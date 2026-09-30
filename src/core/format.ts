@@ -113,9 +113,33 @@ export function parseBlocks(json: string, count: number): Block[] | null {
 const ENUMERATOR =
   /^(?:во-первых|во-вторых|в-третьих|в-четв[её]ртых|в-пятых|перв(?:ое|ый момент)|втор(?:ое|ой момент)|трет(?:ье|ий момент)|четв[её]рт(?:ое|ый момент)|пят(?:ое|ый момент)|шест(?:ое|ой момент)|седьм(?:ое|ой момент)|восьм(?:ое|ой момент)|девят(?:ое|ый момент)|десят(?:ое|ый момент)|дальше|далее|и ещё|ещё|следующ(?:ее|ий момент)|пункт \S+|first(?:ly)?|second(?:ly)?|third(?:ly)?|next)(?:\s*[,:.—–-]+\s*|\s+)/iu;
 
+// Inside a numbered list these always open a new item, whatever the model said.
+const ORDINAL_START =
+  /^(?:во-вторых|в-третьих|в-четв[её]ртых|в-пятых|втор(?:ое|ой момент)|трет(?:ье|ий момент)|четв[её]рт(?:ое|ый момент)|пят(?:ое|ый момент)|шест(?:ое|ой момент)|седьм(?:ое|ой момент)|восьм(?:ое|ой момент)|девят(?:ое|ый момент)|десят(?:ое|ый момент)|и ещё|second(?:ly)?|third(?:ly)?)(?![\p{L}-])/iu;
+
+function splitAtOrdinals(blocks: Block[], segments: Segment[]): Block[] {
+  return blocks.map((b) => {
+    if (b.type !== "list" || !b.ordered) return b;
+    const items: number[][] = [];
+    for (const item of b.items) {
+      let current: number[] = [];
+      for (const id of item) {
+        if (current.length && ORDINAL_START.test(segments[id]!.text)) {
+          items.push(current);
+          current = [];
+        }
+        current.push(id);
+      }
+      items.push(current);
+    }
+    return { ...b, items };
+  });
+}
+
 const capitalise = (s: string) => s.charAt(0).toLocaleUpperCase("ru-RU") + s.slice(1);
 
-export function renderBlocks(blocks: Block[], segments: Segment[]): string {
+export function renderBlocks(layout: Block[], segments: Segment[]): string {
+  const blocks = splitAtOrdinals(layout, segments);
   const join = (ids: number[]) => ids.map((i) => segments[i]!.text).join(" ");
   const parts: string[] = [];
   for (const b of blocks) {
