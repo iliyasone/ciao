@@ -1,0 +1,44 @@
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type { HistoryEntry, OverlayState, RetryMode, Settings } from "../core/types";
+
+function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
+  const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
+const api = {
+  overlay: {
+    onState: (cb: (s: OverlayState) => void) => on("overlay:state", cb),
+    onDelta: (cb: (seq: number, text: string) => void) => on("overlay:delta", cb),
+    onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
+    setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
+    hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),
+  },
+  capture: {
+    onStart: (cb: (seq: number) => void) => on("capture:start", cb),
+    onStop: (cb: (seq: number) => void) => on("capture:stop", cb),
+    chunk: (seq: number, pcm: ArrayBuffer) => ipcRenderer.send("capture:chunk", seq, pcm),
+    stopped: (seq: number) => ipcRenderer.send("capture:stopped", seq),
+    error: (seq: number, message: string) => ipcRenderer.send("capture:error", seq, message),
+  },
+  history: {
+    list: (): Promise<HistoryEntry[]> => ipcRenderer.invoke("history:list"),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke("history:remove", id),
+    retry: (id: string, mode: RetryMode): Promise<HistoryEntry> => ipcRenderer.invoke("history:retry", id, mode),
+    copy: (text: string): Promise<void> => ipcRenderer.invoke("history:copy", text),
+    openFolder: (id?: string): Promise<void> => ipcRenderer.invoke("history:open-folder", id),
+    onChanged: (cb: (entry: HistoryEntry) => void) => on("history:changed", cb),
+    audioUrl: (id: string) => `ciao-audio://entry/${encodeURIComponent(id)}`,
+  },
+  settings: {
+    get: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
+    set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
+    hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
+    setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
+  },
+};
+
+export type CiaoApi = typeof api;
+
+contextBridge.exposeInMainWorld("ciao", api);

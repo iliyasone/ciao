@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --color-settled: #9d9daa;
+  --color-fresh: #f5f5f7;
+  --color-accent: #f4677f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+body.overlay {
+  background: transparent;
+  overflow: hidden;
+}
+
+body.app {
+  background: #111114;
+  color: #e4e4e7;
+  color-scheme: dark;
+}
+
+/* ── Overlay card ─────────────────────────────────────────────────────── */
+
+.card-enter {
+  animation: card-in 170ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.card-leave {
+  animation: card-out 200ms ease-in both;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@keyframes card-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* New words fade in bright, then settle to grey. Inline spans only (no transform),
+   so sub-word tokens still wrap like normal text. */
+.tok {
+  color: var(--color-fresh);
+  animation:
+    tok-in 180ms ease-out both,
+    tok-settle 650ms ease 550ms forwards;
+}
+
+@keyframes tok-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+@keyframes tok-settle {
+  to {
+    color: var(--color-settled);
+  }
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.selectable {
+  user-select: text;
+}

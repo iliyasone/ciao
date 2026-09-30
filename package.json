@@ -1,0 +1,73 @@
+{
+  "name": "ciao",
+  "productName": "Ciao",
+  "version": "0.2.0",
+  "description": "Dictation with a live preview: see what you say while you say it.",
+  "private": true,
+  "main": "dist/main/main.js",
+  "author": "Ilias Dzhabbarov",
+  "license": "MIT",
+  "scripts": {
+    "build:native": "dotnet publish native/win-input -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o build/win-input",
+    "build:main": "node scripts/build-main.mjs",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:renderer",
+    "typecheck": "tsc --noEmit -p .",
+    "dist:win": "npm run build && electron-builder --win dir"
+  },
+  "build": {
+    "appId": "dev.iliyasone.ciao",
+    "productName": "Ciao",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/win-input",
+        "to": "win-input",
+        "filter": [
+          "*.exe"
+        ]
+      },
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "*.png",
+          "*.ico"
+        ]
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "signAndEditExecutable": false
+    },
+    "asar": true,
+    "electronLanguages": [
+      "en-US",
+      "ru"
+    ]
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.5.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.49.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "ws": "^8.22.0"
+  }
+}
