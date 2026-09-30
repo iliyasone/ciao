@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayPosition: null,
   overlayWidth: 640,
   showDelay: false,
+  stopPhrase: true,
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");

@@ -30,7 +30,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
-  - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish.
+  - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
+    or say **"чао-чао"** (the words themselves are not pasted; toggle in
+    *Настройки → Голосом*).
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
 - **The card stays out of your way.**

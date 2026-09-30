@@ -33,6 +33,8 @@ export interface Settings {
   overlayWidth: number;
   /** Developer mode: show and change the recognizer delay level. */
   showDelay: boolean;
+  /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
+  stopPhrase: boolean;
 }
 
 export type EntryStatus = "recording" | "transcribing" | "done" | "failed" | "cancelled";

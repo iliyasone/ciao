@@ -7,6 +7,7 @@ import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, WinInput } from "./winInput";
+import { endsWithStopPhrase, stripStopPhrase } from "../core/voiceCommands";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
@@ -39,6 +40,8 @@ interface Active {
   final?: string;
   completedAt?: number;
   offline: string | null;
+  /** Finished by saying "чао-чао"; strip it from the text. */
+  stoppedByPhrase?: boolean;
   /** Fed from a file by --replay: no mic, nothing pasted. */
   replay: boolean;
   voiceOnsetAt?: number;
@@ -192,6 +195,10 @@ export class DictationController {
         a.liveText += text;
         if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = Date.now();
         this.deps.overlay.delta(a.seq, text);
+        if (this.handsFree && a.settings.stopPhrase && a.phase === "recording" && endsWithStopPhrase(a.liveText)) {
+          a.stoppedByPhrase = true;
+          this.stop();
+        }
       },
       onCompleted: (text) => {
         a.final = text;
@@ -277,7 +284,8 @@ export class DictationController {
       entry.transcripts.push(t);
     };
 
-    const live = (a.final ?? a.liveText).trim();
+    let live = (a.final ?? a.liveText).trim();
+    if (a.stoppedByPhrase) live = stripStopPhrase(live);
     if (live || a.final !== undefined) add("live", settings.liveModel, live);
 
     let text: string | null = a.final !== undefined ? live : null;
@@ -285,6 +293,7 @@ export class DictationController {
       // The live transcript never completed: transcribe the saved file instead.
       try {
         text = (await transcribeFile(a.apiKey, WavWriter.readPcm(this.deps.store.audioPath(entry.id)), settings)).trim();
+        if (a.stoppedByPhrase) text = stripStopPhrase(text);
         add("retry-file", settings.fileModel, text);
       } catch (e) {
         entry.error = `${a.offline ?? "Нет финального текста"}; файл: ${(e as Error).message}`;

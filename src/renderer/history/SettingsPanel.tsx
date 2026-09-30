@@ -84,6 +84,15 @@ export function SettingsPanel() {
           <Toggle label="Запускать вместе с Windows" value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
         </Card>
 
+        <Card title="Голосом">
+          <Toggle
+            label="Заканчивать словами «чао-чао»"
+            hint="В режиме без рук скажи «чао-чао» в конце — запись закончится, а сами слова не вставятся."
+            value={s.stopPhrase}
+            onChange={(v) => update({ stopPhrase: v })}
+          />
+        </Card>
+
         <Card title="Клавиши">
           <Field
             label="Диктовка"
