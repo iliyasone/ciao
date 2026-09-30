@@ -31,9 +31,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
   - Or just say **"чао"** to start hands-free (*Настройки → Голосом*, off by default).
-    The word is spotted on your computer by a small keyword-spotting model
-    ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), Russian streaming zipformer),
-    so nothing is sent anywhere until you dictate. It costs about 6% of one CPU core,
+    The word is spotted on your computer, so nothing is sent anywhere until you
+    dictate: [Vosk](https://alphacephei.com/vosk/) hears it within ~0.2 s and
+    [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotting double-checks
+    the last second of audio, which filters near words like "чаю" or "чекаут".
+    It costs about 10% of one CPU core and ~280 MB of memory, adds ~170 MB to the app,
     and the mic stays open while it is on.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
     or say **"чао-чао"** (the words themselves are not pasted; toggle in

@@ -4,7 +4,7 @@ import path from "node:path";
 import { app, utilityProcess, type UtilityProcess } from "electron";
 import { BYTES_PER_MS } from "../core/audio";
 
-const PRE_ROLL_MS = 1000; // the detector fires ~0.6 s after the word; keep what was said since
+const PRE_ROLL_MS = 1000; // the detector fires ~0.2 s after the word; keep the word and what came after
 
 /**
  * Listens for the wake word in a utility process (src/main/wakeProcess.ts). Audio comes from the
@@ -58,7 +58,12 @@ export class WakeWord extends EventEmitter<{ wake: [preRoll: Uint8Array] }> {
     }
     const child = utilityProcess.fork(path.join(__dirname, "wake.js"), [WakeWord.dir()], { serviceName: "Ciao wake word", stdio: "pipe" });
     this.child = child;
-    child.stderr?.on("data", (d) => console.warn("wake stderr:", String(d).trim()));
+    // Known harmless chatter: sherpa announcing its resampler, Vosk missing the Gr.fst we removed on purpose.
+    const noise = /Creating a resampler|in_sample_rate|output_sample_rate|Gr\.fst/;
+    child.stderr?.on("data", (d) => {
+      const lines = String(d).split(/\r?\n/).filter((l) => l.trim() && !noise.test(l));
+      if (lines.length) console.warn("wake stderr:", lines.join(" | "));
+    });
     child.on("message", (msg: { type: string; keyword?: string; message?: string }) => {
       if (msg.type === "error") console.warn("wake word:", msg.message);
       if (msg.type !== "wake") return;

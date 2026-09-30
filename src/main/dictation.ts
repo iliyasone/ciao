@@ -147,6 +147,9 @@ export class DictationController {
     a.wakeStarted = true;
     this.handsFree = true;
     if (preRoll.byteLength) this.onChunk(a.seq, preRoll);
+    // No shortcut to rule out here (the 150 ms guard is for Ctrl+C-style key combos): show at once.
+    a.shown = true;
+    this.push(a);
   }
 
   // ── Paste the last transcript again (Alt+Shift+Z) ───────────────────────
