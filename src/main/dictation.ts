@@ -8,12 +8,13 @@ import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, WinInput } from "./winInput";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
-import { formatTranscript } from "./format";
+import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
   state(s: OverlayState): void;
-  delta(seq: number, text: string): void;
+  /** gapMs: time since the previous delta (a long gap = the speaker paused). */
+  delta(seq: number, text: string, gapMs: number): void;
   final(seq: number, text: string): void;
   startCapture(seq: number): void;
   stopCapture(seq: number): void;
@@ -24,7 +25,6 @@ const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
-const PAUSE_MS = 1200; // no new words for this long = the speaker paused (a paragraph hint)
 
 interface Active {
   seq: number;
@@ -51,8 +51,8 @@ interface Active {
   voiceOnsetAt?: number;
   firstTextAt?: number;
   lastDeltaAt?: number;
-  /** Offsets in liveText where the speaker paused. */
-  pauses: number[];
+  /** Where the speaker paused, as offsets in liveText. */
+  pauses: Pause[];
   settle?: () => void;
 }
 
@@ -214,11 +214,12 @@ export class DictationController {
     session.handlers = {
       onDelta: (text) => {
         const now = Date.now();
-        if (a.lastDeltaAt !== undefined && now - a.lastDeltaAt > PAUSE_MS && a.liveText.trim()) a.pauses.push(a.liveText.length);
+        const gapMs = a.lastDeltaAt === undefined ? 0 : now - a.lastDeltaAt;
+        if (gapMs >= PARAGRAPH_PAUSE_MS && a.liveText.trim()) a.pauses.push({ at: a.liveText.length, ms: gapMs });
         a.lastDeltaAt = now;
         a.liveText += text;
         if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = Date.now();
-        this.deps.overlay.delta(a.seq, text);
+        this.deps.overlay.delta(a.seq, text, gapMs);
         if (this.handsFree && a.settings.stopPhrase && a.phase === "recording" && endsWithStopPhrase(a.liveText)) {
           a.stoppedByPhrase = true;
           this.stop();
@@ -335,13 +336,15 @@ export class DictationController {
     };
 
     if (text && settings.formatText) {
-      // Pause offsets refer to the live text; they carry over when the final text is the same words.
+      // Same rules as the live card. Pause offsets refer to the live text; they carry over when the
+      // final text contains the same words (possibly without a leading "чао" or trailing "чао-чао").
       const lead = a.liveText.length - a.liveText.trimStart().length;
-      const pauses = a.liveText.trim().startsWith(text) ? a.pauses.map((p) => p - lead).filter((p) => p > 0 && p < text!.length) : [];
-      const formatted = await formatTranscript(a.apiKey, settings.formatModel, text, pauses);
-      if (formatted && formatted !== text) {
-        entry.transcripts.push({ id: `t${entry.transcripts.length + 1}`, source: "formatted", model: settings.formatModel, text: formatted, createdAt: now, costUsd: 0 });
-        text = formatted;
+      const shift = a.liveText.trim().toLowerCase().indexOf(text.toLowerCase());
+      const pauses = shift < 0 ? [] : a.pauses.map((p) => ({ ...p, at: p.at - lead - shift })).filter((p) => p.at > 0 && p.at < text!.length);
+      const laidOut = applyLayout(text, layout(text, pauses));
+      if (laidOut !== text) {
+        entry.transcripts.push({ id: `t${entry.transcripts.length + 1}`, source: "formatted", model: "rules", text: laidOut, createdAt: now, costUsd: 0 });
+        text = laidOut;
       }
     }
 
@@ -395,6 +398,7 @@ export class DictationController {
       costPerMinuteUsd: pricePerMinute(a.settings.liveModel),
       offline: a.offline !== null,
       delay: a.settings.showDelay ? a.settings.delay : undefined,
+      layout: a.settings.formatText,
     };
   }
 

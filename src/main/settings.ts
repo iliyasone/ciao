@@ -27,7 +27,6 @@ export const DEFAULT_SETTINGS: Settings = {
   stopPhrase: true,
   wakeWord: false,
   formatText: true,
-  formatModel: "gpt-5.4-mini",
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");

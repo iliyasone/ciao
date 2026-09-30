@@ -1,6 +1,7 @@
 import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
+import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
 import type { OverlayState } from "../../core/types";
 import { meter, setWake, startCapture, stopCapture } from "./capture";
 
@@ -22,15 +23,19 @@ interface TextState {
   fresh: Token[];
   final: string | null;
   nextId: number;
+  /** Where the speaker paused, as offsets in settled + fresh text (for live paragraphs). */
+  pauses: Pause[];
 }
 
 type TextAction =
-  | { type: "delta"; seq: number; text: string; at: number }
+  | { type: "delta"; seq: number; text: string; at: number; gapMs: number }
   | { type: "final"; seq: number; text: string }
   | { type: "reset"; seq: number }
   | { type: "settle"; before: number };
 
-const emptyText = (seq: number): TextState => ({ seq, settled: "", fresh: [], final: null, nextId: 0 });
+const emptyText = (seq: number): TextState => ({ seq, settled: "", fresh: [], final: null, nextId: 0, pauses: [] });
+
+const textLength = (s: TextState) => s.settled.length + s.fresh.reduce((n, t) => n + t.text.length, 0);
 
 function textReducer(s: TextState, a: TextAction): TextState {
   switch (a.type) {
@@ -41,7 +46,9 @@ function textReducer(s: TextState, a: TextAction): TextState {
       if (!base) return s;
       const text = base.settled === "" && base.fresh.length === 0 ? a.text.trimStart() : a.text;
       if (!text) return base;
-      return { ...base, fresh: [...base.fresh, { id: base.nextId, text, at: a.at }], nextId: base.nextId + 1 };
+      const at = textLength(base);
+      const pauses = a.gapMs >= PARAGRAPH_PAUSE_MS && at > 0 ? [...base.pauses, { at, ms: a.gapMs }] : base.pauses;
+      return { ...base, fresh: [...base.fresh, { id: base.nextId, text, at: a.at }], nextId: base.nextId + 1, pauses };
     }
     case "final":
       return a.seq === s.seq ? { ...s, final: a.text } : s;
@@ -52,6 +59,55 @@ function textReducer(s: TextState, a: TextAction): TextState {
       return { ...s, settled: s.settled + old.map((t) => t.text).join(""), fresh: keep === -1 ? [] : s.fresh.slice(keep) };
     }
   }
+}
+
+/**
+ * The live text with its layout (paragraph gaps, "1." markers, dropped ordinals) applied, while
+ * keeping each fresh token its own animated span.
+ */
+function LiveText({ text, withLayout }: { text: TextState; withLayout: boolean }) {
+  const ranges = [{ key: "settled", start: 0, text: text.settled, fresh: false }];
+  let offset = text.settled.length;
+  for (const t of text.fresh) {
+    ranges.push({ key: `t${t.id}`, start: offset, text: t.text, fresh: true });
+    offset += t.text.length;
+  }
+  const full = text.settled + text.fresh.map((t) => t.text).join("");
+  const { breaks, edits } = withLayout ? layout(full, text.pauses) : { breaks: [], edits: [] };
+  const breakAt = new Map(breaks.map((b) => [b.at, b]));
+  const editAt = new Map(edits.map((e) => [e.start, e]));
+
+  let skipUntil = 0;
+  const out: ReactNode[] = [];
+  for (const r of ranges) {
+    const parts: ReactNode[] = [];
+    let buf = "";
+    for (let i = r.start; i < r.start + r.text.length; i++) {
+      const b = breakAt.get(i);
+      if (b && i >= skipUntil) {
+        if (buf) parts.push(buf);
+        buf = "";
+        if (i > 0) parts.push(<span key={`b${i}`} className={`block ${b.kind === "paragraph" ? "h-2.5" : "h-1"}`} />);
+        if (b.kind === "item") parts.push(<span key={`n${i}`} className="text-faint tabular-nums">{`${b.n}. `}</span>);
+      }
+      if (i < skipUntil) continue;
+      const e = editAt.get(i);
+      if (e) {
+        buf += e.insert;
+        skipUntil = e.end;
+        continue;
+      }
+      buf += full[i];
+    }
+    if (buf) parts.push(buf);
+    if (!parts.length) continue;
+    out.push(
+      <span key={r.key} className={r.fresh ? "tok" : "text-settled"}>
+        {parts}
+      </span>,
+    );
+  }
+  return <>{out}</>;
 }
 
 // ── Pieces ────────────────────────────────────────────────────────────────
@@ -168,7 +224,7 @@ export function Overlay() {
         setLeaving(false);
         setCopied(false);
       }),
-      ciao.overlay.onDelta((seq, t) => dispatch({ type: "delta", seq, text: t, at: performance.now() })),
+      ciao.overlay.onDelta((seq, t, gapMs) => dispatch({ type: "delta", seq, text: t, at: performance.now(), gapMs })),
       ciao.overlay.onFinal((seq, t) => dispatch({ type: "final", seq, text: t })),
       ciao.capture.onStart((seq) => void startCapture(seq)),
       ciao.capture.onStop((seq) => void stopCapture(seq)),
@@ -242,16 +298,9 @@ export function Overlay() {
 
   const content =
     text.final !== null ? (
-      <span className="text-settled">{text.final}</span>
+      <span className="text-settled whitespace-pre-wrap">{text.final}</span>
     ) : text.settled || text.fresh.length ? (
-      <>
-        <span className="text-settled">{text.settled}</span>
-        {text.fresh.map((t) => (
-          <span key={t.id} className="tok">
-            {t.text}
-          </span>
-        ))}
-      </>
+      <LiveText text={text} withLayout={state.layout ?? false} />
     ) : (
       <span className="animate-pulse text-ghost">…</span>
     );

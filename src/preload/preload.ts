@@ -10,7 +10,8 @@ function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () 
 const api = {
   overlay: {
     onState: (cb: (s: OverlayState) => void) => on("overlay:state", cb),
-    onDelta: (cb: (seq: number, text: string) => void) => on("overlay:delta", cb),
+    /** gapMs: time since the previous delta — a long one means the speaker paused. */
+    onDelta: (cb: (seq: number, text: string, gapMs: number) => void) => on("overlay:delta", cb),
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
     hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),

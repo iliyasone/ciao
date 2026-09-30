@@ -62,13 +62,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   it, delete it, or transcribe it again:
   - **More accurate** re-runs the whole file through `gpt-transcribe`.
   - **Live** re-runs it through the streaming model.
-- **Paragraphs and lists.** A long dictation is laid out in paragraphs, and when
-  you enumerate ("первое… второе…", "во-первых…") the points become a list.
-  - A fast model (`gpt-5.4-mini`) only decides the layout; the words themselves are
-    never changed.
-  - Long pauses in your speech are passed to it as hints for new paragraphs.
-  - It adds about a second, and only when there is something to lay out.
-  - Toggle it in *Настройки → Поведение → Абзацы и списки*.
+- **Paragraphs and lists, live.** The card lays the text out while you speak, and
+  the pasted text has the same layout:
+  - a long pause (1.2 s) before a new sentence starts a paragraph;
+  - a sentence starting with "первое", "во-вторых", "третий момент"… starts a
+    numbered item (the word itself is dropped); inside a list "и ещё", "дальше",
+    "также" do too, and only a longer pause (2 s) ends the list.
+  - These are fixed rules, no model, so it costs no time. Toggle in
+    *Настройки → Поведение → Абзацы и списки*.
 - **Context** (Settings tab). Describe what you usually talk about and list the
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.

@@ -33,9 +33,8 @@ export interface Settings {
   overlayWidth: number;
   /** Developer mode: show and change the recognizer delay level. */
   showDelay: boolean;
-  /** Lay out long dictations as paragraphs and lists (a fast LLM picks the structure; words are never changed). */
+  /** Paragraphs after long pauses and numbered lists for "первое… второе…", live and in the pasted text. */
   formatText: boolean;
-  formatModel: string;
   /** Saying "чао" starts a hands-free dictation (the mic stays open; detection is local). */
   wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
@@ -88,6 +87,8 @@ export interface OverlayState {
   endedAt?: number;
   showCost: boolean;
   costPerMinuteUsd: number;
+  /** Lay the live text out in paragraphs and lists (Settings.formatText). */
+  layout?: boolean;
   /** Set only in developer mode (Settings.showDelay). */
   delay?: Delay;
   /** Live connection dropped — audio is still recorded and will be transcribed from the file. */

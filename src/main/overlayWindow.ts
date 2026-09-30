@@ -125,8 +125,8 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.send("overlay:state", s);
   }
 
-  delta(seq: number, text: string): void {
-    this.win.webContents.send("overlay:delta", seq, text);
+  delta(seq: number, text: string, gapMs: number): void {
+    this.win.webContents.send("overlay:delta", seq, text, gapMs);
   }
 
   final(seq: number, text: string): void {
