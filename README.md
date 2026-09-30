@@ -33,6 +33,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish.
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
+- **The card stays out of your way.**
+  - Moving the pointer over it makes it see-through, so you can read what's
+    underneath; scroll it and it turns solid again.
+  - Drag the grip at its bottom edge to move it, and the corner to change its
+    width. Double-click the grip to put it back at the bottom centre.
 - **Pastes where you started.** The text goes into the window that was active when
   you pressed the key. If you switched away, nothing is typed anywhere and the text
   is left on the clipboard. After a successful paste, the clipboard is restored.
@@ -44,7 +49,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - If that fails too (for example, you are still offline), nothing is pasted. The
     dictation is marked "not transcribed" in the history, where you can transcribe
     it later.
-  - A dictation interrupted by a crash is recovered the same way on the next start.
+  - A dictation interrupted by a crash or restart is transcribed from its saved
+    audio on the next start and shown on screen with a *Copy* button.
 - **History.** Click the tray icon to see every dictation. You can play it, copy
   it, delete it, or transcribe it again:
   - **More accurate** re-runs the whole file through `gpt-transcribe`.

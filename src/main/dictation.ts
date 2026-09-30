@@ -152,6 +152,11 @@ export class DictationController {
     this.onCaptureStopped(a.seq);
   }
 
+  /** A fresh overlay sequence number for cards that aren't dictations (e.g. a recovered one). */
+  nextSeq(): number {
+    return ++this.seq;
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
   /** Un-narrowed read of the active dictation (it changes across awaits). */

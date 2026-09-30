@@ -21,6 +21,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showCost: true,
   openAtLogin: true,
   theme: "system",
+  overlayPosition: null,
+  overlayWidth: 640,
   showDelay: false,
 };
 

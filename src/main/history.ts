@@ -54,9 +54,9 @@ export class HistoryStore {
     fs.rmSync(path.join(this.dir, id), { recursive: true, force: true });
   }
 
-  /** Entries left mid-flight by a crash: fix the WAV header and mark them for a retry. */
-  recover(): number {
-    let n = 0;
+  /** Entries left mid-flight by a crash or restart: fix the WAV header and mark them for a retry. */
+  recover(): HistoryEntry[] {
+    const recovered: HistoryEntry[] = [];
     for (const e of this.list()) {
       if (e.status !== "recording" && e.status !== "transcribing") continue;
       const bytes = WavWriter.repair(this.audioPath(e.id));
@@ -64,9 +64,9 @@ export class HistoryStore {
       e.status = "failed";
       e.error = "Приложение закрылось до конца распознавания — аудио сохранено, можно распознать заново";
       this.save(e);
-      n++;
+      recovered.push(e);
     }
-    return n;
+    return recovered;
   }
 
   /** One-time import of recordings made by the first (WinForms) prototype. */

@@ -28,6 +28,9 @@ export interface Settings {
   showCost: boolean;
   openAtLogin: boolean;
   theme: Theme;
+  /** Where the live card sits (window top-left); null = bottom-centre. Set by dragging its grip. */
+  overlayPosition: { x: number; y: number } | null;
+  overlayWidth: number;
   /** Developer mode: show and change the recognizer delay level. */
   showDelay: boolean;
 }
@@ -65,7 +68,8 @@ export type OverlayPhase =
   | "done" // pasted
   | "clipboard" // could not paste, text is on the clipboard
   | "saved" // could not transcribe, audio kept in history
-  | "empty"; // nothing was said
+  | "empty" // nothing was said
+  | "recovered"; // a dictation cut short by a restart, transcribed from its saved audio
 
 export interface OverlayState {
   /** Increments per dictation, so stale renderer messages can be ignored. */

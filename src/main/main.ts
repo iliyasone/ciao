@@ -150,12 +150,46 @@ async function retry(id: string, mode: RetryMode): Promise<HistoryEntry> {
   return fresh;
 }
 
+/**
+ * A dictation cut short by a restart (an update, a crash): transcribe its saved audio and show it,
+ * so nothing said is silently lost. Only the latest recent one is surfaced; all stay in history.
+ */
+async function showRecovered(entries: HistoryEntry[]): Promise<void> {
+  const recent = entries
+    .filter((e) => e.durationMs > 1500 && Date.now() - Date.parse(e.createdAt) < 60 * 60_000)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  if (!recent) return;
+  await new Promise((r) => setTimeout(r, 1500)); // let the overlay page load
+  const seq = dictation.nextSeq();
+  const started = Date.parse(recent.createdAt);
+  const base = { seq, handsFree: false, startedAt: started, endedAt: started + recent.durationMs, showCost: false, costPerMinuteUsd: 0, offline: false };
+  let text: string | null = null;
+  try {
+    const key = loadApiKey();
+    if (key) text = (await retry(recent.id, "file")).transcripts.at(-1)?.text ?? null;
+  } catch (e) {
+    console.warn("recovering", recent.id, e);
+  }
+  if (text) {
+    overlay.state({ ...base, phase: "recovered", message: "Запись прервалась при перезапуске — вот что ты сказал" });
+    overlay.final(seq, text);
+  } else {
+    overlay.state({ ...base, phase: "saved", message: "Запись прервалась при перезапуске — аудио сохранено в истории" });
+  }
+}
+
 function registerIpc(): void {
   ipcMain.on("capture:chunk", (_e, seq: number, pcm: ArrayBuffer) => dictation.onChunk(seq, new Uint8Array(pcm)));
   ipcMain.on("capture:stopped", (_e, seq: number) => dictation.onCaptureStopped(seq));
   ipcMain.on("capture:error", (_e, seq: number, message: string) => dictation.onCaptureError(seq, message));
   ipcMain.on("overlay:interactive", (_e, on: boolean) => overlay.setInteractive(on));
   ipcMain.on("overlay:hidden", (_e, seq: number) => overlay.hidden(seq));
+  ipcMain.on("overlay:drag-start", () => overlay.dragStart());
+  ipcMain.on("overlay:drag", (_e, mode: "move" | "resize", dx: number, dy: number) => overlay.drag(mode, dx, dy));
+  ipcMain.on("overlay:drag-end", () => overlay.dragEnd());
+  ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());
+  ipcMain.handle("overlay:copy", (_e, text: string) => clipboard.writeText(text));
+  ipcMain.on("overlay:open-history", () => openHistory());
 
   ipcMain.handle("history:list", () => store.list());
   ipcMain.handle("history:remove", (_e, id: string) => store.delete(id));
@@ -204,7 +238,7 @@ void app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === "media");
 
   store = new HistoryStore(path.join(app.getPath("userData"), "history"));
-  store.recover();
+  const recovered = store.recover();
   store.importLegacy(path.join(process.env.LOCALAPPDATA ?? "", "VoicePreview", "sessions"));
   protocol.handle("ciao-audio", (req) => {
     const id = decodeURIComponent(new URL(req.url).pathname.slice(1));
@@ -215,7 +249,12 @@ void app.whenReady().then(() => {
   pool.refill();
   setInterval(() => pool.refill(), 30_000);
 
-  overlay = new OverlayWindow(PRELOAD, RENDERER);
+  overlay = new OverlayWindow(
+    PRELOAD,
+    RENDERER,
+    () => ({ position: settings.overlayPosition, cardWidth: settings.overlayWidth }),
+    (p) => applySettings({ ...settings, overlayPosition: p.position, overlayWidth: p.cardWidth }),
+  );
   input = new WinInput(settings.triggers);
   dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged });
   input.on("trigger", (down) => dictation.onHotkey(down));
@@ -236,5 +275,6 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
+  void showRecovered(recovered);
   if (!loadApiKey()) openHistory("settings");
 });

@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, CloudOff, Loader2, Lock, TriangleAlert } from "lucide-react";
+import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import type { OverlayState } from "../../core/types";
@@ -118,7 +118,31 @@ function clock(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-const HIDE_AFTER: Partial<Record<OverlayState["phase"], number>> = { done: 1100, clipboard: 3500, saved: 5000, empty: 0 };
+const HIDE_AFTER: Partial<Record<OverlayState["phase"], number>> = { done: 450, clipboard: 3500, saved: 6000, empty: 0 };
+
+/**
+ * Pointer drag on the grip (move) or the corner (resize). Offsets are sent relative to where the
+ * drag started, so the main process can apply them to the window's original bounds.
+ */
+function dragHandlers(mode: "move" | "resize", dragging: { current: boolean }) {
+  let start: { x: number; y: number } | null = null;
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      start = { x: e.screenX, y: e.screenY };
+      dragging.current = true;
+      ciao.overlay.dragStart();
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (start) ciao.overlay.drag(mode, e.screenX - start.x, e.screenY - start.y);
+    },
+    onPointerUp: () => {
+      start = null;
+      dragging.current = false;
+      ciao.overlay.dragEnd();
+    },
+  };
+}
 
 // ── Overlay ───────────────────────────────────────────────────────────────
 
@@ -128,6 +152,13 @@ export function Overlay() {
   const [now, setNow] = useState(Date.now());
   const [leaving, setLeaving] = useState(false);
   const hovered = useRef(false);
+  const dragging = useRef(false);
+  // Hovering makes the card see-through (to read what's under it); scrolling or grabbing the
+  // grip means you want the card itself, so it turns solid again until the pointer leaves.
+  const [peek, setPeek] = useState(false);
+  const pointerAt = useRef<{ x: number; y: number } | null>(null);
+  const solidUntilLeave = useRef(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const offs = [
@@ -135,6 +166,7 @@ export function Overlay() {
         dispatch({ type: "reset", seq: s.seq });
         setState(s);
         setLeaving(false);
+        setCopied(false);
       }),
       ciao.overlay.onDelta((seq, t) => dispatch({ type: "delta", seq, text: t, at: performance.now() })),
       ciao.overlay.onFinal((seq, t) => dispatch({ type: "final", seq, text: t })),
@@ -200,6 +232,9 @@ export function Overlay() {
     case "saved":
       icon = <TriangleAlert className="size-4 text-amber-700 dark:text-amber-300" />;
       break;
+    case "recovered":
+      icon = <RotateCcw className="size-4 text-amber-700 dark:text-amber-300" />;
+      break;
     default:
       icon = null;
   }
@@ -222,6 +257,17 @@ export function Overlay() {
 
   const showText = state.phase !== "empty" || text.final || text.settled || text.fresh.length;
 
+  const withActions = state.phase === "recovered" || state.phase === "saved";
+  const dismiss = () => {
+    setLeaving(true);
+    setTimeout(() => ciao.overlay.hidden(state.seq), 210);
+  };
+  // Scrolling or touching the grip/corner means you want the card itself: solid until the pointer leaves.
+  const solid = () => {
+    solidUntilLeave.current = true;
+    setPeek(false);
+  };
+
   return (
     <div className="flex h-full w-full items-end justify-center px-10 pb-4">
       <div
@@ -230,11 +276,22 @@ export function Overlay() {
           hovered.current = true;
           ciao.overlay.setInteractive(true);
         }}
+        onMouseMove={(e) => {
+          // Only a real pointer move turns it see-through: the card often appears right under a
+          // resting cursor (at the prompt box), and that alone must not hide the text.
+          const at = pointerAt.current;
+          if (!at) pointerAt.current = { x: e.screenX, y: e.screenY };
+          else if (!peek && !withActions && !solidUntilLeave.current && !dragging.current && Math.hypot(e.screenX - at.x, e.screenY - at.y) > 4) setPeek(true);
+        }}
         onMouseLeave={() => {
           hovered.current = false;
-          ciao.overlay.setInteractive(false);
+          pointerAt.current = null;
+          solidUntilLeave.current = false;
+          setPeek(false);
+          if (!dragging.current) ciao.overlay.setInteractive(false);
         }}
-        className={`${leaving ? "card-leave" : "card-enter"} w-[640px] rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ring-1 ring-tint/10`}
+        onWheel={solid}
+        className={`${leaving ? "card-leave" : "card-enter"} group relative w-full rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-opacity duration-150 dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ${peek ? "opacity-[0.18]" : "opacity-100"}`}
       >
         <header className="mb-1.5 grid h-6 grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex items-center gap-2">
@@ -243,12 +300,65 @@ export function Overlay() {
             {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-700 dark:text-amber-300/80" />}
           </div>
           <div className={`text-[13px] font-medium tracking-wide tabular-nums ${busy ? "text-faint" : "text-fg2"}`}>{clock(elapsed)}</div>
-          <div className="justify-self-end text-[12px] text-faint tabular-nums">
+          <div className="flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">
             {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
+            {withActions && (
+              <button onClick={dismiss} title="Закрыть" className="rounded-md p-0.5 text-faint hover:bg-tint/10 hover:text-fg">
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
         </header>
         {showText ? <Scroller>{content}</Scroller> : null}
         {state.message && <div className="mt-2 text-[12.5px] text-amber-700 dark:text-amber-200/90">{state.message}</div>}
+        {withActions && (
+          <div className="mt-2.5 -ml-2 flex gap-1">
+            {state.phase === "recovered" && text.final && (
+              <button
+                onClick={async () => {
+                  await ciao.overlay.copy(text.final!);
+                  setCopied(true);
+                  setTimeout(dismiss, 700);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-tint/8 px-2.5 py-1 text-[12.5px] text-fg hover:bg-tint/12"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Скопировано" : "Скопировать"}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                ciao.overlay.openHistory();
+                dismiss();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] text-muted hover:bg-tint/8 hover:text-fg"
+            >
+              <History className="size-3.5" />
+              История
+            </button>
+          </div>
+        )}
+
+        {/* Grip: drag to move, double-click to put the card back. Corner: drag to resize. */}
+        <div
+          {...dragHandlers("move", dragging)}
+          onMouseEnter={solid}
+          onDoubleClick={() => ciao.overlay.resetPlacement()}
+          title="Перетащи, чтобы подвинуть. Двойной клик — вернуть на место."
+          className="absolute -bottom-2.5 left-1/2 flex h-5 w-16 -translate-x-1/2 cursor-grab items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        >
+          <span className="h-1.5 w-10 rounded-full bg-tint/25 ring-1 ring-overlay" />
+        </div>
+        <div
+          {...dragHandlers("resize", dragging)}
+          onMouseEnter={solid}
+          title="Потяни, чтобы изменить ширину"
+          className="absolute right-1 bottom-1 size-4 cursor-ew-resize opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          <svg viewBox="0 0 16 16" className="size-4 text-ghost">
+            <path d="M14 6 6 14M14 10l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
       </div>
     </div>
   );
