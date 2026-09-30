@@ -15,6 +15,7 @@ type InputEvents = {
   hotkey: [down: boolean];
   escape: [];
   other: [];
+  mouse: [down: boolean];
 };
 
 /**
@@ -27,7 +28,10 @@ export class WinInput extends EventEmitter<InputEvents> {
   private pending = new Map<number, (reply: Record<string, unknown>) => void>();
   private stopped = false;
 
-  constructor(private readonly hotkey: string) {
+  constructor(
+    private readonly hotkey: string,
+    private middleClick: boolean,
+  ) {
     super();
   }
 
@@ -43,7 +47,8 @@ export class WinInput extends EventEmitter<InputEvents> {
       console.warn("win-input helper unavailable:", exe);
       return;
     }
-    const child = spawn(exe, ["--hotkey", this.hotkey], { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+    const args = ["--hotkey", this.hotkey, ...(this.middleClick ? ["--middle-click"] : [])];
+    const child = spawn(exe, args, { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
     this.child = child;
     readline.createInterface({ input: child.stdout! }).on("line", (line) => this.onLine(line));
     child.on("exit", () => {
@@ -61,6 +66,12 @@ export class WinInput extends EventEmitter<InputEvents> {
 
   arm(on: boolean): void {
     this.send({ cmd: "arm", on });
+  }
+
+  /** Use (and swallow) the middle mouse button as a second dictation trigger. */
+  setMiddleClick(on: boolean): void {
+    this.middleClick = on;
+    this.send({ cmd: "mouse", on });
   }
 
   async foreground(): Promise<ForegroundWindow | null> {
@@ -115,6 +126,9 @@ export class WinInput extends EventEmitter<InputEvents> {
         break;
       case "other":
         this.emit("other");
+        break;
+      case "mouse":
+        this.emit("mouse", msg.down === true);
         break;
     }
   }

@@ -1,6 +1,7 @@
 // Shared, platform-neutral types. Nothing here may import Electron or Node.
 
 export type Delay = "minimal" | "low" | "medium" | "high" | "xhigh";
+export type Theme = "system" | "light" | "dark";
 export const DELAYS: Delay[] = ["minimal", "low", "medium", "high", "xhigh"];
 
 export interface Settings {
@@ -16,6 +17,8 @@ export interface Settings {
   fileModel: string;
   /** System.Windows.Forms.Keys name of the push-to-talk key. */
   hotkey: string;
+  /** The middle mouse button works like the hotkey (click = hands-free, hold = push-to-talk). */
+  middleClick: boolean;
   /** Electron accelerator that pastes the last transcript again. */
   pasteLastHotkey: string;
   autoPaste: boolean;
@@ -23,6 +26,9 @@ export interface Settings {
   restoreClipboard: boolean;
   showCost: boolean;
   openAtLogin: boolean;
+  theme: Theme;
+  /** Developer mode: show and change the recognizer delay level. */
+  showDelay: boolean;
 }
 
 export type EntryStatus = "recording" | "transcribing" | "done" | "failed" | "cancelled";
@@ -70,6 +76,8 @@ export interface OverlayState {
   endedAt?: number;
   showCost: boolean;
   costPerMinuteUsd: number;
+  /** Set only in developer mode (Settings.showDelay). */
+  delay?: Delay;
   /** Live connection dropped — audio is still recorded and will be transcribed from the file. */
   offline: boolean;
   message?: string;

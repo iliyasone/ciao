@@ -15,11 +15,14 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   fileModel: "gpt-transcribe",
   hotkey: "RControlKey",
+  middleClick: true,
   pasteLastHotkey: "Alt+Shift+Z",
   autoPaste: true,
   restoreClipboard: true,
   showCost: true,
   openAtLogin: true,
+  theme: "system",
+  showDelay: false,
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");

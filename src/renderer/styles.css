@@ -2,9 +2,58 @@
 
 @theme {
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --color-settled: #9d9daa;
-  --color-fresh: #f5f5f7;
   --color-accent: #f4677f;
+}
+
+/* Semantic colours. Electron maps the theme setting (system/light/dark) onto
+   prefers-color-scheme, so everything below follows it live. */
+@theme inline {
+  --color-app: var(--c-app);
+  --color-fg: var(--c-fg);
+  --color-fg2: var(--c-fg2);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-ghost: var(--c-ghost);
+  --color-tint: var(--c-tint);
+  --color-card: var(--c-card);
+  --color-card-hover: var(--c-card-hover);
+  --color-overlay: var(--c-overlay);
+  --color-settled: var(--c-settled);
+  --color-fresh: var(--c-fresh);
+}
+
+:root {
+  color-scheme: light;
+  --c-app: #f4f4f6;
+  --c-fg: #18181b;
+  --c-fg2: #27272a;
+  --c-muted: #52525b;
+  --c-faint: #71717a;
+  --c-ghost: #a1a1aa;
+  --c-tint: #000;
+  --c-card: #fff;
+  --c-card-hover: #fcfcfd;
+  --c-overlay: #fdfdfe;
+  --c-settled: #6b6b78;
+  --c-fresh: #09090b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --c-app: #111114;
+    --c-fg: #ececef;
+    --c-fg2: #d4d4d8;
+    --c-muted: #a1a1aa;
+    --c-faint: #71717a;
+    --c-ghost: #52525b;
+    --c-tint: #fff;
+    --c-card: rgb(255 255 255 / 0.035);
+    --c-card-hover: rgb(255 255 255 / 0.05);
+    --c-overlay: #1a1a1f;
+    --c-settled: #9d9daa;
+    --c-fresh: #f5f5f7;
+  }
 }
 
 html,
@@ -26,9 +75,8 @@ body.overlay {
 }
 
 body.app {
-  background: #111114;
-  color: #e4e4e7;
-  color-scheme: dark;
+  background: var(--c-app);
+  color: var(--c-fg);
 }
 
 /* ── Overlay card ─────────────────────────────────────────────────────── */
@@ -79,7 +127,7 @@ body.app {
 
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  scrollbar-color: color-mix(in srgb, var(--c-tint) 18%, transparent) transparent;
 }
 
 .drag {

@@ -17,10 +17,10 @@ static class Native
         public IntPtr dwExtraInfo;
     }
 
-    delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    delegate IntPtr LowLevelHookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
-    static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+    static extern IntPtr SetWindowsHookEx(int idHook, LowLevelHookProc lpfn, IntPtr hMod, uint dwThreadId);
 
     [DllImport("user32.dll")]
     static extern bool UnhookWindowsHookEx(IntPtr hhk);
@@ -37,7 +37,7 @@ static class Native
     /// </summary>
     public sealed class KeyboardHook : IDisposable
     {
-        readonly LowLevelKeyboardProc _proc; // kept alive: the OS holds only a raw pointer
+        readonly LowLevelHookProc _proc; // kept alive: the OS holds only a raw pointer
         readonly IntPtr _hook;
         readonly Func<Keys, bool, bool> _handler;
 
@@ -61,6 +61,47 @@ static class Native
                     bool up = msg is WM_KEYUP or WM_SYSKEYUP;
                     if ((down || up) && _handler((Keys)k.vkCode, down)) return 1;
                 }
+            }
+            return CallNextHookEx(_hook, nCode, wParam, lParam);
+        }
+
+        public void Dispose() => UnhookWindowsHookEx(_hook);
+    }
+
+    const int WH_MOUSE_LL = 14;
+    const int WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
+    const uint LLMHF_INJECTED = 0x01;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MSLLHOOKSTRUCT
+    {
+        public int x, y;
+        public uint mouseData, flags, time;
+        public IntPtr dwExtraInfo;
+    }
+
+    /// <summary>Global low-level mouse hook for the middle button. The handler returns true to swallow the click.</summary>
+    public sealed class MiddleButtonHook : IDisposable
+    {
+        readonly LowLevelHookProc _proc; // kept alive: the OS holds only a raw pointer
+        readonly IntPtr _hook;
+        readonly Func<bool, bool> _handler;
+
+        public MiddleButtonHook(Func<bool, bool> handler)
+        {
+            _handler = handler;
+            _proc = Callback;
+            _hook = SetWindowsHookEx(WH_MOUSE_LL, _proc, GetModuleHandle(null), 0);
+            if (_hook == IntPtr.Zero) throw new InvalidOperationException("SetWindowsHookEx(mouse) failed: " + Marshal.GetLastWin32Error());
+        }
+
+        IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            int msg = (int)wParam;
+            if (nCode >= 0 && msg is WM_MBUTTONDOWN or WM_MBUTTONUP)
+            {
+                var m = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                if ((m.flags & LLMHF_INJECTED) == 0 && _handler(msg == WM_MBUTTONDOWN)) return 1;
             }
             return CallNextHookEx(_hook, nCode, wParam, lParam);
         }

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, session, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from "electron";
 import { DELAYS, type HistoryEntry, type RetryMode, type Settings } from "../core/types";
 import { costUsd } from "../core/cost";
 import { DictationController } from "./dictation";
@@ -56,6 +56,11 @@ function notifyChanged(entry: HistoryEntry): void {
   historyWin?.webContents.send("history:changed", entry);
 }
 
+/** Window chrome colours for the current theme (the page itself follows prefers-color-scheme). */
+function chrome(): { background: string; symbols: string } {
+  return nativeTheme.shouldUseDarkColors ? { background: "#111114", symbols: "#a1a1aa" } : { background: "#f4f4f6", symbols: "#52525b" };
+}
+
 function openHistory(tab?: "settings"): void {
   if (historyWin && !historyWin.isDestroyed()) {
     historyWin.show();
@@ -69,9 +74,9 @@ function openHistory(tab?: "settings"): void {
     minHeight: 480,
     title: "Ciao",
     icon: path.join(ASSETS, "icon.png"),
-    backgroundColor: "#111114",
+    backgroundColor: chrome().background,
     titleBarStyle: "hidden",
-    titleBarOverlay: { color: "#111114", symbolColor: "#a1a1aa", height: 44 },
+    titleBarOverlay: { color: chrome().background, symbolColor: chrome().symbols, height: 44 },
     webPreferences: { preload: PRELOAD },
   });
   void historyWin.loadFile(path.join(RENDERER, "history.html"), { hash: tab ?? "" });
@@ -81,9 +86,11 @@ function openHistory(tab?: "settings"): void {
 function applySettings(next: Settings): void {
   const prev = settings;
   settings = next;
+  nativeTheme.themeSource = next.theme;
   saveSettings(next);
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.openAtLogin });
   if (!prev || prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev?.pasteLastHotkey);
+  if (prev && prev.middleClick !== next.middleClick) input.setMiddleClick(next.middleClick);
   buildTrayMenu();
 }
 
@@ -103,10 +110,12 @@ function buildTrayMenu(): void {
       { label: "История и настройки", click: () => openHistory() },
       { label: `Вставить последнее  (${settings.pasteLastHotkey})`, click: () => void dictation.pasteLast() },
       { type: "separator" },
-      {
-        label: "Задержка",
-        submenu: DELAYS.map((d) => ({ label: d, type: "radio" as const, checked: settings.delay === d, click: () => applySettings({ ...settings, delay: d }) })),
-      },
+      ...(settings.showDelay
+        ? [{
+            label: `Задержка: ${settings.delay}`,
+            submenu: DELAYS.map((d) => ({ label: d, type: "radio" as const, checked: settings.delay === d, click: () => applySettings({ ...settings, delay: d }) })),
+          }]
+        : []),
       { label: "Показывать стоимость", type: "checkbox", checked: settings.showCost, click: () => applySettings({ ...settings, showCost: !settings.showCost }) },
       { type: "separator" },
       { label: "Выход", click: () => app.quit() },
@@ -205,18 +214,25 @@ void app.whenReady().then(() => {
   setInterval(() => pool.refill(), 30_000);
 
   overlay = new OverlayWindow(PRELOAD, RENDERER);
-  input = new WinInput(settings.hotkey);
+  input = new WinInput(settings.hotkey, settings.middleClick);
   dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged });
   input.on("hotkey", (down) => dictation.onHotkey(down));
   input.on("escape", () => dictation.onEscape());
   input.on("other", () => dictation.onOtherKey());
+  input.on("mouse", (down) => dictation.onHotkey(down));
   input.start();
 
   registerIpc();
   tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, "tray.png")));
-  tray.setToolTip("Ciao — держи правый Ctrl и говори");
+  tray.setToolTip("Ciao — держи правый Ctrl (или жми колёсико) и говори");
   tray.on("click", () => openHistory());
   applySettings(settings);
+  nativeTheme.on("updated", () => {
+    if (!historyWin || historyWin.isDestroyed()) return;
+    const c = chrome();
+    historyWin.setBackgroundColor(c.background);
+    historyWin.setTitleBarOverlay({ color: c.background, symbolColor: c.symbols, height: 44 });
+  });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
   if (!loadApiKey()) openHistory("settings");

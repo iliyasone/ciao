@@ -13,18 +13,21 @@ namespace Ciao.Input;
 ///   {"type":"hotkey","down":true|false}   the push-to-talk key (never swallowed)
 ///   {"type":"escape"}                     Esc while armed — swallowed so the focused app never sees it
 ///   {"type":"other"}                      another key pressed while the hotkey is held (a shortcut, not dictation)
+///   {"type":"mouse","down":true|false}    middle mouse button, when enabled — swallowed, so apps never see it
 ///
 /// Commands it accepts (replies carry the same "id"):
 ///   {"id":1,"cmd":"foreground"}           → {"id":1,"hwnd":123,"title":"…","process":"…"}
 ///   {"id":2,"cmd":"paste","hwnd":123}     → Ctrl+V if that window is still in front (hwnd 0 = whatever is in front)
 ///                                           {"id":2,"ok":true} | {"id":2,"ok":false,"reason":"focus-changed","foreground":"…"}
 ///   {"cmd":"arm","on":true}               start/stop swallowing Esc
+///   {"cmd":"mouse","on":true}             start/stop using the middle mouse button (also --middle-click at startup)
 /// </summary>
 static class Program
 {
     static readonly BlockingCollection<string> Out = new();
     static volatile bool _armed;
     static volatile bool _hotkeyDown;
+    static volatile bool _middleClick;
     static Keys _hotkey = Keys.RControlKey;
 
     [STAThread]
@@ -32,11 +35,13 @@ static class Program
     {
         for (int i = 0; i < args.Length - 1; i++)
             if (args[i] == "--hotkey" && Enum.TryParse<Keys>(args[i + 1], out var k)) _hotkey = k;
+        _middleClick = args.Contains("--middle-click");
 
         var stdout = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
         new Thread(() => { foreach (var line in Out.GetConsumingEnumerable()) stdout.WriteLine(line); }) { IsBackground = true }.Start();
 
         using var hook = new Native.KeyboardHook(OnKey);
+        using var mouse = new Native.MiddleButtonHook(OnMiddle);
 
         var stdin = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
         new Thread(() =>
@@ -73,6 +78,13 @@ static class Program
         return false;
     }
 
+    static bool OnMiddle(bool down)
+    {
+        if (!_middleClick) return false;
+        Emit(new JsonObject { ["type"] = "mouse", ["down"] = down });
+        return true;
+    }
+
     static void Handle(string line)
     {
         var msg = JsonNode.Parse(line)!.AsObject();
@@ -101,6 +113,9 @@ static class Program
             }
             case "arm":
                 _armed = msg["on"]?.GetValue<bool>() ?? false;
+                break;
+            case "mouse":
+                _middleClick = msg["on"]?.GetValue<bool>() ?? false;
                 break;
         }
     }

@@ -66,7 +66,9 @@ export class DictationController {
     },
   ) {}
 
-  // ── Keyboard ────────────────────────────────────────────────────────────
+  // ── Keyboard and mouse ──────────────────────────────────────────────────
+  // Right Ctrl and the middle mouse button share one state machine:
+  // hold = push-to-talk, a short press = hands-free until the next press.
 
   onHotkey(down: boolean): void {
     const now = Date.now();
@@ -338,6 +340,7 @@ export class DictationController {
       showCost: a.settings.showCost,
       costPerMinuteUsd: pricePerMinute(a.settings.liveModel),
       offline: a.offline !== null,
+      delay: a.settings.showDelay ? a.settings.delay : undefined,
     };
   }
 

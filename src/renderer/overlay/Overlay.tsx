@@ -189,16 +189,16 @@ export function Overlay() {
       icon = <LevelDot />;
       break;
     case "finishing":
-      icon = <Loader2 className="size-4 animate-spin text-zinc-400" />;
+      icon = <Loader2 className="size-4 animate-spin text-muted" />;
       break;
     case "done":
-      icon = <Check className="size-4 text-emerald-400" strokeWidth={2.5} />;
+      icon = <Check className="size-4 text-emerald-700 dark:text-emerald-400" strokeWidth={2.5} />;
       break;
     case "clipboard":
-      icon = <ClipboardCheck className="size-4 text-amber-300" />;
+      icon = <ClipboardCheck className="size-4 text-amber-700 dark:text-amber-300" />;
       break;
     case "saved":
-      icon = <TriangleAlert className="size-4 text-amber-300" />;
+      icon = <TriangleAlert className="size-4 text-amber-700 dark:text-amber-300" />;
       break;
     default:
       icon = null;
@@ -217,7 +217,7 @@ export function Overlay() {
         ))}
       </>
     ) : (
-      <span className="animate-pulse text-zinc-600">…</span>
+      <span className="animate-pulse text-ghost">…</span>
     );
 
   const showText = state.phase !== "empty" || text.final || text.settled || text.fresh.length;
@@ -234,19 +234,21 @@ export function Overlay() {
           hovered.current = false;
           ciao.overlay.setInteractive(false);
         }}
-        className={`${leaving ? "card-leave" : "card-enter"} w-[640px] rounded-[22px] bg-[#1a1a1f]/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.5)] ring-1 ring-white/10`}
+        className={`${leaving ? "card-leave" : "card-enter"} w-[640px] rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ring-1 ring-tint/10`}
       >
         <header className="mb-1.5 grid h-6 grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex items-center gap-2">
             {icon}
-            {state.handsFree && state.phase === "recording" && <Lock className="size-3.5 text-zinc-500" />}
-            {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-300/80" />}
+            {state.handsFree && state.phase === "recording" && <Lock className="size-3.5 text-faint" />}
+            {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-700 dark:text-amber-300/80" />}
           </div>
-          <div className={`text-[13px] font-medium tracking-wide tabular-nums ${busy ? "text-zinc-500" : "text-zinc-300"}`}>{clock(elapsed)}</div>
-          <div className="justify-self-end text-[12px] text-zinc-500 tabular-nums">{state.showCost ? cost : ""}</div>
+          <div className={`text-[13px] font-medium tracking-wide tabular-nums ${busy ? "text-faint" : "text-fg2"}`}>{clock(elapsed)}</div>
+          <div className="justify-self-end text-[12px] text-faint tabular-nums">
+            {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
+          </div>
         </header>
         {showText ? <Scroller>{content}</Scroller> : null}
-        {state.message && <div className="mt-2 text-[12.5px] text-amber-200/90">{state.message}</div>}
+        {state.message && <div className="mt-2 text-[12.5px] text-amber-700 dark:text-amber-200/90">{state.message}</div>}
       </div>
     </div>
   );

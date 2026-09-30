@@ -20,9 +20,15 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   microphone they appear about 0.8 s after they are spoken (median), and that holds
   steady over multi-minute dictations. The final text arrives about 0.6 s after you
   release the key.
-  - This is at the default **Delay** of `low`. The setting ranges from `minimal`
-    to `xhigh`: lower shows words sooner, higher is more accurate.
+  - This is at the default recognizer delay of `low`. The level ranges from
+    `minimal` to `xhigh`: lower shows words sooner, higher is more accurate, and the
+    price is the same. It is hidden by default. To see and change it, go to Settings
+    (the app's UI is in Russian): *Настройки → Для разработчика → Показывать
+    задержку*.
 - **Push to talk.** Hold **Right Ctrl**, speak, release, and the text is pasted.
+  - The **middle mouse button** works the same way: click to start hands-free,
+    click again to finish, or hold it to talk. While this is on (*Настройки → Клавиши →
+    Колёсико мыши*), other apps don't receive middle clicks.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish.
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
@@ -45,6 +51,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Context** (Settings tab). Describe what you usually talk about and list the
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
+- **Light, dark or system theme** (*Настройки → Оформление*). System is the
+  default and follows Windows live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
 
