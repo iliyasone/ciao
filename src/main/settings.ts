@@ -25,6 +25,8 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayWidth: 640,
   showDelay: false,
   stopPhrase: true,
+  formatText: true,
+  formatModel: "gpt-5.4-mini",
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");

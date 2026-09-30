@@ -8,6 +8,7 @@ import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, WinInput } from "./winInput";
 import { endsWithStopPhrase, stripStopPhrase } from "../core/voiceCommands";
+import { formatTranscript } from "./format";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
@@ -23,6 +24,7 @@ const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
+const PAUSE_MS = 1200; // no new words for this long = the speaker paused (a paragraph hint)
 
 interface Active {
   seq: number;
@@ -46,6 +48,9 @@ interface Active {
   replay: boolean;
   voiceOnsetAt?: number;
   firstTextAt?: number;
+  lastDeltaAt?: number;
+  /** Offsets in liveText where the speaker paused. */
+  pauses: number[];
   settle?: () => void;
 }
 
@@ -184,6 +189,7 @@ export class DictationController {
       phase: "recording",
       shown: false,
       liveText: "",
+      pauses: [],
       offline: session.failure,
       replay,
     };
@@ -192,6 +198,9 @@ export class DictationController {
 
     session.handlers = {
       onDelta: (text) => {
+        const now = Date.now();
+        if (a.lastDeltaAt !== undefined && now - a.lastDeltaAt > PAUSE_MS && a.liveText.trim()) a.pauses.push(a.liveText.length);
+        a.lastDeltaAt = now;
         a.liveText += text;
         if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = Date.now();
         this.deps.overlay.delta(a.seq, text);
@@ -306,6 +315,17 @@ export class DictationController {
       firstTextMs: a.firstTextAt && a.firstTextAt - a.startedAt,
       finalAfterReleaseMs: a.completedAt && a.releasedAt && a.completedAt - a.releasedAt,
     };
+
+    if (text && settings.formatText) {
+      // Pause offsets refer to the live text; they carry over when the final text is the same words.
+      const lead = a.liveText.length - a.liveText.trimStart().length;
+      const pauses = a.liveText.trim().startsWith(text) ? a.pauses.map((p) => p - lead).filter((p) => p > 0 && p < text!.length) : [];
+      const formatted = await formatTranscript(a.apiKey, settings.formatModel, text, pauses);
+      if (formatted && formatted !== text) {
+        entry.transcripts.push({ id: `t${entry.transcripts.length + 1}`, source: "formatted", model: settings.formatModel, text: formatted, createdAt: now, costUsd: 0 });
+        text = formatted;
+      }
+    }
 
     let phase: OverlayPhase;
     let delivery: Delivery = "none";

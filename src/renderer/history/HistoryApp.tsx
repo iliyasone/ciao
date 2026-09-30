@@ -141,7 +141,7 @@ function Stat({ label, entries }: { label: string; entries: HistoryEntry[] }) {
   );
 }
 
-const SOURCE_LABEL: Record<Transcript["source"], string> = { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком" };
+const SOURCE_LABEL: Record<Transcript["source"], string> = { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком", formatted: "с абзацами" };
 
 function StatusBadge({ entry }: { entry: HistoryEntry }) {
   const base = "inline-flex items-center gap-1 rounded-md px-1.5 py-px text-[11px]";

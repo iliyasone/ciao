@@ -33,13 +33,16 @@ export interface Settings {
   overlayWidth: number;
   /** Developer mode: show and change the recognizer delay level. */
   showDelay: boolean;
+  /** Lay out long dictations as paragraphs and lists (a fast LLM picks the structure; words are never changed). */
+  formatText: boolean;
+  formatModel: string;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
   stopPhrase: boolean;
 }
 
 export type EntryStatus = "recording" | "transcribing" | "done" | "failed" | "cancelled";
 export type Delivery = "pasted" | "clipboard" | "none";
-export type TranscriptSource = "live" | "retry-live" | "retry-file";
+export type TranscriptSource = "live" | "retry-live" | "retry-file" | "formatted";
 
 export interface Transcript {
   id: string;

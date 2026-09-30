@@ -78,6 +78,12 @@ export function SettingsPanel() {
         </Card>
 
         <Card title="Поведение">
+          <Toggle
+            label="Абзацы и списки"
+            hint="Длинную диктовку раскладывает по абзацам, а перечисления («первое… второе…») — в список. Слова не меняются. Добавляет около секунды."
+            value={s.formatText}
+            onChange={(v) => update({ formatText: v })}
+          />
           <Toggle label="Вставлять текст сразу" hint="Иначе он просто окажется в буфере обмена." value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
           <Toggle label="Возвращать буфер обмена" hint="После вставки в буфере снова то, что было до диктовки." value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
           <Toggle label="Показывать стоимость" hint="Сколько центов ты наговорил — прямо во время записи." value={s.showCost} onChange={(v) => update({ showCost: v })} />
