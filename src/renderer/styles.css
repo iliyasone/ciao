@@ -81,8 +81,9 @@ body.app {
 
 /* ── Overlay card ─────────────────────────────────────────────────────── */
 
+/* "backwards", not "both": a filled animation would pin opacity and make the hover fade instant. */
 .card-enter {
-  animation: card-in 170ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: card-in 170ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 .card-leave {

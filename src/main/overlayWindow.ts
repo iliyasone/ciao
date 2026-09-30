@@ -95,6 +95,7 @@ export class OverlayWindow implements OverlayPort {
     if (!this.dragOrigin) return;
     this.dragOrigin = null;
     const b = this.win.getBounds();
+    console.log("overlay moved to", JSON.stringify(b));
     this.savePlacement({ position: { x: b.x, y: b.y }, cardWidth: b.width - SIDE_PADDING });
   }
 

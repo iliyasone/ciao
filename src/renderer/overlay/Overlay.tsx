@@ -124,21 +124,21 @@ const HIDE_AFTER: Partial<Record<OverlayState["phase"], number>> = { done: 450, 
  * Pointer drag on the grip (move) or the corner (resize). Offsets are sent relative to where the
  * drag started, so the main process can apply them to the window's original bounds.
  */
-function dragHandlers(mode: "move" | "resize", dragging: { current: boolean }) {
-  let start: { x: number; y: number } | null = null;
+function dragHandlers(mode: "move" | "resize", drag: { current: { x: number; y: number } | null }) {
+  // The start point lives in a ref: the card re-renders every 200 ms while recording, and
+  // handlers recreated mid-drag must still know where the drag began.
   return {
     onPointerDown: (e: React.PointerEvent) => {
       e.currentTarget.setPointerCapture(e.pointerId);
-      start = { x: e.screenX, y: e.screenY };
-      dragging.current = true;
+      drag.current = { x: e.screenX, y: e.screenY };
       ciao.overlay.dragStart();
     },
     onPointerMove: (e: React.PointerEvent) => {
+      const start = drag.current;
       if (start) ciao.overlay.drag(mode, e.screenX - start.x, e.screenY - start.y);
     },
     onPointerUp: () => {
-      start = null;
-      dragging.current = false;
+      drag.current = null;
       ciao.overlay.dragEnd();
     },
   };
@@ -152,7 +152,7 @@ export function Overlay() {
   const [now, setNow] = useState(Date.now());
   const [leaving, setLeaving] = useState(false);
   const hovered = useRef(false);
-  const dragging = useRef(false);
+  const dragging = useRef<{ x: number; y: number } | null>(null);
   // Hovering makes the card see-through (to read what's under it); scrolling or grabbing the
   // grip means you want the card itself, so it turns solid again until the pointer leaves.
   const [peek, setPeek] = useState(false);
@@ -291,7 +291,7 @@ export function Overlay() {
           if (!dragging.current) ciao.overlay.setInteractive(false);
         }}
         onWheel={solid}
-        className={`${leaving ? "card-leave" : "card-enter"} group relative w-full rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-opacity duration-150 dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ${peek ? "opacity-[0.18]" : "opacity-100"}`}
+        className={`${leaving ? "card-leave" : "card-enter"} group relative w-full rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-opacity duration-300 ease-out dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ${peek ? "opacity-[0.18]" : "opacity-100"}`}
       >
         <header className="mb-1.5 grid h-6 grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex items-center gap-2">
