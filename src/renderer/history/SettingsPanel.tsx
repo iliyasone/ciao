@@ -1,5 +1,6 @@
-import { Check, KeyRound, Monitor, Moon, Sun } from "lucide-react";
+import { Check, KeyRound, Monitor, Moon, MousePointerClick, Plus, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
 import { DELAYS, type Settings, type Theme } from "../../core/types";
 
 const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
@@ -84,15 +85,16 @@ export function SettingsPanel() {
         </Card>
 
         <Card title="Клавиши">
-          <Keys label="Диктовка" keys={["Правый Ctrl"]} hint="Держи и говори. Короткое нажатие — режим без рук, ещё одно — готово." />
-          <Toggle
-            label="Колёсико мыши"
-            hint="Нажатие колёсика работает так же, как правый Ctrl. В других приложениях средний клик при этом не срабатывает."
-            value={s.middleClick}
-            onChange={(v) => update({ middleClick: v })}
-          />
+          <Field
+            label="Диктовка"
+            hint="Держи и говори. Короткое нажатие — режим без рук, ещё одно — готово. Назначенные кнопки мыши другие приложения не получают."
+          >
+            <TriggerList value={s.triggers} onChange={(triggers) => update({ triggers })} />
+          </Field>
           <Keys label="Отмена" keys={["Esc"]} hint="Запись всё равно сохранится в истории." />
-          <Keys label="Вставить последнее" keys={s.pasteLastHotkey.split("+")} />
+          <Row label="Вставить последнее" hint="Нажми, чтобы задать другое сочетание.">
+            <AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />
+          </Row>
         </Card>
 
         <Card title="Для разработчика">
@@ -212,6 +214,89 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint?: string
         <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4" : ""}`} />
       </button>
     </Row>
+  );
+}
+
+function Caps({ parts }: { parts: string[] }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {parts.map((k, i) => (
+        <kbd key={i} className="rounded-md bg-tint/8 px-2 py-0.5 font-sans text-[12px] text-fg2 ring-1 ring-tint/10">
+          {k}
+        </kbd>
+      ))}
+    </span>
+  );
+}
+
+/** Dictation triggers; new ones are recorded by the native helper, so lone modifiers and mouse buttons work. */
+function TriggerList({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [capturing, setCapturing] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {value.map((spec) => (
+        <span key={spec} className="inline-flex items-center gap-1.5 rounded-xl bg-tint/5 py-1 pr-1 pl-2 ring-1 ring-tint/[0.07]">
+          {isMouseTrigger(spec) && <MousePointerClick className="size-3.5 text-faint" />}
+          <Caps parts={triggerParts(spec)} />
+          <button
+            title="Убрать"
+            disabled={value.length === 1}
+            onClick={() => onChange(value.filter((v) => v !== spec))}
+            className="rounded-md p-0.5 text-faint transition-colors hover:bg-tint/10 hover:text-fg disabled:opacity-30"
+          >
+            <X className="size-3.5" />
+          </button>
+        </span>
+      ))}
+      <button
+        disabled={capturing}
+        onClick={async () => {
+          setCapturing(true);
+          const spec = await ciao.settings.captureTrigger();
+          setCapturing(false);
+          if (spec && !value.includes(spec)) onChange([...value, spec]);
+        }}
+        className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12.5px] transition-colors ${
+          capturing ? "bg-accent/15 text-accent ring-1 ring-accent/40" : "text-muted ring-1 ring-tint/10 hover:bg-tint/5 hover:text-fg"
+        }`}
+      >
+        {capturing ? (
+          <span className="animate-pulse">Нажми клавишу, сочетание или кнопку мыши… Esc — отмена</span>
+        ) : (
+          <>
+            <Plus className="size-3.5" />
+            Добавить
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+/** Records an Electron accelerator from the next key combo pressed while focused. */
+function AcceleratorRecorder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  return (
+    <button
+      onClick={() => setRecording(true)}
+      onBlur={() => setRecording(false)}
+      onKeyDown={(e) => {
+        if (!recording) return;
+        e.preventDefault();
+        if (e.key === "Escape") {
+          setRecording(false);
+          return;
+        }
+        const acc = acceleratorFromEvent(e);
+        if (acc) {
+          onChange(acc);
+          setRecording(false);
+        }
+      }}
+      className={`rounded-xl px-1.5 py-1 transition-colors ${recording ? "bg-accent/15 ring-1 ring-accent/40" : "hover:bg-tint/5"}`}
+    >
+      {recording ? <span className="animate-pulse px-1 text-[12.5px] text-accent">Нажми сочетание… Esc — отмена</span> : <Caps parts={acceleratorParts(value)} />}
+    </button>
   );
 }
 

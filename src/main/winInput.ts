@@ -12,26 +12,24 @@ export interface ForegroundWindow {
 }
 
 type InputEvents = {
-  hotkey: [down: boolean];
+  trigger: [down: boolean];
   escape: [];
   other: [];
-  mouse: [down: boolean];
 };
 
 /**
- * Talks to native/win-input (Ciao.Input.exe): a global keyboard hook that can
- * swallow Esc, plus foreground-window lookup and Ctrl+V injection. Restarted if it dies.
+ * Talks to native/win-input (Ciao.Input.exe): global keyboard and mouse hooks for the dictation
+ * triggers (and for swallowing Esc), shortcut capture, foreground-window lookup and Ctrl+V
+ * injection. Restarted if it dies.
  */
 export class WinInput extends EventEmitter<InputEvents> {
   private child: ChildProcess | null = null;
   private nextId = 1;
   private pending = new Map<number, (reply: Record<string, unknown>) => void>();
   private stopped = false;
+  private captureResolve: ((spec: string | null) => void) | null = null;
 
-  constructor(
-    private readonly hotkey: string,
-    private middleClick: boolean,
-  ) {
+  constructor(private triggers: string[]) {
     super();
   }
 
@@ -47,8 +45,9 @@ export class WinInput extends EventEmitter<InputEvents> {
       console.warn("win-input helper unavailable:", exe);
       return;
     }
-    const args = ["--hotkey", this.hotkey, ...(this.middleClick ? ["--middle-click"] : [])];
-    const child = spawn(exe, args, { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+    const args = this.triggers.flatMap((t) => ["--trigger", t]);
+    const child = spawn(exe, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    readline.createInterface({ input: child.stderr! }).on("line", (line) => console.error("input stderr:", line));
     this.child = child;
     readline.createInterface({ input: child.stdout! }).on("line", (line) => this.onLine(line));
     child.on("exit", () => {
@@ -68,10 +67,28 @@ export class WinInput extends EventEmitter<InputEvents> {
     this.send({ cmd: "arm", on });
   }
 
-  /** Use (and swallow) the middle mouse button as a second dictation trigger. */
-  setMiddleClick(on: boolean): void {
-    this.middleClick = on;
-    this.send({ cmd: "mouse", on });
+  setTriggers(triggers: string[]): void {
+    this.triggers = triggers;
+    this.send({ cmd: "triggers", list: triggers });
+  }
+
+  /** Resolves with the next key, combo or mouse button the user presses (null: Esc or timeout). */
+  capture(): Promise<string | null> {
+    this.captureResolve?.(null);
+    if (!this.child) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.send({ cmd: "capture", on: false });
+        finish(null);
+      }, 20_000);
+      const finish = (spec: string | null) => {
+        clearTimeout(timer);
+        this.captureResolve = null;
+        resolve(spec);
+      };
+      this.captureResolve = finish;
+      this.send({ cmd: "capture", on: true });
+    });
   }
 
   async foreground(): Promise<ForegroundWindow | null> {
@@ -117,18 +134,19 @@ export class WinInput extends EventEmitter<InputEvents> {
       this.pending.delete(msg.id);
       return;
     }
+    if (msg.type !== "trigger") console.log("input:", line); // trigger presses are too chatty to log
     switch (msg.type) {
-      case "hotkey":
-        this.emit("hotkey", msg.down === true);
+      case "trigger":
+        this.emit("trigger", msg.down === true);
+        break;
+      case "captured":
+        this.captureResolve?.(typeof msg.spec === "string" ? msg.spec : null);
         break;
       case "escape":
         this.emit("escape");
         break;
       case "other":
         this.emit("other");
-        break;
-      case "mouse":
-        this.emit("mouse", msg.down === true);
         break;
     }
   }

@@ -15,10 +15,11 @@ export interface Settings {
   keywords: string[];
   /** Model for "transcribe the whole recording again, more accurately". */
   fileModel: string;
-  /** System.Windows.Forms.Keys name of the push-to-talk key. */
-  hotkey: string;
-  /** The middle mouse button works like the hotkey (click = hands-free, hold = push-to-talk). */
-  middleClick: boolean;
+  /**
+   * Dictation triggers, in the native helper's syntax (see core/triggers.ts): hold = push-to-talk,
+   * a short press = hands-free until the next press. Mouse buttons are swallowed while bound.
+   */
+  triggers: string[];
   /** Electron accelerator that pastes the last transcript again. */
   pasteLastHotkey: string;
   autoPaste: boolean;

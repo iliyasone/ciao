@@ -26,9 +26,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     (the app's UI is in Russian): *Настройки → Для разработчика → Показывать
     задержку*.
 - **Push to talk.** Hold **Right Ctrl**, speak, release, and the text is pasted.
-  - The **middle mouse button** works the same way: click to start hands-free,
-    click again to finish, or hold it to talk. While this is on (*Настройки → Клавиши →
-    Колёсико мыши*), other apps don't receive middle clicks.
+  - The **middle mouse button** works the same way by default: click to start
+    hands-free, click again to finish, or hold it to talk.
+  - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
+    see [Hotkeys](#hotkeys).
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish.
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
@@ -98,12 +99,23 @@ that file.
 
 ### Hotkeys
 
-- The paste-last shortcut is `pasteLastHotkey` in `%APPDATA%\Ciao\config.json`,
-  written as an [Electron accelerator](https://www.electronjs.org/docs/latest/api/accelerator).
-- The push-to-talk key is `hotkey` in the same file, written as a
+Set them in *Настройки → Клавиши*.
+
+- **Dictation triggers.** Click *Добавить* and press what you want: a key (Right
+  Ctrl on its own works), a combo such as Ctrl+Alt+Space, or a mouse button
+  (middle, side buttons, optionally with modifiers). You can have several.
+- **What other apps see.**
+  - Keys and mouse buttons bound this way are hidden from other apps.
+  - A lone modifier such as Right Ctrl is the exception, so Ctrl+C keeps working.
+- **Paste last.** Click the shortcut and press a new combo.
+
+In `%APPDATA%\Ciao\config.json` these are:
+
+- `triggers` — `+`-separated modifiers (`Ctrl`, `Alt`, `Shift`, `Win`), then a
   [.NET `Keys`](https://learn.microsoft.com/dotnet/api/system.windows.forms.keys)
-  name (default `RControlKey`).
-- Restart Ciao after editing either one.
+  name or `MButton` / `XButton1` / `XButton2`.
+- `pasteLastHotkey` — an
+  [Electron accelerator](https://www.electronjs.org/docs/latest/api/accelerator).
 
 ## Where things are stored
 

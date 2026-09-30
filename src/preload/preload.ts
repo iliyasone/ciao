@@ -36,6 +36,8 @@ const api = {
     set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
     hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
     setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
+    /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
+    captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),
   },
 };
 

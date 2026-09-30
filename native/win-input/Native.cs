@@ -37,6 +37,9 @@ static class Native
     /// </summary>
     public sealed class KeyboardHook : IDisposable
     {
+        /// <summary>Tests only: treat injected keys as real (the app itself never injects then).</summary>
+        public static bool AcceptInjected;
+
         readonly LowLevelHookProc _proc; // kept alive: the OS holds only a raw pointer
         readonly IntPtr _hook;
         readonly Func<Keys, bool, bool> _handler;
@@ -54,7 +57,7 @@ static class Native
             if (nCode >= 0)
             {
                 var k = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
-                if ((k.flags & LLKHF_INJECTED) == 0)
+                if ((k.flags & LLKHF_INJECTED) == 0 || AcceptInjected)
                 {
                     int msg = (int)wParam;
                     bool down = msg is WM_KEYDOWN or WM_SYSKEYDOWN;
@@ -69,8 +72,7 @@ static class Native
     }
 
     const int WH_MOUSE_LL = 14;
-    const int WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
-    const uint LLMHF_INJECTED = 0x01;
+    const int WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208, WM_XBUTTONDOWN = 0x020B, WM_XBUTTONUP = 0x020C;
 
     [StructLayout(LayoutKind.Sequential)]
     struct MSLLHOOKSTRUCT
@@ -80,14 +82,18 @@ static class Native
         public IntPtr dwExtraInfo;
     }
 
-    /// <summary>Global low-level mouse hook for the middle button. The handler returns true to swallow the click.</summary>
-    public sealed class MiddleButtonHook : IDisposable
+    /// <summary>
+    /// Global low-level mouse hook for the middle and side buttons ("MButton", "XButton1", "XButton2").
+    /// The handler returns true to swallow the click. Injected clicks count too: mouse utilities
+    /// (Logitech, X-Mouse, AutoHotkey remaps) deliver buttons that way.
+    /// </summary>
+    public sealed class MouseButtonHook : IDisposable
     {
         readonly LowLevelHookProc _proc; // kept alive: the OS holds only a raw pointer
         readonly IntPtr _hook;
-        readonly Func<bool, bool> _handler;
+        readonly Func<string, bool, bool> _handler;
 
-        public MiddleButtonHook(Func<bool, bool> handler)
+        public MouseButtonHook(Func<string, bool, bool> handler)
         {
             _handler = handler;
             _proc = Callback;
@@ -97,17 +103,27 @@ static class Native
 
         IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            int msg = (int)wParam;
-            if (nCode >= 0 && msg is WM_MBUTTONDOWN or WM_MBUTTONUP)
+            if (nCode >= 0)
             {
-                var m = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                if ((m.flags & LLMHF_INJECTED) == 0 && _handler(msg == WM_MBUTTONDOWN)) return 1;
+                int msg = (int)wParam;
+                string? button = null;
+                if (msg is WM_MBUTTONDOWN or WM_MBUTTONUP) button = "MButton";
+                else if (msg is WM_XBUTTONDOWN or WM_XBUTTONUP)
+                    button = (Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam).mouseData >> 16) == 1 ? "XButton1" : "XButton2";
+                bool down = msg is WM_MBUTTONDOWN or WM_XBUTTONDOWN;
+                if (button is not null && _handler(button, down)) return 1;
             }
             return CallNextHookEx(_hook, nCode, wParam, lParam);
         }
 
         public void Dispose() => UnhookWindowsHookEx(_hook);
     }
+
+    static bool Down(Keys k) => (GetAsyncKeyState((int)k) & 0x8000) != 0;
+
+    /// <summary>Modifier state as the system sees it (keys we swallowed are not included).</summary>
+    public static Modifiers CurrentModifiers() =>
+        new(Down(Keys.ControlKey), Down(Keys.Menu), Down(Keys.ShiftKey), Down(Keys.LWin) || Down(Keys.RWin));
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();

@@ -14,8 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
     "TypeScript", "Python", "Electron", "React", "commit", "pull request", "Wispr Flow", "Windows",
   ],
   fileModel: "gpt-transcribe",
-  hotkey: "RControlKey",
-  middleClick: true,
+  triggers: ["RControlKey", "MButton"],
   pasteLastHotkey: "Alt+Shift+Z",
   autoPaste: true,
   restoreClipboard: true,
@@ -28,11 +27,19 @@ export const DEFAULT_SETTINGS: Settings = {
 const file = () => path.join(app.getPath("userData"), "config.json");
 
 export function loadSettings(): Settings {
+  let raw: Partial<Settings> & { hotkey?: string; middleClick?: boolean };
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(file(), "utf8")) };
+    raw = JSON.parse(fs.readFileSync(file(), "utf8"));
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
+  // Older configs had a single `hotkey` plus a `middleClick` switch.
+  if (!raw.triggers && (raw.hotkey || raw.middleClick !== undefined)) {
+    raw.triggers = [raw.hotkey ?? "RControlKey", ...(raw.middleClick === false ? [] : ["MButton"])];
+  }
+  delete raw.hotkey;
+  delete raw.middleClick;
+  return { ...DEFAULT_SETTINGS, ...raw };
 }
 
 export function saveSettings(s: Settings): void {

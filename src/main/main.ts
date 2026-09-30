@@ -90,14 +90,15 @@ function applySettings(next: Settings): void {
   saveSettings(next);
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.openAtLogin });
   if (!prev || prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev?.pasteLastHotkey);
-  if (prev && prev.middleClick !== next.middleClick) input.setMiddleClick(next.middleClick);
+  if (prev && prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   buildTrayMenu();
 }
 
 function registerPasteLast(previous?: string): void {
   if (previous) globalShortcut.unregister(previous);
   try {
-    globalShortcut.register(settings.pasteLastHotkey, () => void dictation.pasteLast());
+    if (!globalShortcut.register(settings.pasteLastHotkey, () => void dictation.pasteLast()))
+      console.warn(`paste-last hotkey ${settings.pasteLastHotkey} is taken by another app`);
   } catch (e) {
     console.warn("paste-last hotkey:", e);
   }
@@ -168,6 +169,7 @@ function registerIpc(): void {
     return settings;
   });
   ipcMain.handle("settings:has-key", () => loadApiKey() !== null);
+  ipcMain.handle("settings:capture-trigger", () => input.capture());
   ipcMain.handle("settings:set-key", (_e, key: string) => {
     fs.writeFileSync(path.join(app.getPath("userData"), "openai-key.txt"), key.trim());
     pool.refill();
@@ -214,17 +216,16 @@ void app.whenReady().then(() => {
   setInterval(() => pool.refill(), 30_000);
 
   overlay = new OverlayWindow(PRELOAD, RENDERER);
-  input = new WinInput(settings.hotkey, settings.middleClick);
+  input = new WinInput(settings.triggers);
   dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged });
-  input.on("hotkey", (down) => dictation.onHotkey(down));
+  input.on("trigger", (down) => dictation.onHotkey(down));
   input.on("escape", () => dictation.onEscape());
   input.on("other", () => dictation.onOtherKey());
-  input.on("mouse", (down) => dictation.onHotkey(down));
   input.start();
 
   registerIpc();
   tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, "tray.png")));
-  tray.setToolTip("Ciao — держи правый Ctrl (или жми колёсико) и говори");
+  tray.setToolTip("Ciao — диктовка с живым превью");
   tray.on("click", () => openHistory());
   applySettings(settings);
   nativeTheme.on("updated", () => {
