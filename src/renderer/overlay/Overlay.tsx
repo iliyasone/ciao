@@ -2,7 +2,7 @@ import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCc
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import type { OverlayState } from "../../core/types";
-import { meter, startCapture, stopCapture } from "./capture";
+import { meter, setWake, startCapture, stopCapture } from "./capture";
 
 // ── Text model ────────────────────────────────────────────────────────────
 // New tokens stay individual spans (animated) for FRESH_MS, then merge into one
@@ -172,6 +172,7 @@ export function Overlay() {
       ciao.overlay.onFinal((seq, t) => dispatch({ type: "final", seq, text: t })),
       ciao.capture.onStart((seq) => void startCapture(seq)),
       ciao.capture.onStop((seq) => void stopCapture(seq)),
+      ciao.wake.onEnable((on) => void setWake(on)),
     ];
     return () => offs.forEach((off) => off());
   }, []);

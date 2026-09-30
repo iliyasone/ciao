@@ -13,7 +13,8 @@
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
     "typecheck": "tsc --noEmit -p .",
-    "dist:win": "npm run build && electron-builder --win dir"
+    "dist:win": "npm run build && electron-builder --win dir",
+    "build:kws": "node scripts/fetch-kws.mjs"
   },
   "build": {
     "appId": "dev.iliyasone.ciao",
@@ -40,6 +41,10 @@
           "*.png",
           "*.ico"
         ]
+      },
+      {
+        "from": "build/kws",
+        "to": "kws"
       }
     ],
     "win": {

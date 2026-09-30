@@ -28,6 +28,10 @@ const api = {
     stopped: (seq: number) => ipcRenderer.send("capture:stopped", seq),
     error: (seq: number, message: string) => ipcRenderer.send("capture:error", seq, message),
   },
+  wake: {
+    onEnable: (cb: (on: boolean) => void) => on("wake:enable", cb),
+    chunk: (pcm: ArrayBuffer) => ipcRenderer.send("wake:chunk", pcm),
+  },
   history: {
     list: (): Promise<HistoryEntry[]> => ipcRenderer.invoke("history:list"),
     remove: (id: string): Promise<void> => ipcRenderer.invoke("history:remove", id),
@@ -41,6 +45,7 @@ const api = {
     get: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
     set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
     hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
+    wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
     setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
     captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),

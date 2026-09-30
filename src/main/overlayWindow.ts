@@ -24,6 +24,7 @@ export class OverlayWindow implements OverlayPort {
   readonly win: BrowserWindow;
   private visibleSeq = -1;
   private dragOrigin: Rectangle | null = null;
+  private wake = false;
 
   constructor(
     preload: string,
@@ -56,6 +57,13 @@ export class OverlayWindow implements OverlayPort {
     this.win.setAlwaysOnTop(true, "screen-saver");
     this.win.setIgnoreMouseEvents(true, { forward: true });
     void this.win.loadFile(path.join(rendererDir, "overlay.html"));
+    this.win.webContents.on("did-finish-load", () => this.win.webContents.send("wake:enable", this.wake));
+  }
+
+  /** Keep the mic open for the wake-word detector (or not). */
+  setWake(on: boolean): void {
+    this.wake = on;
+    if (!this.win.webContents.isLoading()) this.win.webContents.send("wake:enable", on);
   }
 
   /** The card was hovered/left: let clicks and wheel scrolling through only while over it. */

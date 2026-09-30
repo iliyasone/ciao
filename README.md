@@ -30,6 +30,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
+  - Or just say **"чао"** to start hands-free (*Настройки → Голосом*, off by default).
+    The word is spotted on your computer by a small keyword-spotting model
+    ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), Russian streaming zipformer),
+    so nothing is sent anywhere until you dictate. It costs about 6% of one CPU core,
+    and the mic stays open while it is on.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
     or say **"чао-чао"** (the words themselves are not pasted; toggle in
     *Настройки → Голосом*).
@@ -92,6 +97,7 @@ git clone https://github.com/iliyasone/ciao.git
 cd ciao
 npm install
 npm run build:native   # the input helper → build/win-input/Ciao.Input.exe
+npm run build:kws      # the wake-word detector and model (~50 MB) → build/kws
 npm run dist:win       # the app → release/win-unpacked/Ciao.exe
 ```
 

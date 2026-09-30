@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayWidth: 640,
   showDelay: false,
   stopPhrase: true,
+  wakeWord: false,
   formatText: true,
   formatModel: "gpt-5.4-mini",
 };

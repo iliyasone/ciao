@@ -9,6 +9,7 @@ import { HistoryStore, WavWriter } from "./history";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
+import { WakeWord } from "./wakeWord";
 import { WinInput } from "./winInput";
 
 // A second launch only forwards its arguments to the running instance (see "second-instance").
@@ -49,6 +50,7 @@ let pool: SessionPool;
 let input: WinInput;
 let overlay: OverlayWindow;
 let dictation: DictationController;
+const wake = new WakeWord();
 let historyWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
@@ -91,6 +93,8 @@ function applySettings(next: Settings): void {
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.openAtLogin });
   if (!prev || prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev?.pasteLastHotkey);
   if (prev && prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
+  wake.setEnabled(next.wakeWord);
+  overlay.setWake(next.wakeWord);
   buildTrayMenu();
 }
 
@@ -179,6 +183,7 @@ async function showRecovered(entries: HistoryEntry[]): Promise<void> {
 }
 
 function registerIpc(): void {
+  ipcMain.on("wake:chunk", (_e, pcm: ArrayBuffer) => wake.feed(new Uint8Array(pcm)));
   ipcMain.on("capture:chunk", (_e, seq: number, pcm: ArrayBuffer) => dictation.onChunk(seq, new Uint8Array(pcm)));
   ipcMain.on("capture:stopped", (_e, seq: number) => dictation.onCaptureStopped(seq));
   ipcMain.on("capture:error", (_e, seq: number, message: string) => dictation.onCaptureError(seq, message));
@@ -203,6 +208,7 @@ function registerIpc(): void {
     return settings;
   });
   ipcMain.handle("settings:has-key", () => loadApiKey() !== null);
+  ipcMain.handle("settings:wake-available", () => WakeWord.available());
   ipcMain.handle("settings:capture-trigger", () => input.capture());
   ipcMain.handle("settings:set-key", (_e, key: string) => {
     fs.writeFileSync(path.join(app.getPath("userData"), "openai-key.txt"), key.trim());
@@ -256,7 +262,8 @@ void app.whenReady().then(() => {
     (p) => applySettings({ ...settings, overlayPosition: p.position, overlayWidth: p.cardWidth }),
   );
   input = new WinInput(settings.triggers);
-  dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged });
+  dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged, idle: () => wake.reset() });
+  wake.on("wake", (preRoll) => dictation.onWake(preRoll));
   input.on("trigger", (down) => dictation.onHotkey(down));
   input.on("escape", () => dictation.onEscape());
   input.on("other", () => dictation.onOtherKey());

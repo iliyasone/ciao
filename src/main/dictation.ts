@@ -7,7 +7,7 @@ import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, WinInput } from "./winInput";
-import { endsWithStopPhrase, stripStopPhrase } from "../core/voiceCommands";
+import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { formatTranscript } from "./format";
 
 /** What the controller needs from the overlay window. */
@@ -42,6 +42,8 @@ interface Active {
   final?: string;
   completedAt?: number;
   offline: string | null;
+  /** Started by the wake word; its audio (with "чао") was prepended. */
+  wakeStarted?: boolean;
   /** Finished by saying "чао-чао"; strip it from the text. */
   stoppedByPhrase?: boolean;
   /** Fed from a file by --replay: no mic, nothing pasted. */
@@ -71,6 +73,8 @@ export class DictationController {
       settings: () => Settings;
       apiKey: () => string | null;
       changed: (entry: HistoryEntry) => void;
+      /** A dictation ended (the wake-word detector starts afresh). */
+      idle: () => void;
     },
   ) {}
 
@@ -132,6 +136,17 @@ export class DictationController {
     if (!a || a.seq !== seq) return;
     this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: `Микрофон: ${message}` });
     this.cancel(true, `Микрофон: ${message}`);
+  }
+
+  /** The wake word was heard: start hands-free, beginning with the audio since the word. */
+  onWake(preRoll: Uint8Array): void {
+    if (this.active) return;
+    this.start();
+    const a = this.current();
+    if (!a) return;
+    a.wakeStarted = true;
+    this.handsFree = true;
+    if (preRoll.byteLength) this.onChunk(a.seq, preRoll);
   }
 
   // ── Paste the last transcript again (Alt+Shift+Z) ───────────────────────
@@ -250,6 +265,7 @@ export class DictationController {
     const a = this.active;
     if (!a) return;
     this.active = null;
+    this.deps.idle();
     this.deps.input.arm(false);
     this.deps.overlay.stopCapture(a.seq);
     a.session.close();
@@ -295,6 +311,7 @@ export class DictationController {
 
     let live = (a.final ?? a.liveText).trim();
     if (a.stoppedByPhrase) live = stripStopPhrase(live);
+    if (a.wakeStarted) live = stripWakeWord(live);
     if (live || a.final !== undefined) add("live", settings.liveModel, live);
 
     let text: string | null = a.final !== undefined ? live : null;
@@ -303,6 +320,7 @@ export class DictationController {
       try {
         text = (await transcribeFile(a.apiKey, WavWriter.readPcm(this.deps.store.audioPath(entry.id)), settings)).trim();
         if (a.stoppedByPhrase) text = stripStopPhrase(text);
+        if (a.wakeStarted) text = stripWakeWord(text);
         add("retry-file", settings.fileModel, text);
       } catch (e) {
         entry.error = `${a.offline ?? "Нет финального текста"}; файл: ${(e as Error).message}`;
@@ -333,6 +351,7 @@ export class DictationController {
       if (entry.durationMs < 1500 && !entry.error) {
         this.deps.store.delete(entry.id); // an accidental tap, nothing worth keeping
         this.active = null;
+        this.deps.idle();
         this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
         return;
       }
@@ -357,6 +376,7 @@ export class DictationController {
     this.deps.store.save(entry);
     this.deps.changed(entry);
     if (this.active === a) this.active = null;
+    this.deps.idle();
     this.deps.overlay.state({
       ...this.baseState(a),
       phase,

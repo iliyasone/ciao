@@ -36,6 +36,8 @@ export interface Settings {
   /** Lay out long dictations as paragraphs and lists (a fast LLM picks the structure; words are never changed). */
   formatText: boolean;
   formatModel: string;
+  /** Saying "чао" starts a hands-free dictation (the mic stays open; detection is local). */
+  wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
   stopPhrase: boolean;
 }
