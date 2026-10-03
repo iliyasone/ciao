@@ -15,11 +15,14 @@ function set(next: Lang): void {
   for (const l of listeners) l();
 }
 
-/** Call (and await) before rendering. Never rejects: the overlay must render to capture audio. */
+/**
+ * Reads the language and follows changes. Await it before rendering to avoid a flash of the
+ * default; the overlay doesn't (its listeners must be up at once, and it starts hidden). Never rejects.
+ */
 export async function loadLang(): Promise<void> {
   ciao.settings.onChanged((s) => set(s.language));
   try {
-    lang = (await ciao.settings.get()).language;
+    set((await ciao.settings.get()).language);
   } catch (e) {
     console.warn("reading the language:", e);
   }

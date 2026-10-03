@@ -192,7 +192,7 @@ const ru = {
     XButton2: "Боковая кнопка «вперёд»",
     Space: "Пробел",
     Apps: "Меню",
-  } as Record<string, string>,
+  },
 };
 
 export type Strings = typeof ru;
@@ -247,7 +247,7 @@ const en: Strings = {
     incompleteRelease: "The latest release on GitHub is incomplete — it has no latest.yml",
     offline: "No internet connection",
     githubStatus: (status) => `GitHub responded with ${status} — try again later`,
-    buttonTitle: (current) => `You have ${current}. It downloads and restarts by itself.`,
+    buttonTitle: (current) => `You have ${current}. Ciao downloads the update and restarts on its own.`,
     retryUpdate: "Retry update",
     updateTo: (v) => `Update to ${v}`,
     downloading: (v, percent) => `Downloading ${v}: ${percent}%`,
@@ -282,7 +282,7 @@ const en: Strings = {
     retryLiveTitle: "Run the recording through the live model again",
     openFolder: "Open the recording's folder",
     delete: "Delete the recording and its audio",
-    confirmDelete: "Delete for sure?",
+    confirmDelete: "Really delete?",
     play: "Listen",
     pause: "Pause",
   },
@@ -322,7 +322,7 @@ const en: Strings = {
       restoreClipboard: "Restore the clipboard",
       restoreClipboardHint: "After pasting, the clipboard holds what it had before the dictation.",
       showCost: "Show cost",
-      showCostHint: "How many cents you've spoken, right while recording.",
+      showCostHint: "What the dictation costs in cents, shown while you record.",
       openAtLogin: "Start with Windows",
     },
     voice: {
@@ -349,7 +349,7 @@ const en: Strings = {
     updates: {
       title: "Updates",
       version: (v) => `Version ${v}`,
-      disabled: "This is a run from source — update with git.",
+      disabled: "Running from source — update with git.",
       idle: "New versions are checked for automatically, every few hours.",
       checking: "Checking…",
       latest: (time) => `This is the latest version. Checked at ${time}.`,
@@ -378,9 +378,9 @@ const en: Strings = {
     RShiftKey: "Right Shift",
     LShiftKey: "Left Shift",
     RWin: "Right Win",
-    MButton: "Mouse wheel",
-    XButton1: "Side button “back”",
-    XButton2: "Side button “forward”",
+    MButton: "Middle mouse button",
+    XButton1: "Back side button",
+    XButton2: "Forward side button",
     Space: "Space",
     Apps: "Menu",
   },

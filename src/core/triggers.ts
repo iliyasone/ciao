@@ -2,6 +2,8 @@
 // and Electron accelerators ("Alt+Shift+Z"). The trigger syntax is defined by the native helper
 // (native/win-input/Triggers.cs): "+"-separated modifiers, then a .NET Keys name or mouse button.
 
+import type { Strings } from "./i18n";
+
 // Names that differ by language come from Strings.keyNames (core/i18n.ts).
 const TRIGGER_NAMES: Record<string, string> = {
   LWin: "Win",
@@ -16,8 +18,9 @@ const TRIGGER_NAMES: Record<string, string> = {
 };
 
 /** Each part is rendered as its own key cap. */
-export function triggerParts(spec: string, keyNames: Record<string, string>): string[] {
-  return spec.split("+").map((p) => keyNames[p] ?? TRIGGER_NAMES[p] ?? p.replace(/^D(\d)$/, "$1").replace(/^NumPad/, "Num "));
+export function triggerParts(spec: string, keyNames: Strings["keyNames"]): string[] {
+  const names: Record<string, string> = keyNames;
+  return spec.split("+").map((p) => names[p] ?? TRIGGER_NAMES[p] ?? p.replace(/^D(\d)$/, "$1").replace(/^NumPad/, "Num "));
 }
 
 export const isMouseTrigger = (spec: string) => /(^|\+)(MButton|XButton1|XButton2)$/.test(spec);
@@ -45,6 +48,6 @@ export function acceleratorFromEvent(e: { code: string; ctrlKey: boolean; altKey
   return [...mods, key].join("+");
 }
 
-export function acceleratorParts(accelerator: string, keyNames: Record<string, string>): string[] {
-  return accelerator.split("+").map((p) => (p === "Super" ? "Win" : p === "Space" ? (keyNames.Space ?? p) : p));
+export function acceleratorParts(accelerator: string, keyNames: Strings["keyNames"]): string[] {
+  return accelerator.split("+").map((p) => (p === "Super" ? "Win" : p === "Space" ? keyNames.Space : p));
 }
