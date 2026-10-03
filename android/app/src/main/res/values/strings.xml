@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Ciao</string>
+    <string name="tagline">See what you say while you say it.</string>
+    <string name="service_label">Ciao dictation</string>
+    <string name="service_description">Shows the Ciao button while the keyboard is open, and types what you dictate into the text field. Ciao only looks at which field has focus and its text, and never sends it anywhere.</string>
+    <string name="bubble_description">Dictate with Ciao</string>
+
+    <string name="section_setup">Setup</string>
+    <string name="key_title">OpenAI API key</string>
+    <string name="key_text">Needs access to gpt-live-transcribe. Live dictation costs $0.017 per minute of speech; idle time is free. The key stays on this phone.</string>
+    <string name="key_hint" translatable="false">sk-…</string>
+    <string name="mic_title">Microphone</string>
+    <string name="mic_text">Recording starts only when you tap the Ciao button and stops when you finish.</string>
+    <string name="mic_allow">Allow microphone</string>
+    <string name="a11y_title">Ciao button over the keyboard</string>
+    <string name="a11y_text">Turn on “Ciao dictation” in Accessibility. Ciao uses it to see when the keyboard is open and to type the text into the field.</string>
+    <string name="a11y_open">Open Accessibility settings</string>
+    <string name="a11y_open_again">Accessibility settings</string>
+    <string name="a11y_restricted">Switch greyed out? Android blocks this for apps installed from a file: open App info, tap ⋮ in the corner, choose “Allow restricted settings”, then come back.</string>
+    <string name="app_info">App info</string>
+    <string name="try_title">Try it</string>
+    <string name="try_text">Tap the field below, then tap the Ciao button above the keyboard and speak. Tap it again or say “ciao ciao” to finish. Hold it to talk while held. Drag it to move it.</string>
+    <string name="try_hint">Tap here and dictate…</string>
+
+    <string name="section_recognition">Recognition</string>
+    <string name="context_title">Context</string>
+    <string name="context_text">What you usually talk about. Helps the recognizer with names and terms.</string>
+    <string name="terms_title">Terms</string>
+    <string name="terms_text">Words that must be spelled exactly, separated by commas.</string>
+    <string name="format_text">Paragraphs and lists</string>
+    <string name="stop_phrase">Say “ciao ciao” to finish</string>
+    <string name="show_cost">Show the cost of a dictation</string>
+    <string name="version">Ciao %1$s for Android</string>
+
+    <string name="cancel">Cancel</string>
+    <string name="done">Finish</string>
+    <string name="retry">Transcribe again</string>
+    <string name="need_key">Add your OpenAI API key in Ciao first</string>
+    <string name="need_mic">Allow Ciao to use the microphone first</string>
+    <string name="mic_error">Cannot open the microphone: %1$s</string>
+    <string name="mic_stopped">The microphone stopped: %1$s</string>
+    <string name="mic_silent">The microphone gives silence. Is another app using it?</string>
+    <string name="offline">Offline. Still recording, will transcribe at the end</string>
+    <string name="copied">Copied. Paste it where you need it</string>
+    <string name="nothing_heard">Nothing heard</string>
+    <string name="failed">Not transcribed: %1$s</string>
+
+    <string name="error_cannot_reach">Cannot reach OpenAI</string>
+    <string name="error_bad_key">OpenAI rejected the API key</string>
+    <string name="error_status">OpenAI error %1$d</string>
+    <string name="error_closed">Connection closed %1$s</string>
+    <string name="error_openai">OpenAI error</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors the desktop palette in src/renderer/styles.css. -->
+<resources>
+    <color name="accent">#F4677F</color>
+    <color name="app">#F4F4F6</color>
+    <color name="fg">#18181B</color>
+    <color name="muted">#52525B</color>
+    <color name="faint">#71717A</color>
+    <color name="ghost">#A1A1AA</color>
+    <color name="card">#FFFFFF</color>
+    <color name="overlay">#FDFDFE</color>
+    <color name="settled">#6B6B78</color>
+    <color name="fresh">#09090B</color>
+    <color name="ok">#047857</color>
+    <color name="warn">#B45309</color>
+</resources>
