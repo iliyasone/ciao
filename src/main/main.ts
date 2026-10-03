@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,12 +18,28 @@ import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
 
-// A second launch only forwards its arguments to the running instance (see "second-instance").
-if (!app.requestSingleInstanceLock()) app.exit(0);
-
 // Run as an X11 app on Linux, through XWayland on a Wayland desktop: only X11 lets the card sit at
-// the bottom of the screen above everything, and lets Ciao grab Esc during a dictation.
-if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "x11");
+// the bottom of the screen above everything, and lets Ciao grab Esc during a dictation. Electron
+// picks Wayland before this file runs (and writes it into --ozone-platform); switching here would
+// reach only the child processes (the GPU process then crashes on Wayland window handles), so start
+// over with the flag. Not when the user chose a platform themselves, or there's no XWayland.
+const relaunchOnX11 =
+  process.platform === "linux" &&
+  app.commandLine.getSwitchValue("ozone-platform") === "wayland" &&
+  !process.argv.some((a) => a.startsWith("--ozone-platform")) &&
+  !!process.env.DISPLAY &&
+  !process.env.CIAO_X11_RELAUNCH;
+if (relaunchOnX11) {
+  // Through the AppImage itself: the copy mounted for this run goes away when this process exits.
+  spawn(process.env.APPIMAGE ?? process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], {
+    detached: true,
+    stdio: "inherit",
+    env: { ...process.env, CIAO_X11_RELAUNCH: "1" },
+  }).unref();
+  app.exit(0);
+}
+// A second launch only forwards its arguments to the running instance (see "second-instance").
+else if (!app.requestSingleInstanceLock()) app.exit(0);
 
 // Mirror console output into userData/ciao.log — the only way to see what happened on someone's machine.
 {

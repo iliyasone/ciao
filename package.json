@@ -56,6 +56,10 @@
           "filter": [
             "*.exe"
           ]
+        },
+        {
+          "from": "build/kws",
+          "to": "kws"
         }
       ]
     },
@@ -74,7 +78,13 @@
       "category": "Utility",
       "synopsis": "Dictation with a live preview",
       "executableName": "ciao",
-      "maintainer": "Ilias Dzhabbarov <iliyasone@users.noreply.github.com>"
+      "maintainer": "Ilias Dzhabbarov <iliyasone@users.noreply.github.com>",
+      "extraResources": [
+        {
+          "from": "build/kws",
+          "to": "kws"
+        }
+      ]
     },
     "appImage": {
       "artifactName": "Ciao-${version}.AppImage"

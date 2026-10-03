@@ -242,7 +242,9 @@ How it differs from Windows:
 
   Without it the text stays on the clipboard.
 - The Ciao windows run through XWayland on Wayland, so the card can stay at the
-  bottom of the screen above everything.
+  bottom of the screen above everything. On a Wayland desktop Ciao restarts
+  itself once at launch with `--ozone-platform=x11`; pass `--ozone-platform=…`
+  yourself to choose otherwise.
 - The tray icon needs AppIndicator support (on GNOME, the *AppIndicator and
   KStatusNotifierItem Support* extension). *Start when you sign in* writes
   `~/.config/autostart/ciao.desktop`.
