@@ -121,6 +121,8 @@ function updateMenuItem(state: UpdateState): Electron.MenuItemConstructorOptions
       return [{ label: `Обновление ${state.version}: ${state.percent}%`, enabled: false }];
     case "installing":
       return [{ label: `Устанавливается ${state.version}…`, enabled: false }];
+    case "error":
+      return state.version ? [{ label: `Повторить обновление до ${state.version}`, click: () => void updater.install() }] : [];
     default:
       return [];
   }

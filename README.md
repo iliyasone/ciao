@@ -94,7 +94,8 @@ Idle time costs nothing.
 Download `Ciao-Setup-<version>.exe` from the
 [latest release](https://github.com/iliyasone/ciao/releases/latest) and run it. It
 installs for your user only (no admin prompt) into `%LOCALAPPDATA%\Programs\Ciao`
-and starts Ciao.
+and starts Ciao. If you already run a copy you built yourself, quit it first
+(tray → *Выход*); otherwise the new one hands over to it and exits.
 
 1. The installer is unsigned, so SmartScreen may warn you: choose *More info → Run
    anyway*.
@@ -188,8 +189,8 @@ Run `npm version 0.3.0 && git push --follow-tags` on `main`. `npm version` bumps
 `package.json`, commits and tags `v0.3.0`; pushing the tag starts the release.
 
 [`release.yml`](.github/workflows/release.yml) builds the installer on a Windows
-runner and publishes it as a GitHub release with `latest.yml`, which is the file
-installed copies check. The tag must equal `v` + the `package.json` version, or
+runner and uploads it to a draft GitHub release with `latest.yml`, which is the
+file installed copies check. The draft is published once all files are uploaded. The tag must equal `v` + the `package.json` version, or
 the workflow fails. [`ci.yml`](.github/workflows/ci.yml) builds the same installer
 on every PR and attaches it to the run as an artifact.
 

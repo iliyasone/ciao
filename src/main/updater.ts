@@ -34,6 +34,7 @@ export class Updater {
     autoUpdater.logger = { info: (m) => console.log("updater:", m), warn: (m) => console.warn("updater:", m), error: (m) => console.error("updater:", m) };
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.disableWebInstaller = true;
     if (!fs.existsSync(path.join(process.resourcesPath, "app-update.yml"))) {
       const file = path.join(app.getPath("userData"), "app-update.yml");
       fs.writeFileSync(file, `provider: github\nowner: ${REPO.owner}\nrepo: ${REPO.repo}\nupdaterCacheDirName: ciao-updater\n`);
@@ -54,11 +55,16 @@ export class Updater {
     if (this.timer) clearInterval(this.timer);
   }
 
-  /** `manual`: the user pressed "Проверить" — only then is a failure shown (offline is normal in the background). */
+  /**
+   * `manual`: the user pressed "Проверить" — only then is a failure shown (offline is normal in the
+   * background). A background check leaves an already found version alone, so its button stays.
+   */
   async check(manual = true): Promise<void> {
-    const { phase, current } = this.state;
-    if (phase === "disabled" || phase === "checking" || phase === "downloading" || phase === "installing") return;
     const before = this.state;
+    const { phase, current } = before;
+    if (phase === "disabled" || phase === "checking" || phase === "downloading" || phase === "installing") return;
+    const known = before.phase === "available" || before.phase === "error" ? before.version : undefined;
+    if (!manual && known) return;
     this.set({ phase: "checking", current });
     try {
       const result = await autoUpdater.checkForUpdates();
@@ -67,7 +73,7 @@ export class Updater {
       else this.set({ phase: "latest", current, checkedAt: Date.now() });
     } catch (e) {
       console.warn("update check failed:", e);
-      if (manual) this.set({ phase: "error", current, message: describe(e) });
+      if (manual) this.set({ phase: "error", current, message: describe(e), version: known });
       else this.set(before.phase === "error" ? { phase: "idle", current } : before);
     }
   }
@@ -99,9 +105,11 @@ export class Updater {
 
 /** electron-updater errors can carry whole HTTP responses; keep the first line. */
 function describe(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (code === "ERR_UPDATER_NO_PUBLISHED_VERSIONS" || code === "ERR_UPDATER_LATEST_VERSION_NOT_FOUND") return "На GitHub пока нет опубликованных версий";
+  if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return "Последний релиз на GitHub собран не до конца — в нём нет latest.yml";
   const text = e instanceof Error ? e.message : String(e);
   if (/net::ERR_INTERNET_DISCONNECTED|ENOTFOUND|ERR_NAME_NOT_RESOLVED/.test(text)) return "Нет интернета";
-  if (/404|Unable to find latest version|No published versions/i.test(text)) return "На GitHub пока нет опубликованных версий";
   const line = text.split("\n")[0]!.trim();
   return line.length > 160 ? `${line.slice(0, 157)}…` : line;
 }
