@@ -173,11 +173,13 @@ we can see how many people use it. Two events:
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
   - time and money: `duration_s`, `voice_onset_ms` (not for wake-word starts, whose
     audio begins with speech), `first_text_ms`, `final_after_release_ms` and `cost_usd`;
-  - where the text went: `target_app`, the process name of the window it was meant
-    for (such as `WindowsTerminal` or `T3 Code`). When the text could not be pasted,
+  - where the text went: `target_app`, the kind of app it was meant for, from a
+    closed list in [`src/core/apps.ts`](src/core/apps.ts) (`t3code`, `vscode`,
+    `terminal`, `browser`, `telegram`, …). Any program not on the list is sent as
+    `other`, never by name. When the text could not be pasted,
     `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`, or
     `no-helper` / `timeout` / `unknown` when the input helper failed. On
-    `focus-changed` there are also `switched_to_app` (the process in front instead),
+    `focus-changed` there are also `switched_to_app` (the app in front instead, same list),
     `target_closed`, and `target_on_other_desktop` (true when you switched to another
     virtual desktop; absent when Windows can't tell).
 

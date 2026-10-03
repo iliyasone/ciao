@@ -9,6 +9,7 @@ import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, PasteMiss, WinInput } from "./winInput";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
+import { appLabel } from "../core/apps";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
@@ -43,7 +44,7 @@ export interface DictationReport {
   first_text_ms?: number;
   final_after_release_ms?: number;
   cost_usd: number;
-  /** Process name of the window it was meant for, e.g. "WindowsTerminal". */
+  /** The app it was meant for, from a closed list (core/apps.ts): "terminal", "vscode", … or "other". */
   target_app?: string;
   /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", or "no-helper" / "timeout" / "unknown" (helper failed). */
   paste_miss?: string;
@@ -479,9 +480,9 @@ export class DictationController {
       first_text_ms: t?.firstTextMs,
       final_after_release_ms: t?.finalAfterReleaseMs,
       cost_usd: Math.round(entry.transcripts.reduce((sum, x) => sum + x.costUsd, 0) * 10_000) / 10_000,
-      target_app: entry.target?.process || undefined,
+      target_app: entry.target?.process ? appLabel(entry.target.process) : undefined,
       paste_miss: miss?.reason,
-      switched_to_app: miss?.foregroundProcess || undefined,
+      switched_to_app: miss?.foregroundProcess ? appLabel(miss.foregroundProcess) : undefined,
       target_closed: miss?.targetExists === undefined ? undefined : !miss.targetExists,
       target_on_other_desktop: miss?.targetOnCurrentDesktop === undefined ? undefined : !miss.targetOnCurrentDesktop,
     });
