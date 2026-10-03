@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stopPhrase: true,
   wakeWord: false,
   formatText: true,
+  telemetry: true,
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");

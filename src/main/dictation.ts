@@ -2,7 +2,7 @@ import { clipboard } from "electron";
 import { level } from "../core/audio";
 import { costUsd, pricePerMinute } from "../core/cost";
 import type { RealtimeSession } from "../core/realtime";
-import type { Delivery, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
+import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
@@ -48,6 +48,8 @@ interface Active {
   stoppedByPhrase?: boolean;
   /** Fed from a file by --replay: no mic, nothing pasted. */
   replay: boolean;
+  /** Was in hands-free mode when it stopped (the controller's flag moves on to the next dictation). */
+  handsFree?: boolean;
   voiceOnsetAt?: number;
   firstTextAt?: number;
   lastDeltaAt?: number;
@@ -75,6 +77,8 @@ export class DictationController {
       changed: (entry: HistoryEntry) => void;
       /** A dictation ended (the wake-word detector starts afresh). */
       idle: () => void;
+      /** A dictation that was kept in history ended; for anonymous usage counts. */
+      ended: (e: { outcome: DictationOutcome; durationMs: number; handsFree: boolean; wake: boolean }) => void;
     },
   ) {}
 
@@ -258,6 +262,7 @@ export class DictationController {
     if (!a || a.phase !== "recording") return;
     a.phase = "finishing";
     a.releasedAt = Date.now();
+    a.handsFree = this.handsFree;
     a.shown = true;
     this.deps.input.arm(false);
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
@@ -284,6 +289,7 @@ export class DictationController {
     a.entry.error = error;
     this.deps.store.save(a.entry);
     this.deps.changed(a.entry);
+    this.ended(a, error ? "failed" : "cancelled");
     if (!error) this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: "Отменено — запись в истории" });
   }
 
@@ -381,6 +387,7 @@ export class DictationController {
     entry.delivery = delivery;
     this.deps.store.save(entry);
     this.deps.changed(entry);
+    this.ended(a, entry.status === "failed" ? "failed" : text ? delivery : "empty");
     if (this.active === a) this.active = null;
     this.deps.idle();
     this.deps.overlay.state({
@@ -388,6 +395,10 @@ export class DictationController {
       phase,
       message: phase === "clipboard" ? "Окно сменилось — текст в буфере, Ctrl+V" : phase === "saved" ? "Не распозналось — аудио сохранено в истории" : undefined,
     });
+  }
+
+  private ended(a: Active, outcome: DictationOutcome): void {
+    if (!a.replay) this.deps.ended({ outcome, durationMs: a.entry.durationMs, handsFree: a.handsFree ?? this.handsFree, wake: !!a.wakeStarted });
   }
 
   private baseState(a: Active): OverlayState {

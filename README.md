@@ -152,9 +152,30 @@ Everything is under `%APPDATA%\Ciao`:
   starts with the UTC start time, `YYYYMMDD-HHMMSS`. The **Folder** button in the
   history window opens it.
 - `ciao.log` — the app log.
+- `telemetry-id` — the random install id for [anonymous usage counts](#telemetry).
 
 Recordings and transcripts stay on your machine. Audio leaves it only to be
 transcribed by OpenAI.
+
+## Telemetry
+
+Ciao sends anonymous usage counts to [PostHog](https://posthog.com) (EU cloud), so
+we can see how many people use it. Two events:
+
+- `app_started`: app version, OS version, CPU architecture, and whether an API key
+  is set and the wake word and paragraph layout are on.
+- `dictation`, once per dictation kept in the history: how it ended (pasted,
+  clipboard, empty, failed, cancelled), its length in whole seconds, and whether it
+  was hands-free or started by the wake word.
+
+Each event carries a random install id from `%APPDATA%\Ciao\telemetry-id`. It is
+not derived from your machine or accounts. No text, audio, window titles, prompts,
+terms or keys are ever sent, and PostHog keeps no person profiles for these events.
+
+To turn it off, use *Настройки → Поведение → Анонимная статистика*, or set
+`CIAO_TELEMETRY=0`. An unpackaged dev run (`electron .`) sends nothing unless
+`CIAO_TELEMETRY=1`. `CIAO_POSTHOG_KEY` and `CIAO_POSTHOG_HOST`
+point it at your own PostHog project.
 
 ## Development
 

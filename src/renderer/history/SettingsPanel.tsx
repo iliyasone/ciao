@@ -88,6 +88,12 @@ export function SettingsPanel() {
           <Toggle label="Возвращать буфер обмена" hint="После вставки в буфере снова то, что было до диктовки." value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
           <Toggle label="Показывать стоимость" hint="Сколько центов ты наговорил — прямо во время записи." value={s.showCost} onChange={(v) => update({ showCost: v })} />
           <Toggle label="Запускать вместе с Windows" value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
+          <Toggle
+            label="Анонимная статистика"
+            hint="Сколько людей пользуется Ciao: запуск и длина каждой диктовки со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются."
+            value={s.telemetry}
+            onChange={(v) => update({ telemetry: v })}
+          />
         </Card>
 
         <Card title="Голосом">

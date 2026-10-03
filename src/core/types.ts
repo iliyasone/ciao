@@ -39,11 +39,16 @@ export interface Settings {
   wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
   stopPhrase: boolean;
+  /** Send anonymous usage counts (launches, dictations); never text or audio. */
+  telemetry: boolean;
 }
 
 export type EntryStatus = "recording" | "transcribing" | "done" | "failed" | "cancelled";
 export type Delivery = "pasted" | "clipboard" | "none";
 export type TranscriptSource = "live" | "retry-live" | "retry-file" | "formatted";
+
+/** How a dictation ended, for usage counts. */
+export type DictationOutcome = Delivery | "empty" | "failed" | "cancelled";
 
 export interface Transcript {
   id: string;

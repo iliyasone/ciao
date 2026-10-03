@@ -9,6 +9,7 @@ import { HistoryStore, WavWriter } from "./history";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
+import { Telemetry } from "./telemetry";
 import { WakeWord } from "./wakeWord";
 import { WinInput } from "./winInput";
 
@@ -51,6 +52,7 @@ let input: WinInput;
 let overlay: OverlayWindow;
 let dictation: DictationController;
 const wake = new WakeWord();
+const telemetry = new Telemetry(() => Telemetry.allowed() && settings?.telemetry !== false);
 let historyWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
@@ -262,7 +264,18 @@ void app.whenReady().then(() => {
     (p) => applySettings({ ...settings, overlayPosition: p.position, overlayWidth: p.cardWidth }),
   );
   input = new WinInput(settings.triggers);
-  dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged, idle: () => wake.reset() });
+  dictation = new DictationController({
+    store,
+    pool,
+    input,
+    overlay,
+    settings: () => settings,
+    apiKey: loadApiKey,
+    changed: notifyChanged,
+    idle: () => wake.reset(),
+    ended: ({ outcome, durationMs, handsFree, wake: byWake }) =>
+      telemetry.capture("dictation", { outcome, duration_s: Math.round(durationMs / 1000), hands_free: handsFree, wake_word: byWake }),
+  });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
   input.on("trigger", (down) => dictation.onHotkey(down));
   input.on("escape", () => dictation.onEscape());
@@ -282,6 +295,7 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
+  telemetry.capture("app_started", { has_api_key: loadApiKey() !== null, wake_word: settings.wakeWord, format_text: settings.formatText });
   void showRecovered(recovered);
   if (!loadApiKey()) openHistory("settings");
 });
