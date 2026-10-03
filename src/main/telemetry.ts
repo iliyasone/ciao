@@ -5,8 +5,8 @@ import path from "node:path";
 import { app, net } from "electron";
 
 // Anonymous usage counts, so we know how many people use Ciao and how much.
-// Events carry a random install id and coarse facts (version, OS, how long a dictation was) —
-// never text, audio, window titles, keys or settings content. See README → Telemetry.
+// Events carry a random install id and coarse facts (version, OS, a few on/off settings, how long
+// a dictation was) — never text, audio, window titles or keys. See README → Telemetry.
 // Same approach as T3 Code: PostHog's HTTP batch API, public project key, no SDK.
 
 // A PostHog project key is public by design: it can only send events, not read them.
@@ -68,6 +68,7 @@ export class Telemetry {
     this.sending = true;
     const batch = this.queue.splice(0);
     const distinct_id = this.installId();
+    let sent = false;
     try {
       const res = await net.fetch(`${HOST}/batch/`, {
         method: "POST",
@@ -79,12 +80,15 @@ export class Telemetry {
       // A 4xx other than 429 (a wrong key, a malformed event) won't get better on retry: drop the batch.
       if (res.status === 429 || res.status >= 500) this.requeue(batch);
       else if (!res.ok) console.warn(`telemetry: HTTP ${res.status}, dropped ${batch.length} events`);
+      else sent = true;
     } catch {
       // Offline, blocked or timed out.
       this.requeue(batch);
     } finally {
       this.sending = false;
     }
+    // Events captured while this batch was in flight; after a failure they wait for the timer.
+    if (sent) void this.flush();
   }
 
   /** Keep the events for the next attempt, every FLUSH_MS or on the next event (bounded by MAX_QUEUED). */

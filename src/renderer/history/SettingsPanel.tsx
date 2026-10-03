@@ -90,7 +90,7 @@ export function SettingsPanel() {
           <Toggle label="Запускать вместе с Windows" value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
           <Toggle
             label="Анонимная статистика"
-            hint="Сколько людей пользуется Ciao: запуск и длина каждой диктовки со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются."
+            hint="Сколько людей пользуется Ciao: запуск, длина и исход каждой диктовки, версия приложения и Windows — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются."
             value={s.telemetry}
             onChange={(v) => update({ telemetry: v })}
           />

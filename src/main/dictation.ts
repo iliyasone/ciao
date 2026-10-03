@@ -137,7 +137,8 @@ export class DictationController {
 
   onCaptureError(seq: number, message: string): void {
     const a = this.active;
-    if (!a || a.seq !== seq) return;
+    // Once finishing, finish() owns the entry (a slow mic can fail after the key was already released).
+    if (!a || a.seq !== seq || a.phase !== "recording") return;
     this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: `Микрофон: ${message}` });
     this.cancel(true, `Микрофон: ${message}`);
   }
