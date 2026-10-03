@@ -7,7 +7,7 @@ import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlaySta
 import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
-import type { ForegroundWindow, PasteMiss, WinInput } from "./winInput";
+import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
@@ -47,7 +47,7 @@ export interface DictationReport {
   cost_usd: number;
   /** The app it was meant for, from a closed list (core/apps.ts): "terminal", "vscode", … or "other". */
   target_app?: string;
-  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", or "no-helper" / "timeout" / "unknown" (helper failed). */
+  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", "no-injector" (Wayland without access to /dev/uinput), or "no-helper" / "timeout" / "unknown" (helper failed). */
   paste_miss?: string;
   /** focus-changed: the app in front instead, whether the target window was closed or left on another desktop. */
   switched_to_app?: string;
@@ -107,7 +107,7 @@ export class DictationController {
     private readonly deps: {
       store: HistoryStore;
       pool: SessionPool;
-      input: WinInput;
+      input: InputHelper;
       overlay: OverlayPort;
       settings: () => Settings;
       apiKey: () => string | null;

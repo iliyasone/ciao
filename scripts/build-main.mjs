@@ -6,3 +6,4 @@ const common = { bundle: true, platform: "node", format: "cjs", target: "node22"
 await build({ ...common, entryPoints: ["src/main/main.ts"], outfile: "dist/main/main.js" });
 await build({ ...common, entryPoints: ["src/preload/preload.ts"], outfile: "dist/preload/preload.js" });
 await build({ ...common, entryPoints: ["src/main/wakeProcess.ts"], outfile: "dist/main/wake.js" });
+await build({ ...common, entryPoints: ["src/linux-input/main.ts"], outfile: "dist/main/linux-input.js" });

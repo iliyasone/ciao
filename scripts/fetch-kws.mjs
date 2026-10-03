@@ -1,10 +1,12 @@
-// Fetches the wake-word detector for the Windows build into build/kws (shipped as resources/kws).
-// Two detectors (see src/main/wakeProcess.ts): Vosk hears "чао" fast, sherpa-onnx double-checks.
-//   vosk/                 libvosk.dll + its MinGW runtime DLLs (called through koffi, no compilation)
+// Fetches the wake-word detector into build/kws (shipped as resources/kws), for Windows x64 or, with
+// `linux` as the argument, Linux x64. Two detectors (see src/main/wakeProcess.ts): Vosk hears "чао"
+// fast, sherpa-onnx double-checks.
+//   vosk/                 libvosk.dll + its MinGW runtime DLLs, or libvosk.so (called through koffi)
 //   vosk-model/           vosk-model-small-ru-0.22, trimmed for grammar mode (see below)
-//   koffi/                FFI for Node, only the win32_x64 binary
-//   sherpa-onnx-node/     JS wrapper        } siblings: the wrapper finds the addon at
-//   sherpa-onnx-win-x64/  N-API addon + DLLs }           ../sherpa-onnx-win-x64/sherpa-onnx.node
+//   koffi/                FFI for Node, only the target's binary; the Linux input helper uses it too
+//   sherpa-onnx-node/     JS wrapper              } siblings: the wrapper finds the addon at
+//   sherpa-onnx-win-x64/  N-API addon + libraries }   ../sherpa-onnx-<os>-x64/sherpa-onnx.node
+//                         (sherpa-onnx-linux-x64/ on Linux)
 //   model/                sherpa Russian streaming zipformer (Vosk-trained, int8)
 //   keywords.txt          the wake word as sherpa model tokens
 // Runs on any OS; nothing is compiled. Neither model needs training.
@@ -18,7 +20,8 @@ const KOFFI = "2.16.3";
 const SHERPA_MODEL = "sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16";
 const SHERPA_MODEL_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${SHERPA_MODEL}.tar.bz2`;
 const SHERPA_MODEL_FILES = ["encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"];
-const VOSK_LIB_URL = "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip";
+const linux = process.argv[2] === "linux";
+const VOSK_LIB_URL = `https://github.com/alphacep/vosk-api/releases/download/v0.3.45/${linux ? "vosk-linux-x86_64-0.3.45" : "vosk-win64-0.3.45"}.zip`;
 const VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip";
 
 const out = path.resolve("build/kws");
@@ -45,9 +48,9 @@ function npmUnpack(name, version) {
   return dest;
 }
 
-// sherpa-onnx: wrapper + Windows addon, and its model.
+// sherpa-onnx: wrapper + addon, and its model.
 npmUnpack("sherpa-onnx-node", SHERPA);
-npmUnpack("sherpa-onnx-win-x64", SHERPA);
+npmUnpack(linux ? "sherpa-onnx-linux-x64" : "sherpa-onnx-win-x64", SHERPA);
 {
   const archive = path.join(tmp, "sherpa-model.tar.bz2");
   await download(SHERPA_MODEL_URL, archive);
@@ -58,21 +61,21 @@ npmUnpack("sherpa-onnx-win-x64", SHERPA);
   fs.writeFileSync(path.join(out, "keywords.txt"), "▁ ча о @чао\n");
 }
 
-// koffi: keep only the loader and the Windows x64 binary.
+// koffi: keep only the loader and the target's binary.
 {
   const dest = npmUnpack("koffi", KOFFI);
   for (const f of fs.readdirSync(dest)) if (!["index.js", "package.json", "build", "LICENSE.txt"].includes(f)) fs.rmSync(path.join(dest, f), { recursive: true });
   const builds = path.join(dest, "build", "koffi");
-  for (const f of fs.readdirSync(builds)) if (f !== "win32_x64") fs.rmSync(path.join(builds, f), { recursive: true });
+  for (const f of fs.readdirSync(builds)) if (f !== (linux ? "linux_x64" : "win32_x64")) fs.rmSync(path.join(builds, f), { recursive: true });
 }
 
-// libvosk for Windows.
+// libvosk.
 {
   const zip = path.join(tmp, "vosk-lib.zip");
   await download(VOSK_LIB_URL, zip);
   const dest = path.join(out, "vosk");
   fs.mkdirSync(dest, { recursive: true });
-  for (const e of new AdmZip(zip).getEntries()) if (e.entryName.endsWith(".dll")) fs.writeFileSync(path.join(dest, path.basename(e.entryName)), e.getData());
+  for (const e of new AdmZip(zip).getEntries()) if (/\.(dll|so)$/.test(e.entryName)) fs.writeFileSync(path.join(dest, path.basename(e.entryName)), e.getData());
 }
 
 /** Word list (output symbols) of an OpenFst binary, as Kaldi's words.txt. */

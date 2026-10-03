@@ -1,5 +1,5 @@
 import { clipboard, ClipboardItem } from "electron";
-import type { PasteMiss, WinInput } from "./winInput";
+import type { InputHelper, PasteMiss } from "./input";
 
 /** Every format currently on the clipboard, copied out so it can be put back later. */
 async function snapshot(): Promise<ClipboardItem[] | null> {
@@ -37,7 +37,7 @@ const RESTORE_AFTER_MS = 700;
  * nothing is typed anywhere and the text stays on the clipboard instead.
  */
 export async function pasteText(
-  input: WinInput,
+  input: InputHelper,
   text: string,
   hwnd: number,
   restoreClipboard: boolean,

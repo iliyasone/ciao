@@ -1,8 +1,9 @@
 # Push a tag vX.Y.Z (matching package.json) to publish a release; installed copies of Ciao find it
-# through electron-updater (src/main/updater.ts) and offer to update. The release is uploaded as a
-# draft and published only once every file is there: clients read latest.yml from the latest
-# published release, so a half-uploaded one would break their checks. A rerun fills the same draft.
-# The Android APK is built first and attached to the same draft before it is published.
+# through electron-updater (src/main/updater.ts) and offer to update. The release is created as a
+# draft, the Windows installer, the Linux AppImage and .deb and the Android APK are uploaded to it in
+# parallel, and it is published only once every file is there: clients read latest.yml /
+# latest-linux.yml from the latest published release, so a half-uploaded one would break their
+# checks. A rerun fills the same draft.
 name: Release
 
 on:
@@ -13,7 +14,60 @@ permissions:
   contents: write
 
 jobs:
+  # electron-builder uploads the files in parallel, and each upload creates the release if it
+  # doesn't exist yet: v0.3.1 ended up as two releases, the installer in one and the blockmap in
+  # the other. Creating the draft first gives every job one release to find. A rerun reuses it.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
+      - name: Create the draft
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "${GITHUB_REF_NAME#v}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  windows:
+    needs: draft
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:native
+      - run: npm run build:kws
+      - run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  linux:
+    needs: draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:kws:linux
+      - run: npm run release:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   android:
+    needs: draft
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,53 +90,18 @@ jobs:
           CIAO_KEYSTORE_PASSWORD: ${{ secrets.CIAO_KEYSTORE_PASSWORD }}
           CIAO_KEY_ALIAS: ${{ secrets.CIAO_KEY_ALIAS }}
           CIAO_KEY_PASSWORD: ${{ secrets.CIAO_KEY_PASSWORD }}
-      - run: mv app/build/outputs/apk/release/Ciao-*-release.apk "Ciao-${GITHUB_REF_NAME#v}.apk"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: android/Ciao-*.apk
-
-  release:
-    needs: android
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - name: Tag matches package.json
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build:native
-      - run: npm run build:kws
-      # electron-builder uploads the files in parallel, and each upload creates the release if it
-      # doesn't exist yet: v0.3.1 ended up as two releases, the installer in one and the blockmap in
-      # the other. Creating the draft first gives them one release to find. A rerun reuses it.
-      - name: Create the draft
-        shell: bash
-        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "${GITHUB_REF_NAME#v}" --notes ""
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npm run release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: apk
       - name: Attach the APK
-        shell: bash
-        run: gh release upload "$GITHUB_REF_NAME" Ciao-*.apk --clobber
+        run: |
+          mv app/build/outputs/apk/release/Ciao-*-release.apk "Ciao-${GITHUB_REF_NAME#v}.apk"
+          gh release upload "$GITHUB_REF_NAME" Ciao-*.apk --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: [windows, linux, android]
+    runs-on: ubuntu-latest
+    steps:
       - name: Publish the draft
-        run: gh release edit "$env:GITHUB_REF_NAME" --draft=false --latest
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

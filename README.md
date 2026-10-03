@@ -89,8 +89,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 
 ## Requirements
 
-- Windows 10/11 (x64), or Android 8+ (see [Android](#android)). macOS and Linux
-  are not supported yet.
+- Windows 10/11 (x64), Linux x64 (see [Linux](#linux)), or Android 8+ (see
+  [Android](#android)). macOS is not supported yet.
 - An OpenAI API key with access to `gpt-live-transcribe` and `gpt-transcribe`.
 
 Pricing is per minute of audio: live transcription is $0.017/min (about $1 per
@@ -125,6 +125,9 @@ failed check in the background shows nothing.
 
 To check by hand, go to *Settings → Updates → Check*.
 
+On Linux the AppImage updates itself the same way; the `.deb` asks for your
+password to install the new package.
+
 A portable copy (the `release/win-unpacked` folder from `npm run dist:win`) is
 updated the same way. The update installs Ciao into `%LOCALAPPDATA%\Programs\Ciao`,
 and from then on that copy runs and starts with Windows. You can delete the old
@@ -132,8 +135,8 @@ folder. A dev run (`electron .`) never updates.
 
 ### Build it yourself
 
-You need Node.js 22+ and the .NET 8 SDK. The build runs on Windows, Linux or macOS
-and always produces the Windows app.
+You need Node.js 22+, and the .NET 8 SDK for the Windows app. The Windows build
+runs on Windows, Linux or macOS.
 
 ```sh
 git clone https://github.com/iliyasone/ciao.git
@@ -147,6 +150,56 @@ npm run dist:win:installer  # the installer → release/Ciao-Setup-<version>.exe
 
 `dist:win` needs nothing else. `dist:win:installer` needs Wine on Linux and macOS
 (NSIS uses it for the uninstaller). On Windows it needs nothing extra.
+
+The Linux app is built on Linux, without Wine or .NET:
+
+```sh
+npm run build:kws:linux     # the wake-word detector and FFI for Linux → build/kws
+npm run dist:linux          # → release/Ciao-<version>.AppImage and .deb
+```
+
+There the input helper is [`src/linux-input`](src/linux-input), plain Node run by
+Electron, which speaks the same protocol as the Windows one.
+
+### Linux
+
+Download `Ciao-<version>.AppImage` (any distribution) or `Ciao-<version>.deb`
+(Debian, Ubuntu) from the
+[latest release](https://github.com/iliyasone/ciao/releases/latest).
+
+```sh
+chmod +x Ciao-*.AppImage && ./Ciao-*.AppImage   # or: sudo apt install ./Ciao-*.deb
+sudo usermod -aG input $USER                    # then sign out and back in
+```
+
+Ciao reads the keyboard and mouse from `/dev/input`, which works the same on X11
+and Wayland, so you need to be in the `input` group. Without it Ciao says so
+at start and only the wake word starts a dictation.
+
+How it differs from Windows:
+
+- **Keys are not hidden from other apps.** The app in front sees the trigger key
+  too, so the default is Right Ctrl alone. A middle-click trigger is off by
+  default, because the middle click would also paste the selection under the
+  pointer. During a dictation Esc is held back from the app in front on X11, but
+  on Wayland it gets through.
+- **X11** works fully: Ciao pastes with Ctrl+V (Ctrl+Shift+V in terminals) and
+  only into the window you started in.
+- **Wayland** gives no app a way to see which window is active, so the text is
+  pasted into whatever is in front when you finish, always with Ctrl+V. To type
+  it, Ciao needs a virtual keyboard through `/dev/uinput`; allow that once:
+
+  ```sh
+  echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/60-ciao-uinput.rules
+  sudo udevadm control --reload && sudo udevadm trigger /dev/uinput
+  ```
+
+  Without it the text stays on the clipboard.
+- The Ciao windows run through XWayland on Wayland, so the card can stay at the
+  bottom of the screen above everything.
+- The tray icon needs AppIndicator support (on GNOME, the *AppIndicator and
+  KStatusNotifierItem Support* extension). *Start when you sign in* writes
+  `~/.config/autostart/ciao.desktop`.
 
 ### API key
 
@@ -212,7 +265,7 @@ update itself: install a newer APK over the old one.
 
 ## Where things are stored
 
-Everything is under `%APPDATA%\Ciao`:
+Everything is under `%APPDATA%\Ciao` (`~/.config/Ciao` on Linux):
 
 - `config.json` — settings. Most of them are edited in the app.
 - `openai-key.txt` — the API key.
@@ -266,20 +319,38 @@ point it at your own PostHog project.
 
 ### Releasing
 
-Run `npm version 0.3.0 && git push --follow-tags` on `main`. `npm version` bumps
-`package.json`, commits and tags `v0.3.0`; pushing the tag starts the release.
+Every release ships all three apps under one version, the one in `package.json`
+(the Android build reads it from there too):
 
-[`release.yml`](.github/workflows/release.yml) builds the installer on a Windows
-runner and uploads it to a draft GitHub release with `latest.yml`, which is the
-file installed copies check. The draft is published once all files are uploaded.
-The tag must equal `v` + the `package.json` version, or the workflow fails.
-An Ubuntu job builds the Android APK first, signed with the release key from the
-repository secrets (`CIAO_KEYSTORE_BASE64`, `CIAO_KEYSTORE_PASSWORD`,
-`CIAO_KEY_ALIAS`, `CIAO_KEY_PASSWORD`), and it is attached to the same draft.
-Every release must be signed with that key, or Android refuses to install it over
-the previous one.
-[`ci.yml`](.github/workflows/ci.yml) builds the same installer and APK on every PR
-and attaches them to the run as artifacts.
+1. Merge everything that goes in into `main` and wait for CI to pass.
+2. On `main`, run `npm version 0.5.0 -m "Release %s" && git push --follow-tags`.
+   `npm version` bumps `package.json` and `package-lock.json`, commits
+   "Release 0.5.0" and tags `v0.5.0`; pushing the tag starts the release.
+3. Watch the *Release* run. When it is green, the release is published. Its notes
+   are generated from the merged PRs; edit them on GitHub if a platform needs a
+   word of its own.
+
+[`release.yml`](.github/workflows/release.yml) creates a draft GitHub release, then
+three jobs upload into it at the same time:
+
+| Job | Runner | Files |
+| --- | --- | --- |
+| `windows` | Windows | `Ciao-Setup-<version>.exe`, its `.blockmap`, `latest.yml` |
+| `linux` | Ubuntu | `Ciao-<version>.AppImage`, `Ciao-<version>.deb`, `latest-linux.yml` |
+| `android` | Ubuntu | `Ciao-<version>.apk` |
+
+Installed desktop copies check `latest.yml` / `latest-linux.yml` of the latest
+published release, so the draft is published only after all three jobs succeed.
+If one fails, rerun the failed jobs: they fill the same draft.
+
+- The tag must equal `v` + the `package.json` version, or the workflow fails.
+- The APK is signed with the release key from the repository secrets
+  (`CIAO_KEYSTORE_BASE64`, `CIAO_KEYSTORE_PASSWORD`, `CIAO_KEY_ALIAS`,
+  `CIAO_KEY_PASSWORD`). Every release must be signed with that key, or Android
+  refuses to install it over the previous one.
+
+[`ci.yml`](.github/workflows/ci.yml) builds the same installer, AppImage, `.deb`
+and APK on every PR and attaches them to the run as artifacts.
 
 ### Testing without speaking
 
@@ -326,12 +397,16 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `history.ts` — storage and crash recovery;
   - `transcribe.ts` — live and file transcription;
   - `paste.ts` — clipboard-preserving paste;
+  - `input.ts` — talks to the keyboard and paste helper of the system;
   - `updater.ts` — updates from GitHub Releases.
 - `src/renderer/` — React 19 + Tailwind 4:
   - `overlay/` — the live card and microphone capture;
   - `history/` — the history and settings window.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#).
+- `src/linux-input/` — the Linux one, with the same protocol: evdev for the keys,
+  X11 (libX11/libXtst through koffi) for the active window and Ctrl+V, uinput for
+  Ctrl+V on Wayland. Electron runs it as plain Node.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.
 - `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app): one
