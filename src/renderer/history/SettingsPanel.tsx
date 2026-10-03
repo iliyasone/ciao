@@ -100,6 +100,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           <Toggle label={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
           <Toggle label={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
           <Toggle label={tr.behaviour.openAtLogin} value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
+          <Toggle label={tr.behaviour.telemetry} hint={tr.behaviour.telemetryHint} value={s.telemetry} onChange={(v) => update({ telemetry: v })} />
         </Card>
 
         <Card title={tr.voice.title}>

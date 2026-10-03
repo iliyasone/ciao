@@ -10,6 +10,7 @@ import { HistoryStore, WavWriter } from "./history";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
+import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
 import { WinInput } from "./winInput";
@@ -53,6 +54,7 @@ let input: WinInput;
 let overlay: OverlayWindow;
 let dictation: DictationController;
 const wake = new WakeWord();
+const telemetry = new Telemetry(() => Telemetry.allowed() && settings?.telemetry !== false);
 let historyWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
 const updater = new Updater((state) => {
@@ -300,9 +302,19 @@ void app.whenReady().then(() => {
     (p) => applySettings({ ...settings, overlayPosition: p.position, overlayWidth: p.cardWidth }),
   );
   input = new WinInput(settings.triggers);
-  dictation = new DictationController({ store, pool, input, overlay, settings: () => settings, apiKey: loadApiKey, changed: notifyChanged, idle: () => wake.reset() });
+  dictation = new DictationController({
+    store,
+    pool,
+    input,
+    overlay,
+    settings: () => settings,
+    apiKey: loadApiKey,
+    changed: notifyChanged,
+    idle: () => wake.reset(),
+    ended: (report) => telemetry.capture("dictation", { ...report }),
+  });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
-  input.on("trigger", (down) => dictation.onHotkey(down));
+  input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));
   input.on("escape", () => dictation.onEscape());
   input.on("other", () => dictation.onOtherKey());
   input.start();
@@ -319,6 +331,7 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
+  telemetry.capture("app_started", { has_api_key: loadApiKey() !== null, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.formatText });
   updater.start();
   void showRecovered(recovered);
   if (!loadApiKey()) openHistory("settings");

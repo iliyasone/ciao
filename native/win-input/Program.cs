@@ -19,7 +19,8 @@ namespace Ciao.Input;
 /// Commands it accepts (replies carry the same "id"):
 ///   {"id":1,"cmd":"foreground"}           → {"id":1,"hwnd":123,"title":"…","process":"…"}
 ///   {"id":2,"cmd":"paste","hwnd":123}     → Ctrl+V if that window is still in front (hwnd 0 = whatever is in front)
-///                                           {"id":2,"ok":true} | {"id":2,"ok":false,"reason":"focus-changed","foreground":"…"}
+///                                           {"id":2,"ok":true} | {"id":2,"ok":false,"reason":"focus-changed","foreground":"…",
+///                                            "foregroundProcess":"…","targetExists":bool,"targetOnCurrentDesktop":bool|null}
 ///   {"cmd":"arm","on":true}               start/stop swallowing Esc
 ///   {"cmd":"triggers","list":["…"]}       replace the triggers
 ///   {"cmd":"capture","on":true}           report the next key, combo or mouse button as "captured" (swallowing it)
@@ -231,7 +232,13 @@ static class Program
                 var front = Native.GetForegroundWindow();
                 if (wanted != IntPtr.Zero && front != wanted)
                 {
-                    Emit(new JsonObject { ["id"] = id, ["ok"] = false, ["reason"] = "focus-changed", ["foreground"] = Native.DescribeWindow(front).Title });
+                    var (title, process) = Native.DescribeWindow(front);
+                    Emit(new JsonObject
+                    {
+                        ["id"] = id, ["ok"] = false, ["reason"] = "focus-changed", ["foreground"] = title, ["foregroundProcess"] = process,
+                        // Why focus moved: the window was closed, or the user switched to another virtual desktop.
+                        ["targetExists"] = Native.IsWindow(wanted), ["targetOnCurrentDesktop"] = Native.IsOnCurrentDesktop(wanted),
+                    });
                     break;
                 }
                 Native.SendPaste();

@@ -184,9 +184,46 @@ Everything is under `%APPDATA%\Ciao`:
   starts with the UTC start time, `YYYYMMDD-HHMMSS`. The **Folder** button in the
   history window opens it.
 - `ciao.log` — the app log.
+- `telemetry-id` — the random install id for [anonymous usage counts](#telemetry).
 
 Recordings and transcripts stay on your machine. Audio leaves it only to be
 transcribed by OpenAI.
+
+## Telemetry
+
+Ciao sends anonymous usage counts to [PostHog](https://posthog.com) (EU cloud), so
+we can see how many people use it. Two events:
+
+- `app_started`: app version, OS version, CPU architecture, and whether an API key
+  is set and the wake word and paragraph layout are on.
+- `dictation`, once per dictation kept in the history:
+  - how it ended: `outcome` (pasted, clipboard, empty, failed, cancelled) and
+    `transcribed_by` (`live`; `file` when the live transcript failed and the saved
+    audio was sent instead; `none` when nothing was transcribed, as on Esc);
+  - how it was driven: `trigger` (the key or button that started it, such as
+    `RControlKey` or `MButton`, or `wake_word`), `ended_by` (release, press,
+    `stop_phrase`, escape, `mic_error`) and `hands_free`;
+  - time and money: `duration_s`, `voice_onset_ms` (not for wake-word starts, whose
+    audio begins with speech), `first_text_ms`, `final_after_release_ms` and `cost_usd`;
+  - where the text went: `target_app`, the kind of app it was meant for, from a
+    closed list in [`src/core/apps.ts`](src/core/apps.ts) (`t3code`, `vscode`,
+    `terminal`, `browser`, `telegram`, …). Any program not on the list is sent as
+    `other`, never by name. When the text could not be pasted,
+    `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`, or
+    `no-helper` / `timeout` / `unknown` when the input helper failed. On
+    `focus-changed` there are also `switched_to_app` (the app in front instead, same list),
+    `target_closed`, and `target_on_other_desktop` (true when you switched to another
+    virtual desktop; absent when Windows can't tell).
+
+Each event carries a random install id from `%APPDATA%\Ciao\telemetry-id`. It is
+not derived from your machine or accounts. No text, audio, window titles, prompts,
+terms or API keys are ever sent. PostHog keeps no person profiles for these events, does
+not look up a location from your IP address, and the project discards IP addresses.
+
+To turn it off, use *Settings → Behavior → Anonymous usage stats* (*Настройки → Поведение → Анонимная статистика* in Russian), or set
+`CIAO_TELEMETRY=0`. An unpackaged dev run (`electron .`) sends nothing unless
+`CIAO_TELEMETRY=1`. `CIAO_POSTHOG_KEY` and `CIAO_POSTHOG_HOST`
+point it at your own PostHog project.
 
 ## Development
 

@@ -132,6 +132,9 @@ const ru = {
       showCost: "Показывать стоимость",
       showCostHint: "Сколько центов ты наговорил — прямо во время записи.",
       openAtLogin: "Запускать вместе с Windows",
+      telemetry: "Анонимная статистика",
+      telemetryHint:
+        "Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия Windows — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются.",
     },
     voice: {
       title: "Голосом",
@@ -324,6 +327,9 @@ const en: Strings = {
       showCost: "Show cost",
       showCostHint: "What the dictation costs in cents, shown while you record.",
       openAtLogin: "Start with Windows",
+      telemetry: "Anonymous usage stats",
+      telemetryHint:
+        "How many people use Ciao and how dictation goes: what started it, how long it took and what it cost, which kind of app it pasted into and whether that worked, the Windows version — with a random install id. No text, audio or window titles are sent.",
     },
     voice: {
       title: "Voice",
