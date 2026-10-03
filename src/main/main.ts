@@ -33,8 +33,10 @@ if (relaunchOnX11) {
   // process exits. APPIMAGE alone may be inherited from another AppImage app that started us.
   const { APPIMAGE, APPDIR } = process.env;
   const inAppImage = !!APPIMAGE && !!APPDIR && process.execPath.startsWith(`${APPDIR}/`);
-  if (inAppImage) closeAppImageFds(APPIMAGE, APPDIR);
-  spawn(inAppImage ? APPIMAGE : process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], { stdio: "inherit" }).unref();
+  if (inAppImage) closeAppImageFds(APPDIR);
+  spawn(inAppImage ? APPIMAGE : process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], { stdio: "inherit" })
+    .on("error", (e) => console.error("restart on X11 failed:", e))
+    .unref();
   app.exit(0);
 }
 // A second launch only forwards its arguments to the running instance (see "second-instance").
@@ -46,12 +48,13 @@ else if (!app.requestSingleInstanceLock()) app.exit(0);
  * are closed. The pipe the AppImage runtime waits on to unmount must stay open until this process
  * exits (its code runs from the mount), so it is reopened close-on-exec instead.
  */
-function closeAppImageFds(appImage: string, appDir: string): void {
+function closeAppImageFds(appDir: string): void {
+  // The runtime is the process serving the mount: it has /dev/fuse open (its exe may be a launcher).
   const runtimePipes = new Set<string>();
   for (const pid of fs.readdirSync("/proc")) {
     try {
-      if (fs.readlinkSync(`/proc/${pid}/exe`) !== appImage) continue;
-      for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) runtimePipes.add(fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      const files = fs.readdirSync(`/proc/${pid}/fd`).map((fd) => fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      if (files.includes("/dev/fuse")) for (const f of files) if (f.startsWith("pipe:")) runtimePipes.add(f);
     } catch {
       // Not a process, gone, or not ours.
     }
