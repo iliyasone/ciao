@@ -387,7 +387,7 @@ export class DictationController {
     entry.delivery = delivery;
     this.deps.store.save(entry);
     this.deps.changed(entry);
-    this.ended(a, entry.status === "failed" ? "failed" : text ? delivery : "empty");
+    this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
     if (this.active === a) this.active = null;
     this.deps.idle();
     this.deps.overlay.state({

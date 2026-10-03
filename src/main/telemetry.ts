@@ -14,8 +14,11 @@ const KEY = process.env.CIAO_POSTHOG_KEY ?? "phc_REPLACE_ME";
 const HOST = process.env.CIAO_POSTHOG_HOST ?? "https://eu.i.posthog.com";
 const FLUSH_MS = 5 * 60_000;
 const MAX_QUEUED = 200;
+const TIMEOUT_MS = 15_000;
 
 interface Event {
+  /** Lets PostHog drop a resent copy when a batch arrived but its response did not. */
+  uuid: string;
   event: string;
   timestamp: string;
   properties: Record<string, unknown>;
@@ -31,8 +34,10 @@ export class Telemetry {
     os: process.platform,
     os_version: os.release(),
     arch: process.arch,
-    // Counts only: no person profiles in PostHog, just one anonymous id per install.
+    // Counts only: no person profiles in PostHog, just one anonymous id per install,
+    // and no location looked up from the IP (the project also discards IPs).
     $process_person_profile: false,
+    $geoip_disable: true,
   };
 
   /** enabled() is read on every event, so turning it off in Settings takes effect at once. */
@@ -49,7 +54,7 @@ export class Telemetry {
 
   capture(event: string, properties: Record<string, unknown> = {}): void {
     if (!this.enabled()) return;
-    this.queue.push({ event, timestamp: new Date().toISOString(), properties: { ...this.common, ...properties } });
+    this.queue.push({ uuid: crypto.randomUUID(), event, timestamp: new Date().toISOString(), properties: { ...this.common, ...properties } });
     if (this.queue.length > MAX_QUEUED) this.queue.splice(0, this.queue.length - MAX_QUEUED);
     void this.flush();
   }
@@ -68,15 +73,24 @@ export class Telemetry {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ api_key: KEY, batch: batch.map((e) => ({ ...e, distinct_id })) }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await res.body?.cancel();
+      // A 4xx other than 429 (a wrong key, a malformed event) won't get better on retry: drop the batch.
+      if (res.status === 429 || res.status >= 500) this.requeue(batch);
+      else if (!res.ok) console.warn(`telemetry: HTTP ${res.status}, dropped ${batch.length} events`);
     } catch {
-      // Offline or blocked: keep the events for the next attempt (bounded by MAX_QUEUED).
-      this.queue.unshift(...batch);
-      this.queue.splice(0, Math.max(0, this.queue.length - MAX_QUEUED));
+      // Offline, blocked or timed out.
+      this.requeue(batch);
     } finally {
       this.sending = false;
     }
+  }
+
+  /** Keep the events for the next attempt, every FLUSH_MS or on the next event (bounded by MAX_QUEUED). */
+  private requeue(batch: Event[]): void {
+    this.queue.unshift(...batch);
+    this.queue.splice(0, Math.max(0, this.queue.length - MAX_QUEUED));
   }
 
   /** A random UUID made on first use and kept in userData; it says nothing about the machine or person. */

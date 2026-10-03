@@ -170,7 +170,8 @@ we can see how many people use it. Two events:
 
 Each event carries a random install id from `%APPDATA%\Ciao\telemetry-id`. It is
 not derived from your machine or accounts. No text, audio, window titles, prompts,
-terms or keys are ever sent, and PostHog keeps no person profiles for these events.
+terms or keys are ever sent. PostHog keeps no person profiles for these events, does
+not look up a location from your IP address, and the project discards IP addresses.
 
 To turn it off, use *Настройки → Поведение → Анонимная статистика*, or set
 `CIAO_TELEMETRY=0`. An unpackaged dev run (`electron .`) sends nothing unless

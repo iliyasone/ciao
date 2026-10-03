@@ -48,7 +48,7 @@ export type Delivery = "pasted" | "clipboard" | "none";
 export type TranscriptSource = "live" | "retry-live" | "retry-file" | "formatted";
 
 /** How a dictation ended, for usage counts. */
-export type DictationOutcome = Delivery | "empty" | "failed" | "cancelled";
+export type DictationOutcome = Exclude<Delivery, "none"> | "empty" | "failed" | "cancelled";
 
 export interface Transcript {
   id: string;
