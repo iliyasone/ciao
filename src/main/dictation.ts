@@ -6,7 +6,7 @@ import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlaySta
 import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
-import type { ForegroundWindow, WinInput } from "./winInput";
+import type { ForegroundWindow, PasteMiss, WinInput } from "./winInput";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 
@@ -25,6 +25,33 @@ const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
+
+/**
+ * One finished dictation as sent to anonymous usage counts (see README → Telemetry):
+ * how it went, never what was said or which window titles were involved.
+ */
+export interface DictationReport {
+  outcome: DictationOutcome;
+  duration_s: number;
+  /** The trigger spec that started it ("RControlKey", "MButton", "Ctrl+Alt+Space") or "wake_word". */
+  trigger: string;
+  ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
+  hands_free: boolean;
+  /** "live" = the streaming transcript, "file" = the saved audio re-sent after the live one failed. */
+  transcribed_by: "live" | "file" | "none";
+  voice_onset_ms?: number;
+  first_text_ms?: number;
+  final_after_release_ms?: number;
+  cost_usd: number;
+  /** Process name of the window it was meant for, e.g. "WindowsTerminal". */
+  target_app?: string;
+  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", "no-helper". */
+  paste_miss?: string;
+  /** focus-changed: the app in front instead, whether the target window was closed or left on another desktop. */
+  switched_to_app?: string;
+  target_closed?: boolean;
+  target_on_other_desktop?: boolean;
+}
 
 interface Active {
   seq: number;
@@ -50,6 +77,10 @@ interface Active {
   replay: boolean;
   /** Was in hands-free mode when it stopped (the controller's flag moves on to the next dictation). */
   handsFree?: boolean;
+  /** What started it: a trigger spec or "wake_word". */
+  trigger: string;
+  endedBy?: DictationReport["ended_by"];
+  miss?: PasteMiss;
   voiceOnsetAt?: number;
   firstTextAt?: number;
   lastDeltaAt?: number;
@@ -78,7 +109,7 @@ export class DictationController {
       /** A dictation ended (the wake-word detector starts afresh). */
       idle: () => void;
       /** A dictation that was kept in history ended; for anonymous usage counts. */
-      ended: (e: { outcome: DictationOutcome; durationMs: number; handsFree: boolean; wake: boolean }) => void;
+      ended: (report: DictationReport) => void;
     },
   ) {}
 
@@ -86,13 +117,13 @@ export class DictationController {
   // Right Ctrl and the middle mouse button share one state machine:
   // hold = push-to-talk, a short press = hands-free until the next press.
 
-  onHotkey(down: boolean): void {
+  onHotkey(down: boolean, spec = ""): void {
     const now = Date.now();
     if (down) {
       if (this.hotkeyDown) return;
       this.hotkeyDown = true;
       this.pressedAt = now;
-      if (!this.active) this.start();
+      if (!this.active) this.start(false, spec);
       else if (this.active.phase === "recording" && this.handsFree) this.stop();
       return;
     }
@@ -146,7 +177,7 @@ export class DictationController {
   /** The wake word was heard: start hands-free, beginning with the audio since the word. */
   onWake(preRoll: Uint8Array): void {
     if (this.active) return;
-    this.start();
+    this.start(false, "wake_word");
     const a = this.current();
     if (!a) return;
     a.wakeStarted = true;
@@ -163,7 +194,7 @@ export class DictationController {
     const text = this.lastText ?? this.deps.store.list().find((e) => e.transcripts.length)?.transcripts.at(-1)?.text ?? null;
     if (!text) return;
     const r = await pasteText(this.deps.input, text, 0, this.deps.settings().restoreClipboard);
-    if (r === "clipboard") await clipboard.writeText(text);
+    if (r.delivery === "clipboard") await clipboard.writeText(text);
   }
 
   /** Test hook: plays a recording through the whole pipeline in real time (no mic, no paste). */
@@ -195,7 +226,7 @@ export class DictationController {
     return this.active;
   }
 
-  private start(replay = false): void {
+  private start(replay = false, trigger = "replay"): void {
     const settings = this.deps.settings();
     const apiKey = this.deps.apiKey();
     const seq = ++this.seq;
@@ -215,6 +246,7 @@ export class DictationController {
       pauses: [],
       offline: session.failure,
       replay,
+      trigger,
     };
     this.active = a;
     this.handsFree = false;
@@ -264,6 +296,7 @@ export class DictationController {
     a.phase = "finishing";
     a.releasedAt = Date.now();
     a.handsFree = this.handsFree;
+    a.endedBy = a.stoppedByPhrase ? "stop_phrase" : this.handsFree ? "press" : "release";
     a.shown = true;
     this.deps.input.arm(false);
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
@@ -290,6 +323,7 @@ export class DictationController {
     a.entry.error = error;
     this.deps.store.save(a.entry);
     this.deps.changed(a.entry);
+    a.endedBy = error ? "mic_error" : "escape";
     this.ended(a, error ? "failed" : "cancelled");
     if (!error) this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: "Отменено — запись в истории" });
   }
@@ -377,10 +411,13 @@ export class DictationController {
       if (a.replay) {
         delivery = "none";
       } else if (settings.autoPaste && target) {
-        delivery = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
+        const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
+        delivery = r.delivery;
+        if (r.delivery === "clipboard") a.miss = r.miss;
       } else {
         await clipboard.writeText(text);
         delivery = "clipboard";
+        a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };
       }
       entry.status = "done";
       phase = delivery === "clipboard" ? "clipboard" : "done";
@@ -399,7 +436,27 @@ export class DictationController {
   }
 
   private ended(a: Active, outcome: DictationOutcome): void {
-    if (!a.replay) this.deps.ended({ outcome, durationMs: a.entry.durationMs, handsFree: a.handsFree ?? this.handsFree, wake: !!a.wakeStarted });
+    if (a.replay) return;
+    const { entry, miss } = a;
+    const t = entry.timings;
+    this.deps.ended({
+      outcome,
+      duration_s: Math.round(entry.durationMs / 1000),
+      trigger: a.trigger,
+      ended_by: a.endedBy ?? "release",
+      hands_free: a.handsFree ?? this.handsFree,
+      // A partial live transcript is kept even when the saved file had to be transcribed instead.
+      transcribed_by: entry.transcripts.some((x) => x.source === "retry-file") ? "file" : entry.transcripts.length ? "live" : "none",
+      voice_onset_ms: t?.voiceOnsetMs,
+      first_text_ms: t?.firstTextMs,
+      final_after_release_ms: t?.finalAfterReleaseMs,
+      cost_usd: Math.round(entry.transcripts.reduce((sum, x) => sum + x.costUsd, 0) * 10_000) / 10_000,
+      target_app: entry.target?.process || undefined,
+      paste_miss: miss?.reason,
+      switched_to_app: miss?.foregroundProcess || undefined,
+      target_closed: miss?.targetExists === undefined ? undefined : !miss.targetExists,
+      target_on_other_desktop: miss?.targetOnCurrentDesktop === undefined ? undefined : !miss.targetOnCurrentDesktop,
+    });
   }
 
   private baseState(a: Active): OverlayState {

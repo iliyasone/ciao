@@ -5,8 +5,9 @@ import path from "node:path";
 import { app, net } from "electron";
 
 // Anonymous usage counts, so we know how many people use Ciao and how much.
-// Events carry a random install id and coarse facts (version, OS, a few on/off settings, how long
-// a dictation was) — never text, audio, window titles or keys. See README → Telemetry.
+// Events carry a random install id and facts about how things went (version, OS, a few on/off
+// settings; per dictation its trigger, timings, cost, target app and why a paste failed) —
+// never text, audio, window titles or API keys. See README → Telemetry.
 // Same approach as T3 Code: PostHog's HTTP batch API, public project key, no SDK.
 
 // A PostHog project key is public by design: it can only send events, not read them.

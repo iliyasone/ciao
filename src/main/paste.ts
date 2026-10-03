@@ -1,5 +1,5 @@
 import { clipboard, ClipboardItem } from "electron";
-import type { WinInput } from "./winInput";
+import type { PasteMiss, WinInput } from "./winInput";
 
 /** Every format currently on the clipboard, copied out so it can be put back later. */
 async function snapshot(): Promise<ClipboardItem[] | null> {
@@ -36,11 +36,19 @@ const RESTORE_AFTER_MS = 700;
  * Pastes `text` into `hwnd` via the clipboard. If the window is no longer in front,
  * nothing is typed anywhere and the text stays on the clipboard instead.
  */
-export async function pasteText(input: WinInput, text: string, hwnd: number, restoreClipboard: boolean): Promise<"pasted" | "clipboard"> {
+export async function pasteText(
+  input: WinInput,
+  text: string,
+  hwnd: number,
+  restoreClipboard: boolean,
+): Promise<{ delivery: "pasted" } | { delivery: "clipboard"; miss: PasteMiss }> {
   const before = restoreClipboard ? await snapshot() : null;
   await clipboard.writeText(text);
   const r = await input.paste(hwnd);
-  if (!r.ok) return "clipboard";
+  if (!r.ok) {
+    const { ok: _, ...miss } = r;
+    return { delivery: "clipboard", miss };
+  }
   if (before) setTimeout(() => void restore(before), RESTORE_AFTER_MS);
-  return "pasted";
+  return { delivery: "pasted" };
 }

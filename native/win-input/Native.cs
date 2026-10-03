@@ -134,6 +134,34 @@ static class Native
     [DllImport("user32.dll")]
     static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindow(IntPtr hWnd);
+
+    [ComImport, Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IVirtualDesktopManager
+    {
+        [PreserveSig] int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, [MarshalAs(UnmanagedType.Bool)] out bool onCurrentDesktop);
+    }
+
+    [ComImport, Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")]
+    class VirtualDesktopManager;
+
+    /// <summary>Whether the window is on the virtual desktop being shown; null if Windows can't tell (closed window, no COM).</summary>
+    public static bool? IsOnCurrentDesktop(IntPtr hwnd)
+    {
+        if (!IsWindow(hwnd)) return null; // Windows answers "yes, on this desktop" for a closed window
+        try
+        {
+            var manager = (IVirtualDesktopManager)new VirtualDesktopManager();
+            return manager.IsWindowOnCurrentVirtualDesktop(hwnd, out var on) == 0 ? on : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     public static (string Title, string Process) DescribeWindow(IntPtr hwnd)
     {
         var sb = new StringBuilder(256);

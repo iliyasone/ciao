@@ -5,6 +5,17 @@ import path from "node:path";
 import readline from "node:readline";
 import { app } from "electron";
 
+/** Why a paste into the dictation's window did not happen. */
+export interface PasteMiss {
+  reason: string;
+  /** The app in front instead (process name, no title). */
+  foregroundProcess?: string;
+  /** false = the window was closed. */
+  targetExists?: boolean;
+  /** false = the window is on another virtual desktop; undefined = Windows could not tell. */
+  targetOnCurrentDesktop?: boolean;
+}
+
 export interface ForegroundWindow {
   hwnd: number;
   title: string;
@@ -12,7 +23,7 @@ export interface ForegroundWindow {
 }
 
 type InputEvents = {
-  trigger: [down: boolean];
+  trigger: [down: boolean, spec: string];
   escape: [];
   other: [];
 };
@@ -97,9 +108,16 @@ export class WinInput extends EventEmitter<InputEvents> {
   }
 
   /** Ctrl+V into `hwnd` if it is still in front (0 = whatever is in front). */
-  async paste(hwnd: number): Promise<{ ok: boolean; reason?: string }> {
+  async paste(hwnd: number): Promise<{ ok: true } | ({ ok: false } & PasteMiss)> {
     const r = await this.request({ cmd: "paste", hwnd });
-    return { ok: r.ok === true, reason: typeof r.reason === "string" ? r.reason : undefined };
+    if (r.ok === true) return { ok: true };
+    return {
+      ok: false,
+      reason: typeof r.reason === "string" ? r.reason : "unknown",
+      foregroundProcess: typeof r.foregroundProcess === "string" ? r.foregroundProcess : undefined,
+      targetExists: typeof r.targetExists === "boolean" ? r.targetExists : undefined,
+      targetOnCurrentDesktop: typeof r.targetOnCurrentDesktop === "boolean" ? r.targetOnCurrentDesktop : undefined,
+    };
   }
 
   private request(msg: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -137,7 +155,7 @@ export class WinInput extends EventEmitter<InputEvents> {
     if (msg.type !== "trigger") console.log("input:", line); // trigger presses are too chatty to log
     switch (msg.type) {
       case "trigger":
-        this.emit("trigger", msg.down === true);
+        this.emit("trigger", msg.down === true, String(msg.spec ?? ""));
         break;
       case "captured":
         this.captureResolve?.(typeof msg.spec === "string" ? msg.spec : null);

@@ -273,11 +273,10 @@ void app.whenReady().then(() => {
     apiKey: loadApiKey,
     changed: notifyChanged,
     idle: () => wake.reset(),
-    ended: ({ outcome, durationMs, handsFree, wake: byWake }) =>
-      telemetry.capture("dictation", { outcome, duration_s: Math.round(durationMs / 1000), hands_free: handsFree, wake_word: byWake }),
+    ended: (report) => telemetry.capture("dictation", { ...report }),
   });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
-  input.on("trigger", (down) => dictation.onHotkey(down));
+  input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));
   input.on("escape", () => dictation.onEscape());
   input.on("other", () => dictation.onOtherKey());
   input.start();
