@@ -15,7 +15,8 @@ export const DEFAULT_SETTINGS: Settings = {
     "TypeScript", "Python", "Electron", "React", "commit", "pull request", "Wispr Flow", "Windows",
   ],
   fileModel: "gpt-transcribe",
-  triggers: ["RControlKey", "MButton"],
+  // Linux can't keep a middle click from the app under the pointer (it would paste the selection there).
+  triggers: process.platform === "linux" ? ["RControlKey"] : ["RControlKey", "MButton"],
   pasteLastHotkey: "Alt+Shift+Z",
   autoPaste: true,
   restoreClipboard: true,

@@ -1,6 +1,7 @@
 // Which app a dictation went to, as a coarse label for anonymous usage counts.
 // Only apps on this closed list are named; everything else is "other", so a rare or in-house
-// program never leaves the machine. Keys are Windows process names, lower-case, without ".exe".
+// program never leaves the machine. Keys are process names (executable names on Linux),
+// lower-case, without ".exe".
 
 const APPS: Record<string, string> = {
   // Coding agents and editors
@@ -30,10 +31,22 @@ const APPS: Record<string, string> = {
   "wezterm-gui": "terminal",
   alacritty: "terminal",
   mintty: "terminal",
+  "gnome-terminal-server": "terminal",
+  kgx: "terminal",
+  ptyxis: "terminal",
+  konsole: "terminal",
+  kitty: "terminal",
+  foot: "terminal",
+  ghostty: "terminal",
+  "xfce4-terminal": "terminal",
+  tilix: "terminal",
+  xterm: "terminal",
   // Browsers
   chrome: "browser",
   msedge: "browser",
   firefox: "browser",
+  "firefox-bin": "browser",
+  chromium: "browser",
   brave: "browser",
   opera: "browser",
   vivaldi: "browser",

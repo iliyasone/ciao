@@ -3,6 +3,7 @@
   "productName": "Ciao",
   "version": "0.4.0",
   "description": "Dictation with a live preview: see what you say while you say it.",
+  "homepage": "https://sayciao.vercel.app",
   "private": true,
   "main": "dist/main/main.js",
   "author": "Ilias Dzhabbarov",
@@ -15,8 +16,11 @@
     "typecheck": "tsc --noEmit -p .",
     "dist:win": "npm run build && electron-builder --win dir",
     "dist:win:installer": "npm run build && electron-builder --win nsis --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
     "release": "npm run build && electron-builder --win nsis --publish always",
-    "build:kws": "node scripts/fetch-kws.mjs"
+    "release:linux": "npm run build && electron-builder --linux AppImage deb --publish always",
+    "build:kws": "node scripts/fetch-kws.mjs",
+    "build:kws:linux": "node scripts/fetch-kws.mjs linux"
   },
   "build": {
     "appId": "dev.iliyasone.ciao",
@@ -29,13 +33,6 @@
       "package.json"
     ],
     "extraResources": [
-      {
-        "from": "build/win-input",
-        "to": "win-input",
-        "filter": [
-          "*.exe"
-        ]
-      },
       {
         "from": "assets",
         "to": "assets",
@@ -52,13 +49,39 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "extraResources": [
+        {
+          "from": "build/win-input",
+          "to": "win-input",
+          "filter": [
+            "*.exe"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "artifactName": "Ciao-Setup-${version}.exe",
       "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "synopsis": "Dictation with a live preview",
+      "executableName": "ciao",
+      "maintainer": "Ilias Dzhabbarov <iliyasone@users.noreply.github.com>"
+    },
+    "appImage": {
+      "artifactName": "Ciao-${version}.AppImage"
+    },
+    "deb": {
+      "artifactName": "Ciao-${version}.deb"
     },
     "publish": [
       {

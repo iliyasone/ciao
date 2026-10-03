@@ -1,22 +1,27 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from "electron";
 import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { setLang, t } from "../core/i18n";
+import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
+import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
-import { WinInput } from "./winInput";
 
 // A second launch only forwards its arguments to the running instance (see "second-instance").
 if (!app.requestSingleInstanceLock()) app.exit(0);
+
+// Run as an X11 app on Linux, through XWayland on a Wayland desktop: only X11 lets the card sit at
+// the bottom of the screen above everything, and lets Ciao grab Esc during a dictation.
+if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "x11");
 
 // Mirror console output into userData/ciao.log — the only way to see what happened on someone's machine.
 {
@@ -50,7 +55,7 @@ const ASSETS = app.isPackaged ? path.join(process.resourcesPath, "assets") : pat
 let settings: Settings;
 let store: HistoryStore;
 let pool: SessionPool;
-let input: WinInput;
+let input: InputHelper;
 let overlay: OverlayWindow;
 let dictation: DictationController;
 const wake = new WakeWord();
@@ -99,7 +104,7 @@ function applySettings(next: Settings): void {
   setLang(next.language);
   nativeTheme.themeSource = next.theme;
   saveSettings(next);
-  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.openAtLogin });
+  setAutostart(next.openAtLogin);
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   wake.setEnabled(next.wakeWord);
@@ -183,6 +188,13 @@ async function retry(id: string, mode: RetryMode): Promise<HistoryEntry> {
   store.save(fresh);
   notifyChanged(fresh);
   return fresh;
+}
+
+/** Linux: the helper may not read /dev/input, so no key starts a dictation until that is fixed. */
+async function explainInputGroup(): Promise<void> {
+  const s = t().linuxInput;
+  const { response } = await dialog.showMessageBox({ type: "warning", title: "Ciao", message: s.title, detail: s.message, buttons: [s.copy, s.ok], defaultId: 0 });
+  if (response === 0) clipboard.writeText("sudo usermod -aG input $USER");
 }
 
 /**
@@ -301,7 +313,7 @@ void app.whenReady().then(() => {
     () => ({ position: settings.overlayPosition, cardWidth: settings.overlayWidth }),
     (p) => applySettings({ ...settings, overlayPosition: p.position, overlayWidth: p.cardWidth }),
   );
-  input = new WinInput(settings.triggers);
+  input = new InputHelper(settings.triggers);
   dictation = new DictationController({
     store,
     pool,
@@ -317,6 +329,9 @@ void app.whenReady().then(() => {
   input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));
   input.on("escape", () => dictation.onEscape());
   input.on("other", () => dictation.onOtherKey());
+  input.once("devices", (reading, denied) => {
+    if (reading === 0 && denied > 0) void explainInputGroup();
+  });
   input.start();
 
   registerIpc();

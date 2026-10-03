@@ -1,5 +1,5 @@
-# Typecheck and build the Windows installer and the Android APK on every PR, so a release tag never
-# meets a broken build.
+# Typecheck and build the Windows installer, the Linux AppImage and .deb, and the Android APK on
+# every PR, so a release tag never meets a broken build.
 name: CI
 
 on:
@@ -28,6 +28,26 @@ jobs:
         with:
           name: Ciao-Setup
           path: release/Ciao-Setup-*.exe
+          retention-days: 7
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:kws:linux
+      - run: npm run dist:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ciao-Linux
+          path: |
+            release/Ciao-*.AppImage
+            release/Ciao-*.deb
           retention-days: 7
 
   android:

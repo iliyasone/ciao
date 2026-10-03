@@ -3,7 +3,8 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { app } from "electron";
+import { app, globalShortcut } from "electron";
+import { WakeWord } from "./wakeWord";
 
 /** Why a paste into the dictation's window did not happen. */
 export interface PasteMiss {
@@ -12,11 +13,12 @@ export interface PasteMiss {
   foregroundProcess?: string;
   /** false = the window was closed. */
   targetExists?: boolean;
-  /** false = the window is on another virtual desktop; undefined = Windows could not tell. */
+  /** false = the window is on another virtual desktop; undefined = the system could not tell. */
   targetOnCurrentDesktop?: boolean;
 }
 
 export interface ForegroundWindow {
+  /** HWND on Windows, X11 window id on Linux; 0 = unknown (Wayland). */
   hwnd: number;
   title: string;
   process: string;
@@ -26,14 +28,16 @@ type InputEvents = {
   trigger: [down: boolean, spec: string];
   escape: [];
   other: [];
+  /** Linux: keyboards and mice the helper reads, and ones it may not open (not in the "input" group). */
+  devices: [reading: number, denied: number];
 };
 
 /**
- * Talks to native/win-input (Ciao.Input.exe): global keyboard and mouse hooks for the dictation
- * triggers (and for swallowing Esc), shortcut capture, foreground-window lookup and Ctrl+V
- * injection. Restarted if it dies.
+ * Talks to the input helper: native/win-input (Ciao.Input.exe) on Windows, src/linux-input run as
+ * plain Node on Linux. It reports the dictation triggers (and Esc), captures shortcuts, looks up
+ * the foreground window and types Ctrl+V. Restarted if it dies.
  */
-export class WinInput extends EventEmitter<InputEvents> {
+export class InputHelper extends EventEmitter<InputEvents> {
   private child: ChildProcess | null = null;
   private nextId = 1;
   private pending = new Map<number, (reply: Record<string, unknown>) => void>();
@@ -44,20 +48,32 @@ export class WinInput extends EventEmitter<InputEvents> {
     super();
   }
 
-  static exePath(): string {
-    return app.isPackaged
-      ? path.join(process.resourcesPath, "win-input", "Ciao.Input.exe")
-      : path.join(app.getAppPath(), "build", "win-input", "Ciao.Input.exe");
+  /** How to run the helper on this system; null where there is none. */
+  private static command(): { file: string; args: string[]; env?: NodeJS.ProcessEnv } | null {
+    if (process.platform === "win32") {
+      const exe = app.isPackaged
+        ? path.join(process.resourcesPath, "win-input", "Ciao.Input.exe")
+        : path.join(app.getAppPath(), "build", "win-input", "Ciao.Input.exe");
+      return fs.existsSync(exe) ? { file: exe, args: [] } : null;
+    }
+    if (process.platform === "linux") {
+      const koffi = path.join(WakeWord.dir(), "koffi");
+      if (!fs.existsSync(koffi)) return null;
+      // Every keyboard and mouse is a blocking read on a libuv thread (4 by default).
+      const env = { ...process.env, ELECTRON_RUN_AS_NODE: "1", UV_THREADPOOL_SIZE: "64" };
+      return { file: process.execPath, args: [path.join(__dirname, "linux-input.js"), "--koffi", koffi], env };
+    }
+    return null;
   }
 
   start(): void {
-    const exe = WinInput.exePath();
-    if (process.platform !== "win32" || !fs.existsSync(exe)) {
-      console.warn("win-input helper unavailable:", exe);
+    const command = InputHelper.command();
+    if (!command) {
+      console.warn("input helper unavailable on", process.platform);
       return;
     }
-    const args = this.triggers.flatMap((t) => ["--trigger", t]);
-    const child = spawn(exe, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    const args = [...command.args, ...this.triggers.flatMap((t) => ["--trigger", t])];
+    const child = spawn(command.file, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: command.env });
     readline.createInterface({ input: child.stderr! }).on("line", (line) => console.error("input stderr:", line));
     this.child = child;
     readline.createInterface({ input: child.stdout! }).on("line", (line) => this.onLine(line));
@@ -76,6 +92,15 @@ export class WinInput extends EventEmitter<InputEvents> {
 
   arm(on: boolean): void {
     this.send({ cmd: "arm", on });
+    // The Linux helper only listens, so Esc would also reach the app in front. On X11 a global
+    // shortcut grabs it while armed (on Wayland the grab only covers X11 apps).
+    if (process.platform !== "linux") return;
+    try {
+      if (on) globalShortcut.register("Escape", () => {}); // the helper reports the press itself
+      else globalShortcut.unregister("Escape");
+    } catch {
+      // Taken by another app.
+    }
   }
 
   setTriggers(triggers: string[]): void {
@@ -165,6 +190,9 @@ export class WinInput extends EventEmitter<InputEvents> {
         break;
       case "other":
         this.emit("other");
+        break;
+      case "status":
+        this.emit("devices", Number(msg.reading), Number(msg.denied));
         break;
     }
   }

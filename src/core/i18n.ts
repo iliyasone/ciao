@@ -21,6 +21,14 @@ const ru = {
     quit: "Выход",
   },
 
+  linuxInput: {
+    title: "Ciao не слышит клавиатуру",
+    message:
+      "Чтобы Ciao замечал клавишу диктовки, добавь себя в группу input и перезайди в систему:\n\nsudo usermod -aG input $USER\n\nПока этого нет, диктовку можно начать словом «чао» (Настройки → Голосом).",
+    copy: "Скопировать команду",
+    ok: "Понятно",
+  },
+
   errors: {
     noApiKey: "Нет API-ключа",
     noApiKeyHint: "Нет API-ключа — положи его в openai-key.txt",
@@ -118,7 +126,7 @@ const ru = {
       language: "Язык",
       languageHint: "Язык интерфейса.",
       theme: "Тема",
-      themeHint: "Системная — как в Windows, переключается вместе с ней.",
+      themeHint: "Системная — как в системе, переключается вместе с ней.",
       themes: { system: "Системная", light: "Светлая", dark: "Тёмная" },
     },
     behaviour: {
@@ -131,16 +139,16 @@ const ru = {
       restoreClipboardHint: "После вставки в буфере снова то, что было до диктовки.",
       showCost: "Показывать стоимость",
       showCostHint: "Сколько центов ты наговорил — прямо во время записи.",
-      openAtLogin: "Запускать вместе с Windows",
+      openAtLogin: "Запускать при входе в систему",
       telemetry: "Анонимная статистика",
       telemetryHint:
-        "Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия Windows — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются.",
+        "Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия системы — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются.",
     },
     voice: {
       title: "Голосом",
       wakeWord: "Включать словом «чао»",
       wakeWordHint:
-        "Скажи «чао» — начнётся запись без рук. Микрофон слушает постоянно, но слово ищется прямо на компьютере: пока ты не диктуешь, звук никуда не уходит. Windows покажет значок микрофона.",
+        "Скажи «чао» — начнётся запись без рук. Микрофон слушает постоянно, но слово ищется прямо на компьютере: пока ты не диктуешь, звук никуда не уходит. Система покажет, что микрофон занят.",
       stopPhrase: "Заканчивать словами «чао-чао»",
       stopPhraseHint: "В режиме без рук скажи «чао-чао» в конце — запись закончится, а сами слова не вставятся.",
     },
@@ -214,6 +222,14 @@ const en: Strings = {
     delay: (d) => `Delay: ${d}`,
     showCost: "Show cost",
     quit: "Quit",
+  },
+
+  linuxInput: {
+    title: "Ciao can't hear the keyboard",
+    message:
+      "For Ciao to notice the dictation key, add yourself to the input group and sign in again:\n\nsudo usermod -aG input $USER\n\nUntil then you can start a dictation by saying “ciao” (Settings → Voice).",
+    copy: "Copy the command",
+    ok: "OK",
   },
 
   errors: {
@@ -313,7 +329,7 @@ const en: Strings = {
       language: "Language",
       languageHint: "The language of the interface.",
       theme: "Theme",
-      themeHint: "System follows Windows and switches along with it.",
+      themeHint: "System follows the OS and switches along with it.",
       themes: { system: "System", light: "Light", dark: "Dark" },
     },
     behaviour: {
@@ -326,16 +342,16 @@ const en: Strings = {
       restoreClipboardHint: "After pasting, the clipboard holds what it had before the dictation.",
       showCost: "Show cost",
       showCostHint: "What the dictation costs in cents, shown while you record.",
-      openAtLogin: "Start with Windows",
+      openAtLogin: "Start when you sign in",
       telemetry: "Anonymous usage stats",
       telemetryHint:
-        "How many people use Ciao and how dictation goes: what started it, how long it took and what it cost, which kind of app it pasted into and whether that worked, the Windows version — with a random install id. No text, audio or window titles are sent.",
+        "How many people use Ciao and how dictation goes: what started it, how long it took and what it cost, which kind of app it pasted into and whether that worked, the OS version — with a random install id. No text, audio or window titles are sent.",
     },
     voice: {
       title: "Voice",
       wakeWord: "Start with the word “ciao”",
       wakeWordHint:
-        "Say “ciao” to start a hands-free recording. The microphone listens all the time, but the word is detected right on your computer: until you dictate, no audio leaves it. Windows will show the microphone icon.",
+        "Say “ciao” to start a hands-free recording. The microphone listens all the time, but the word is detected right on your computer: until you dictate, no audio leaves it. The system will show that the microphone is in use.",
       stopPhrase: "Finish with “ciao ciao”",
       stopPhraseHint: "In hands-free mode, say “ciao ciao” at the end — the recording stops, and the words themselves aren't pasted.",
     },
