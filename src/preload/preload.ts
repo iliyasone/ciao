@@ -8,6 +8,8 @@ function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () 
 }
 
 const api = {
+  /** "win32", "darwin", …: read by core/platform.ts. */
+  platform: process.platform,
   overlay: {
     onState: (cb: (s: OverlayState) => void) => on("overlay:state", cb),
     /** gapMs: time since the previous delta — a long one means the speaker paused. */
@@ -51,6 +53,10 @@ const api = {
     setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
     captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),
+    /** macOS: whether Ciao has the Accessibility permission; null elsewhere (not needed). */
+    accessibility: (): Promise<boolean | null> => ipcRenderer.invoke("settings:accessibility"),
+    onAccessibility: (cb: (granted: boolean) => void) => on("settings:accessibility", cb),
+    openAccessibility: (): Promise<void> => ipcRenderer.invoke("settings:open-accessibility"),
   },
   update: {
     get: (): Promise<UpdateState> => ipcRenderer.invoke("update:get"),

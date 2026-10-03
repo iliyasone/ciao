@@ -20,6 +20,7 @@ const LANGUAGES: { value: Lang; label: string }[] = [
 export function SettingsPanel({ updateState }: { updateState: UpdateState | null }) {
   const [s, setS] = useState<Settings | null>(null);
   const [hasKey, setHasKey] = useState(true);
+  const [wakeAvailable, setWakeAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tr = useStrings().settings;
@@ -27,6 +28,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   useEffect(() => {
     void ciao.settings.get().then(setS);
     void ciao.settings.hasApiKey().then(setHasKey);
+    void ciao.settings.wakeAvailable().then(setWakeAvailable);
   }, []);
 
   const update = (patch: Partial<Settings>, debounce = false) => {
@@ -53,6 +55,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         <div className="h-4 text-right text-[12px] text-emerald-700 dark:text-emerald-400/80">{saved && <><Check className="mr-1 inline size-3.5" />{tr.saved}</>}</div>
 
         <ApiKeyCard hasKey={hasKey} onSaved={() => setHasKey(true)} />
+        <PermissionsCard />
 
         <Card title={tr.recognition.title}>
           <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>
@@ -104,12 +107,14 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         </Card>
 
         <Card title={tr.voice.title}>
-          <Toggle
-            label={tr.voice.wakeWord}
-            hint={tr.voice.wakeWordHint}
-            value={s.wakeWord}
-            onChange={(v) => update({ wakeWord: v })}
-          />
+          {wakeAvailable && (
+            <Toggle
+              label={tr.voice.wakeWord}
+              hint={tr.voice.wakeWordHint}
+              value={s.wakeWord}
+              onChange={(v) => update({ wakeWord: v })}
+            />
+          )}
           <Toggle
             label={tr.voice.stopPhrase}
             hint={tr.voice.stopPhraseHint}
@@ -175,6 +180,37 @@ function ApiKeyCard({ hasKey, onSaved }: { hasKey: boolean; onSaved: () => void 
             {tr.save}
           </button>
         </div>
+      </Row>
+    </Card>
+  );
+}
+
+/** macOS only: the Accessibility permission the input helper needs. Hidden elsewhere. */
+function PermissionsCard() {
+  const [granted, setGranted] = useState<boolean | null>(null);
+  const tr = useStrings().settings.permissions;
+  useEffect(() => {
+    void ciao.settings.accessibility().then(setGranted);
+    return ciao.settings.onAccessibility(setGranted);
+  }, []);
+  if (granted === null) return null;
+  return (
+    <Card title={tr.title}>
+      <Row label={tr.accessibility} hint={granted ? undefined : tr.accessibilityHint}>
+        {granted ? (
+          <span className="inline-flex items-center gap-1 text-[12.5px] text-emerald-700 dark:text-emerald-400/80">
+            <Check className="size-3.5" />
+            {tr.granted}
+          </span>
+        ) : (
+          <button
+            onClick={() => void ciao.settings.openAccessibility()}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] text-white transition-colors hover:bg-accent/90"
+          >
+            <KeyRound className="size-3.5" />
+            {tr.open}
+          </button>
+        )}
       </Row>
     </Card>
   );

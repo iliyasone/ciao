@@ -47,6 +47,8 @@ export class OverlayWindow implements OverlayPort {
       focusable: false,
       hasShadow: false,
       alwaysOnTop: true,
+      // macOS: a non-activating panel, so showing it never takes focus from the app being dictated into.
+      ...(process.platform === "darwin" && { type: "panel" }),
       backgroundColor: "#00000000",
       webPreferences: {
         preload,
@@ -55,6 +57,8 @@ export class OverlayWindow implements OverlayPort {
       },
     });
     this.win.setAlwaysOnTop(true, "screen-saver");
+    // macOS: show on every Space, over full-screen apps too.
+    if (process.platform === "darwin") this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     this.win.setIgnoreMouseEvents(true, { forward: true });
     void this.win.loadFile(path.join(rendererDir, "overlay.html"));
     this.win.webContents.on("did-finish-load", () => this.win.webContents.send("wake:enable", this.wake));

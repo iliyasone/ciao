@@ -47,7 +47,8 @@ export interface DictationReport {
   cost_usd: number;
   /** The app it was meant for, from a closed list (core/apps.ts): "terminal", "vscode", … or "other". */
   target_app?: string;
-  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", "no-injector" (Wayland without access to /dev/uinput), or "no-helper" / "timeout" / "unknown" (helper failed). */
+  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", "no-injector" (Wayland without access to /dev/uinput),
+   * "no-permission" (macOS: no Accessibility), or "no-helper" / "timeout" / "unknown" (helper failed). */
   paste_miss?: string;
   /** focus-changed: the app in front instead, whether the target window was closed or left on another desktop. */
   switched_to_app?: string;
@@ -212,8 +213,10 @@ export class DictationController {
   async pasteLast(): Promise<void> {
     const text = this.lastText ?? this.deps.store.list().find((e) => e.transcripts.length)?.transcripts.at(-1)?.text ?? null;
     if (!text) return;
-    const r = await pasteText(this.deps.input, text, 0, this.deps.settings().restoreClipboard);
-    if (r.delivery === "clipboard") await clipboard.writeText(text);
+    // Whatever is in front, unless there is nothing to paste into (see InputHelper.foreground).
+    const target = await this.deps.input.foreground();
+    const r = target ? await pasteText(this.deps.input, text, target.hwnd, this.deps.settings().restoreClipboard) : null;
+    if (r?.delivery !== "pasted") await clipboard.writeText(text);
   }
 
   /** Test hook: plays a recording through the whole pipeline in real time (no mic, no paste). */
@@ -457,7 +460,7 @@ export class DictationController {
       phase,
       message:
         phase === "clipboard"
-          ? t().overlay.clipboard
+          ? a.miss?.reason === "no-permission" ? t().overlay.noPermission : t().overlay.clipboard
           : phase === "saved"
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,

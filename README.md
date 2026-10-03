@@ -27,7 +27,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     `minimal` to `xhigh`: lower shows words sooner, higher is more accurate, and the
     price is the same. It is hidden by default. To see and change it, go to
     *Settings → For developers → Show delay*.
-- **Push to talk.** Hold **Right Ctrl**, speak, release, and the text is pasted.
+- **Push to talk.** Hold **Right Ctrl** (**Right Option** on a Mac), speak, release, and the text is pasted.
   - The **middle mouse button** works the same way by default: click to start
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
@@ -52,7 +52,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Pastes where you started.** The text goes into the window that was active when
   you pressed the key. If you switched away, nothing is typed anywhere and the text
   is left on the clipboard. After a successful paste, the clipboard is restored.
-- **Paste the last transcript again** with **Alt+Shift+Z**.
+- **Paste the last transcript again** with **Alt+Shift+Z** (**Option+Shift+Z** on a Mac).
 - **Nothing is lost.**
   - Audio is written to disk while you speak.
   - If the live connection drops, recording continues and the saved file is
@@ -79,18 +79,20 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
 - **English or Russian interface** (*Settings → Appearance → Language*). The
-  default is Russian if Windows is in Russian and English otherwise (also for
+  default is Russian if the system is in Russian and English otherwise (also for
   an existing install, the first time it starts with this setting); a change
   applies right away.
 - **Light, dark or system theme** (*Settings → Appearance*). System is the
-  default and follows Windows live.
+  default and follows the system live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
 
 ## Requirements
 
-- Windows 10/11 (x64), Linux x64 (see [Linux](#linux)), or Android 8+ (see
-  [Android](#android)). macOS is not supported yet.
+- Windows 10/11 (x64), macOS 13 or later (Apple Silicon or Intel; see
+  [macOS](#macos)), Linux x64 (see [Linux](#linux)), or Android 8+ (see
+  [Android](#android)). The macOS build is new: it has no wake word yet and
+  updates by hand.
 - An OpenAI API key with access to `gpt-live-transcribe` and `gpt-transcribe`.
 
 Pricing is per minute of audio: live transcription is $0.017/min (about $1 per
@@ -98,6 +100,8 @@ hour of talking), re-transcribing a file with `gpt-transcribe` is $0.0045/min.
 Idle time costs nothing.
 
 ## Install
+
+### Windows
 
 Download `Ciao-Setup-<version>.exe` from the
 [latest release](https://github.com/iliyasone/ciao/releases/latest) and run it. It
@@ -126,12 +130,46 @@ failed check in the background shows nothing.
 To check by hand, go to *Settings → Updates → Check*.
 
 On Linux the AppImage updates itself the same way; the `.deb` asks for your
-password to install the new package.
+password to install the new package. On macOS the check works the same, but the
+button opens the release page instead: see [macOS](#macos).
 
 A portable copy (the `release/win-unpacked` folder from `npm run dist:win`) is
 updated the same way. The update installs Ciao into `%LOCALAPPDATA%\Programs\Ciao`,
 and from then on that copy runs and starts with Windows. You can delete the old
 folder. A dev run (`electron .`) never updates.
+
+### macOS
+
+Download from the [latest release](https://github.com/iliyasone/ciao/releases/latest):
+`Ciao-<version>-arm64.dmg` for Apple Silicon (M1 and later), `Ciao-<version>-x64.dmg`
+for Intel. Open it and drag Ciao into Applications.
+
+1. The app is not signed with an Apple Developer ID, so macOS blocks the first
+   start ("Apple could not verify…"). Click *Done*, open System Settings →
+   Privacy & Security, scroll down and click *Open Anyway*. Or run
+   `xattr -dr com.apple.quarantine /Applications/Ciao.app` in Terminal once.
+2. Ciao lives in the menu bar; there is no Dock icon. On first start the Settings
+   tab opens: paste your API key there.
+3. Allow the microphone when asked, and turn Ciao on in System Settings → Privacy
+   & Security → Accessibility. Without that, Ciao can't hear the dictation key or
+   paste the text. *Settings → Permissions* shows whether it has it.
+4. Hold **Right Option** to dictate (most Mac keyboards have no Right Control).
+   The middle mouse button works too, and *Settings → Keys* takes any other key.
+
+What is different on macOS for now:
+
+- **No wake word.** Saying "ciao" to start isn't available yet.
+- **Updates are by hand.** *Update to X* opens the release page. Quit Ciao (menu
+  bar icon → *Quit*), download the new `.dmg` and drag Ciao into Applications over
+  the old one. Because the app is unsigned, macOS then stops honouring the
+  Accessibility permission even though the switch still shows on: remove Ciao from
+  that list with **−**, press *Settings → Permissions → Open settings* to put it
+  back, and turn it on again.
+- **Paste goes to the app, not the window.** macOS tells Ciao which app is in front
+  but not which of its windows, so switching to another window or tab of the same
+  app still gets the text.
+- **Keys that can't be heard.** While a password field (or a terminal with
+  *Secure Keyboard Entry*) is focused, macOS hides keys from every app, Ciao too.
 
 ### Build it yourself
 
@@ -150,6 +188,14 @@ npm run dist:win:installer  # the installer → release/Ciao-Setup-<version>.exe
 
 `dist:win` needs nothing else. `dist:win:installer` needs Wine on Linux and macOS
 (NSIS uses it for the uninstaller). On Windows it needs nothing extra.
+
+The macOS app builds on a Mac only, with Xcode's command line tools
+(`xcode-select --install`) instead of .NET:
+
+```sh
+npm run build:native:mac    # the input helper → build/mac-input/Ciao.Input
+npm run dist:mac            # disk images → release/Ciao-<version>-{arm64,x64}.dmg
+```
 
 The Linux app is built on Linux, without Wine or .NET:
 
@@ -204,7 +250,7 @@ How it differs from Windows:
 ### API key
 
 Ciao takes the key from the `OPENAI_API_KEY` environment variable. If that is not
-set, it reads `%APPDATA%\Ciao\openai-key.txt`. Saving a key in Settings writes
+set, it reads `openai-key.txt` in the [data folder](#where-things-are-stored). Saving a key in Settings writes
 that file.
 
 ### Hotkeys
@@ -219,7 +265,10 @@ Set them in *Settings → Keys*.
   - A lone modifier such as Right Ctrl is the exception, so Ctrl+C keeps working.
 - **Paste last.** Click the shortcut and press a new combo.
 
-In `%APPDATA%\Ciao\config.json` these are:
+On macOS, Option is `Alt` and Command is `Win` in these names, and the Fn key is
+`Fn`.
+
+In `config.json` these are:
 
 - `triggers` — `+`-separated modifiers (`Ctrl`, `Alt`, `Shift`, `Win`), then a
   [.NET `Keys`](https://learn.microsoft.com/dotnet/api/system.windows.forms.keys)
@@ -265,7 +314,8 @@ update itself: install a newer APK over the old one.
 
 ## Where things are stored
 
-Everything is under `%APPDATA%\Ciao` (`~/.config/Ciao` on Linux):
+Everything is under `%APPDATA%\Ciao` on Windows, `~/Library/Application Support/Ciao`
+on macOS and `~/.config/Ciao` on Linux:
 
 - `config.json` — settings. Most of them are edited in the app.
 - `openai-key.txt` — the API key.
@@ -299,13 +349,14 @@ we can see how many people use it. Two events:
     closed list in [`src/core/apps.ts`](src/core/apps.ts) (`t3code`, `vscode`,
     `terminal`, `browser`, `telegram`, …). Any program not on the list is sent as
     `other`, never by name. When the text could not be pasted,
-    `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`, or
+    `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`,
+    `no-permission` (macOS: Ciao has no Accessibility permission), or
     `no-helper` / `timeout` / `unknown` when the input helper failed. On
     `focus-changed` there are also `switched_to_app` (the app in front instead, same list),
     `target_closed`, and `target_on_other_desktop` (true when you switched to another
     virtual desktop; absent when Windows can't tell).
 
-Each event carries a random install id from `%APPDATA%\Ciao\telemetry-id`. It is
+Each event carries a random install id from `telemetry-id` in the [data folder](#where-things-are-stored). It is
 not derived from your machine or accounts. No text, audio, window titles, prompts,
 terms or API keys are ever sent. PostHog keeps no person profiles for these events, does
 not look up a location from your IP address, and the project discards IP addresses.
@@ -319,7 +370,7 @@ point it at your own PostHog project.
 
 ### Releasing
 
-Every release ships all three apps under one version, the one in `package.json`
+Every release ships all the apps under one version, the one in `package.json`
 (the Android build reads it from there too):
 
 1. Merge everything that goes in into `main` and wait for CI to pass.
@@ -331,16 +382,18 @@ Every release ships all three apps under one version, the one in `package.json`
    word of its own.
 
 [`release.yml`](.github/workflows/release.yml) creates a draft GitHub release, then
-three jobs upload into it at the same time:
+four jobs upload into it at the same time:
 
 | Job | Runner | Files |
 | --- | --- | --- |
 | `windows` | Windows | `Ciao-Setup-<version>.exe`, its `.blockmap`, `latest.yml` |
+| `mac` | macOS | `Ciao-<version>-{arm64,x64}.dmg`, `.zip`s, their `.blockmap`s, `latest-mac.yml` |
 | `linux` | Ubuntu | `Ciao-<version>.AppImage`, `Ciao-<version>.deb`, `latest-linux.yml` |
 | `android` | Ubuntu | `Ciao-<version>.apk` |
 
-Installed desktop copies check `latest.yml` / `latest-linux.yml` of the latest
-published release, so the draft is published only after all three jobs succeed.
+Installed desktop copies check `latest.yml` / `latest-mac.yml` / `latest-linux.yml`
+of the latest published release, so the draft is published only after all four jobs
+succeed.
 If one fails, rerun the failed jobs: they fill the same draft.
 
 - The tag must equal `v` + the `package.json` version, or the workflow fails.
@@ -349,8 +402,10 @@ If one fails, rerun the failed jobs: they fill the same draft.
   `CIAO_KEY_PASSWORD`). Every release must be signed with that key, or Android
   refuses to install it over the previous one.
 
-[`ci.yml`](.github/workflows/ci.yml) builds the same installer, AppImage, `.deb`
-and APK on every PR and attaches them to the run as artifacts.
+[`ci.yml`](.github/workflows/ci.yml) builds the same installer, disk images,
+AppImage, `.deb` and APK on every PR and attaches them to the run as artifacts. On
+macOS it also checks that the input helper answers and that the packaged app is
+signed and starts.
 
 ### Testing without speaking
 
@@ -374,7 +429,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
                   │ transcript deltas ──► overlay card (live text)
                   │ on key release: commit ──► final transcript
                   ▼
-       Ciao.Input.exe ──► Ctrl+V into the window that was active at the start
+       Ciao.Input ──► Ctrl+V (⌘V) into the window that was active at the start
 ```
 
 - A WebSocket session is kept open in reserve, because opening one takes up to a
@@ -382,10 +437,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   nothing.
 - If the final transcript does not arrive, the saved WAV is sent to
   `gpt-transcribe` instead.
-- `Ciao.Input.exe` is a tiny .NET helper. It installs a low-level keyboard hook,
-  so it can see Right Ctrl being held and swallow Esc (the focused app never
-  receives it). It also reports the foreground window and injects Ctrl+V. It
-  talks to the Electron app over stdin/stdout, one JSON object per line.
+- `Ciao.Input` is a tiny native helper: .NET on Windows, Swift on macOS. It
+  installs a low-level keyboard and mouse hook (an event tap on macOS), so it can
+  see Right Ctrl being held and swallow Esc (the focused app never receives it).
+  It also reports the foreground window and injects Ctrl+V. It talks to the
+  Electron app over stdin/stdout, one JSON object per line; both helpers speak the
+  same protocol (`src/main/input.ts`).
 
 ### Project layout
 
@@ -407,6 +464,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - `src/linux-input/` — the Linux one, with the same protocol: evdev for the keys,
   X11 (libX11/libXtst through koffi) for the active window and Ctrl+V, uinput for
   Ctrl+V on Wayland. Electron runs it as plain Node.
+- `native/mac-input/` — the macOS one (Swift), same protocol: an event tap for
+  the keys, the frontmost app and ⌘V.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.
 - `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app): one
@@ -436,7 +495,8 @@ Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds
 - Built-in dictation and read-aloud in [T3 Code](https://github.com/pingdotgg/t3code).
   The stack is the same (Electron, React, Tailwind, Vite), so the UI and the core
   can move into it.
-- macOS ([#4](https://github.com/iliyasone/ciao/issues/4)).
+- The wake word and signed, self-installing updates on macOS
+  ([#4](https://github.com/iliyasone/ciao/issues/4)).
 
 ## License
 

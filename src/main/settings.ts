@@ -16,7 +16,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   fileModel: "gpt-transcribe",
   // Linux can't keep a middle click from the app under the pointer (it would paste the selection there).
-  triggers: process.platform === "linux" ? ["RControlKey"] : ["RControlKey", "MButton"],
+  // Mac keyboards mostly have no Right Control; Right Option is the spare key there.
+  triggers:
+    process.platform === "linux" ? ["RControlKey"] : [process.platform === "darwin" ? "RMenu" : "RControlKey", "MButton"],
   pasteLastHotkey: "Alt+Shift+Z",
   autoPaste: true,
   restoreClipboard: true,

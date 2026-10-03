@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { app, globalShortcut } from "electron";
+import { app, BrowserWindow, globalShortcut } from "electron";
 import { WakeWord } from "./wakeWord";
 
 /** Why a paste into the dictation's window did not happen. */
@@ -18,7 +18,7 @@ export interface PasteMiss {
 }
 
 export interface ForegroundWindow {
-  /** HWND on Windows, X11 window id on Linux; 0 = unknown (Wayland). */
+  /** HWND on Windows, X11 window id on Linux, the app's process id on macOS; 0 = unknown (Wayland). */
   hwnd: number;
   title: string;
   process: string;
@@ -30,11 +30,13 @@ type InputEvents = {
   other: [];
   /** Linux: keyboards and mice the helper reads, and ones it may not open (not in the "input" group). */
   devices: [reading: number, denied: number];
+  /** macOS: whether Ciao has the Accessibility permission the helper needs. */
+  permission: [accessibility: boolean];
 };
 
 /**
- * Talks to the input helper: native/win-input (Ciao.Input.exe) on Windows, src/linux-input run as
- * plain Node on Linux. It reports the dictation triggers (and Esc), captures shortcuts, looks up
+ * Talks to the input helper: native/win-input (Ciao.Input.exe) on Windows, native/mac-input
+ * (Swift) on macOS, src/linux-input run as plain Node on Linux. It reports the dictation triggers (and Esc), captures shortcuts, looks up
  * the foreground window and types Ctrl+V. Restarted if it dies.
  */
 export class InputHelper extends EventEmitter<InputEvents> {
@@ -43,6 +45,8 @@ export class InputHelper extends EventEmitter<InputEvents> {
   private pending = new Map<number, (reply: Record<string, unknown>) => void>();
   private stopped = false;
   private captureResolve: ((spec: string | null) => void) | null = null;
+  /** macOS: false until the helper has the Accessibility permission (it hears no keys before). */
+  private canHear = true;
 
   constructor(private triggers: string[]) {
     super();
@@ -54,6 +58,12 @@ export class InputHelper extends EventEmitter<InputEvents> {
       const exe = app.isPackaged
         ? path.join(process.resourcesPath, "win-input", "Ciao.Input.exe")
         : path.join(app.getAppPath(), "build", "win-input", "Ciao.Input.exe");
+      return fs.existsSync(exe) ? { file: exe, args: [] } : null;
+    }
+    if (process.platform === "darwin") {
+      const exe = app.isPackaged
+        ? path.join(process.resourcesPath, "mac-input", "Ciao.Input")
+        : path.join(app.getAppPath(), "build", "mac-input", "Ciao.Input");
       return fs.existsSync(exe) ? { file: exe, args: [] } : null;
     }
     if (process.platform === "linux") {
@@ -111,7 +121,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
   /** Resolves with the next key, combo or mouse button the user presses (null: Esc or timeout). */
   capture(): Promise<string | null> {
     this.captureResolve?.(null);
-    if (!this.child) return Promise.resolve(null);
+    if (!this.child || !this.canHear) return Promise.resolve(null);
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.send({ cmd: "capture", on: false });
@@ -129,10 +139,14 @@ export class InputHelper extends EventEmitter<InputEvents> {
 
   async foreground(): Promise<ForegroundWindow | null> {
     const r = await this.request({ cmd: "foreground" });
-    return typeof r.hwnd === "number" ? { hwnd: r.hwnd, title: String(r.title ?? ""), process: String(r.process ?? "") } : null;
+    if (typeof r.hwnd !== "number") return null;
+    // macOS names apps, not windows: Ciao in front with none of its windows focused means its
+    // window was just closed and macOS left Ciao active. ⌘V would go nowhere; no target instead.
+    if (process.platform === "darwin" && r.hwnd === process.pid && !BrowserWindow.getFocusedWindow()) return null;
+    return { hwnd: r.hwnd, title: String(r.title ?? ""), process: String(r.process ?? "") };
   }
 
-  /** Ctrl+V into `hwnd` if it is still in front (0 = whatever is in front). */
+  /** Ctrl+V (⌘V on macOS) into `hwnd` if it is still in front (0 = whatever is in front). */
   async paste(hwnd: number): Promise<{ ok: true } | ({ ok: false } & PasteMiss)> {
     const r = await this.request({ cmd: "paste", hwnd });
     if (r.ok === true) return { ok: true };
@@ -193,6 +207,10 @@ export class InputHelper extends EventEmitter<InputEvents> {
         break;
       case "status":
         this.emit("devices", Number(msg.reading), Number(msg.denied));
+        break;
+      case "permission":
+        this.canHear = msg.accessibility === true;
+        this.emit("permission", this.canHear);
         break;
     }
   }

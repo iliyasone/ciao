@@ -4,6 +4,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCost } from "../../core/cost";
 import type { Strings } from "../../core/i18n";
+import { isMac } from "../../core/platform";
 import type { HistoryEntry, RetryMode } from "../../core/types";
 import { useStrings } from "../lang";
 import { SettingsPanel } from "./SettingsPanel";
@@ -17,7 +18,8 @@ export function HistoryApp() {
   const tr = useStrings();
   return (
     <div className="flex h-full flex-col">
-      <header className="drag flex h-11 shrink-0 items-center gap-5 border-b border-tint/5 pl-4 pr-40">
+      {/* Room for the window buttons: macOS traffic lights on the left, Windows controls on the right. */}
+      <header className={`drag flex h-11 shrink-0 items-center gap-5 border-b border-tint/5 ${isMac ? "pr-4 pl-21" : "pr-40 pl-4"}`}>
         <div className="flex items-center gap-2">
           <img src="./icon.png" className="size-5 rounded-md" alt="" />
           <span className="text-[14px] font-semibold tracking-tight text-fg">Ciao</span>
