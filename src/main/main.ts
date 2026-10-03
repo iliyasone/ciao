@@ -33,14 +33,45 @@ if (relaunchOnX11) {
   // process exits. APPIMAGE alone may be inherited from another AppImage app that started us.
   const { APPIMAGE, APPDIR } = process.env;
   const inAppImage = !!APPIMAGE && !!APPDIR && process.execPath.startsWith(`${APPDIR}/`);
-  spawn(inAppImage ? APPIMAGE : process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], {
-    detached: true,
-    stdio: "inherit",
-  }).unref();
+  if (inAppImage) closeAppImageFds(APPIMAGE, APPDIR);
+  spawn(inAppImage ? APPIMAGE : process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], { stdio: "inherit" }).unref();
   app.exit(0);
 }
 // A second launch only forwards its arguments to the running instance (see "second-instance").
 else if (!app.requestSingleInstanceLock()) app.exit(0);
+
+/**
+ * Keep the copy started next from inheriting what ties this process to its AppImage mount: that
+ * would keep the mount and its FUSE process alive for the whole session. Files inside the mount
+ * are closed. The pipe the AppImage runtime waits on to unmount must stay open until this process
+ * exits (its code runs from the mount), so it is reopened close-on-exec instead.
+ */
+function closeAppImageFds(appImage: string, appDir: string): void {
+  const runtimePipes = new Set<string>();
+  for (const pid of fs.readdirSync("/proc")) {
+    try {
+      if (fs.readlinkSync(`/proc/${pid}/exe`) !== appImage) continue;
+      for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) runtimePipes.add(fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+    } catch {
+      // Not a process, gone, or not ours.
+    }
+  }
+  for (const fd of fs.readdirSync("/proc/self/fd")) {
+    try {
+      const file = fs.readlinkSync(`/proc/self/fd/${fd}`);
+      if (file.startsWith("pipe:") && runtimePipes.has(file)) {
+        const flags = parseInt(/flags:\s*(\d+)/.exec(fs.readFileSync(`/proc/self/fdinfo/${fd}`, "utf8"))?.[1] ?? "0", 8);
+        const access = (flags & 3) === fs.constants.O_WRONLY ? fs.constants.O_WRONLY : fs.constants.O_RDONLY;
+        fs.openSync(`/proc/self/fd/${fd}`, access | fs.constants.O_NONBLOCK); // libuv opens close-on-exec
+        fs.closeSync(Number(fd));
+      } else if (file === appDir || file.startsWith(`${appDir}/`)) {
+        fs.closeSync(Number(fd));
+      }
+    } catch {
+      // Gone already (the directory listing's own descriptor).
+    }
+  }
+}
 
 // Mirror console output into userData/ciao.log — the only way to see what happened on someone's machine.
 {

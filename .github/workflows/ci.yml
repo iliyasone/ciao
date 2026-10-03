@@ -63,7 +63,8 @@ jobs:
           timeout 30 release/Ciao-*.AppImage --no-sandbox > ciao.out 2>&1
           sleep 20
           cat ciao.out
-          ps -eo args | grep -- '--type=gpu-process' | grep -v grep | grep -q -- '--ozone-platform=x11'
+          ps -eo args | grep -qE '^/tmp/\.mount_Ciao[^ ]*/ciao --ozone-platform=x11'
+          test "$(mount | grep -c Ciao)" = 1
           log="$HOME/.config/Ciao/ciao.log"
           cat "$log"
           grep -q "started; history" "$log"
