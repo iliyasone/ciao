@@ -230,7 +230,7 @@ const en: Strings = {
 
   overlay: {
     cancelled: "Cancelled — the recording is in history",
-    clipboard: "The window changed — the text is on the clipboard, Ctrl+V",
+    clipboard: "The window changed — the text is on the clipboard, press Ctrl+V to paste",
     saved: "Couldn't transcribe — the audio is saved in history",
     recovered: "The recording was cut short by a restart — here's what you said",
     recoveredSaved: "The recording was cut short by a restart — the audio is saved in history",
