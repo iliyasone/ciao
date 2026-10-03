@@ -15,6 +15,7 @@ namespace Ciao.Input;
 ///   {"type":"escape"}                                  Esc while armed — swallowed so the focused app never sees it
 ///   {"type":"other"}                                   another key while a lone-modifier trigger is held (a shortcut, not dictation)
 ///   {"type":"captured","spec":"…"|null}                result of a capture (null = cancelled with Esc)
+///   {"type":"permission","accessibility":bool}         macOS helper only (native/mac-input): whether the event tap is up
 ///
 /// Commands it accepts (replies carry the same "id"):
 ///   {"id":1,"cmd":"foreground"}           → {"id":1,"hwnd":123,"title":"…","process":"…"}

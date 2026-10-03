@@ -1,5 +1,5 @@
-# Typecheck and build the Windows installer, the Linux AppImage and .deb, and the Android APK on
-# every PR, so a release tag never meets a broken build.
+# Typecheck and build the Windows installer, the macOS disk images (with a smoke test), the Linux
+# AppImage and .deb, and the Android APK on every PR, so a release tag never meets a broken build.
 name: CI
 
 on:
@@ -48,6 +48,47 @@ jobs:
           path: |
             release/Ciao-*.AppImage
             release/Ciao-*.deb
+          retention-days: 7
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:native:mac
+      # Nothing presses keys here; the helper must start, report its permission and answer commands.
+      - name: Input helper answers
+        run: |
+          lipo -info build/mac-input/Ciao.Input | grep -q "x86_64 arm64"
+          out=$(printf '{"id":1,"cmd":"foreground"}\n' | build/mac-input/Ciao.Input --trigger RMenu --trigger Ctrl+Space)
+          echo "$out"
+          echo "$out" | grep -q '"type":"ready"'
+          echo "$out" | grep -q '"type":"permission"'
+          echo "$out" | grep -q '"id":1'
+      # electron-builder skips signing in PR builds; the ad-hoc signature uses no secrets, and an
+      # unsigned Apple Silicon app doesn't start at all.
+      - run: npm run dist:mac
+        env:
+          CSC_FOR_PULL_REQUEST: "true"
+      - name: The app is signed and starts
+        run: |
+          for app in release/mac*/Ciao.app; do codesign --verify --deep --strict --verbose=2 "$app"; done
+          release/mac-arm64/Ciao.app/Contents/MacOS/Ciao &
+          sleep 20
+          kill $! || true
+          log="$HOME/Library/Application Support/Ciao/ciao.log"
+          cat "$log"
+          grep -q "started; history" "$log"
+          grep -q "accessibility permission" "$log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ciao-mac
+          path: release/Ciao-*.dmg
           retention-days: 7
 
   android:

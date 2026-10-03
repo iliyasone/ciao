@@ -1,6 +1,7 @@
 // Human-readable names for dictation triggers ("RControlKey", "Ctrl+Alt+Space", "MButton", …)
 // and Electron accelerators ("Alt+Shift+Z"). The trigger syntax is defined by the native helper
 // (native/win-input/Triggers.cs): "+"-separated modifiers, then a .NET Keys name or mouse button.
+// The macOS helper (native/mac-input) reads and writes the same names.
 
 import type { Strings } from "./i18n";
 
@@ -49,5 +50,6 @@ export function acceleratorFromEvent(e: { code: string; ctrlKey: boolean; altKey
 }
 
 export function acceleratorParts(accelerator: string, keyNames: Strings["keyNames"]): string[] {
-  return accelerator.split("+").map((p) => (p === "Super" ? "Win" : p === "Space" ? keyNames.Space : p));
+  const names: Record<string, string> = keyNames;
+  return accelerator.split("+").map((p) => names[p] ?? (p === "Super" ? "Win" : p));
 }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { app } from "electron";
+import { app, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { t } from "../core/i18n";
 import type { UpdateState } from "../core/types";
@@ -16,6 +16,9 @@ const FIRST_CHECK_AFTER_MS = 15_000;
  * Installed builds (the NSIS installer) carry resources/app-update.yml. A portable copy (the
  * `dist:win` folder) does not; it gets the same feed from a file in userData, so its update runs
  * the installer and moves it to an installed copy.
+ *
+ * macOS builds are not signed with a Developer ID, and macOS refuses to install an unsigned update
+ * in place. There the check works the same, but "update" opens the release page to download it.
  */
 export class Updater {
   private state: UpdateState;
@@ -86,6 +89,10 @@ export class Updater {
     const s = this.state;
     const found = s.phase === "available" || s.phase === "error" ? s.version : undefined;
     if (!found) return;
+    if (process.platform === "darwin") {
+      void shell.openExternal(`https://github.com/${REPO.owner}/${REPO.repo}/releases/tag/v${encodeURIComponent(found)}`);
+      return;
+    }
     const { current } = s;
     let version = found;
     this.set({ phase: "downloading", current, version, percent: 0 });

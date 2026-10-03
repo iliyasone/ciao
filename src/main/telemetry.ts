@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { app, net } from "electron";
 
@@ -33,7 +32,7 @@ export class Telemetry {
     $lib: "ciao",
     app_version: app.getVersion(),
     os: process.platform,
-    os_version: os.release(),
+    os_version: process.getSystemVersion(), // the macOS version, not Darwin's (os.release())
     arch: process.arch,
     // Counts only: no person profiles in PostHog, just one anonymous id per install,
     // and no location looked up from the IP (the project also discards IPs).

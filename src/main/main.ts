@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, systemPreferences, Tray } from "electron";
 import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { setLang, t } from "../core/i18n";
+import { acceleratorParts } from "../core/triggers";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
@@ -51,6 +52,7 @@ const DIST = path.join(__dirname, "..");
 const PRELOAD = path.join(DIST, "preload", "preload.js");
 const RENDERER = path.join(DIST, "renderer");
 const ASSETS = app.isPackaged ? path.join(process.resourcesPath, "assets") : path.join(app.getAppPath(), "assets");
+const MAC = process.platform === "darwin";
 
 let settings: Settings;
 let store: HistoryStore;
@@ -62,6 +64,8 @@ const wake = new WakeWord();
 const telemetry = new Telemetry(() => Telemetry.allowed() && settings?.telemetry !== false);
 let historyWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
+/** macOS: the input helper has the Accessibility permission (always true elsewhere). */
+let accessibility = !MAC;
 const updater = new Updater((state) => {
   historyWin?.webContents.send("update:state", state);
   buildTrayMenu();
@@ -91,7 +95,10 @@ function openHistory(tab?: "settings"): void {
     icon: path.join(ASSETS, "icon.png"),
     backgroundColor: chrome().background,
     titleBarStyle: "hidden",
-    titleBarOverlay: { color: chrome().background, symbolColor: chrome().symbols, height: 44 },
+    // macOS keeps its traffic lights (centred in the 44 px header); Windows draws its buttons over the page.
+    ...(MAC
+      ? { trafficLightPosition: { x: 16, y: 15 } }
+      : { titleBarOverlay: { color: chrome().background, symbolColor: chrome().symbols, height: 44 } }),
     webPreferences: { preload: PRELOAD },
   });
   void historyWin.loadFile(path.join(RENDERER, "history.html"), { hash: tab ?? "" });
@@ -107,8 +114,10 @@ function applySettings(next: Settings): void {
   setAutostart(next.openAtLogin);
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
-  wake.setEnabled(next.wakeWord);
-  overlay.setWake(next.wakeWord);
+  // No detector in this build (macOS for now): keep the mic closed rather than listen for nothing.
+  const wakeWord = next.wakeWord && WakeWord.available();
+  wake.setEnabled(wakeWord);
+  overlay.setWake(wakeWord);
   tray?.setToolTip(t().tray.tooltip);
   buildTrayMenu();
   // Open windows re-render in the new language right away.
@@ -149,7 +158,7 @@ function buildTrayMenu(): void {
       ...update,
       ...(update.length ? [{ type: "separator" as const }] : []),
       { label: s.historyAndSettings, click: () => openHistory() },
-      { label: s.pasteLast(settings.pasteLastHotkey), click: () => void dictation.pasteLast() },
+      { label: s.pasteLast(acceleratorParts(settings.pasteLastHotkey, t().keyNames).join("+")), click: () => void dictation.pasteLast() },
       { type: "separator" },
       ...(settings.showDelay
         ? [{
@@ -253,6 +262,12 @@ function registerIpc(): void {
   ipcMain.handle("settings:has-key", () => loadApiKey() !== null);
   ipcMain.handle("settings:wake-available", () => WakeWord.available());
   ipcMain.handle("settings:capture-trigger", () => input.capture());
+  ipcMain.handle("settings:accessibility", () => (MAC ? accessibility : null));
+  ipcMain.handle("settings:open-accessibility", () => {
+    // Asking (again) puts Ciao back on the list if the user removed it there.
+    systemPreferences.isTrustedAccessibilityClient(true);
+    return shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+  });
   ipcMain.handle("settings:set-key", (_e, key: string) => {
     fs.writeFileSync(path.join(app.getPath("userData"), "openai-key.txt"), key.trim());
     pool.refill();
@@ -277,6 +292,10 @@ app.on("second-instance", (_e, argv) => {
   if (file) void dictation.replay(WavWriter.readPcm(file));
   else openHistory();
 });
+// macOS: opening Ciao again (Finder, Spotlight) reaches the running copy as "activate", not a second launch.
+app.on("activate", () => {
+  if (store) openHistory();
+});
 app.on("window-all-closed", () => {
   // Keep running in the tray.
 });
@@ -297,7 +316,7 @@ void app.whenReady().then(() => {
 
   store = new HistoryStore(path.join(app.getPath("userData"), "history"));
   const recovered = store.recover();
-  store.importLegacy(path.join(process.env.LOCALAPPDATA ?? "", "VoicePreview", "sessions"));
+  if (process.platform === "win32") store.importLegacy(path.join(process.env.LOCALAPPDATA ?? "", "VoicePreview", "sessions"));
   protocol.handle("ciao-audio", (req) => {
     const id = decodeURIComponent(new URL(req.url).pathname.slice(1));
     return net.fetch(pathToFileURL(store.audioPath(id)).toString());
@@ -332,11 +351,24 @@ void app.whenReady().then(() => {
   input.once("devices", (reading, denied) => {
     if (reading === 0 && denied > 0) void explainInputGroup();
   });
+  input.on("permission", (granted) => {
+    console.log("accessibility permission:", granted);
+    accessibility = granted;
+    historyWin?.webContents.send("settings:accessibility", granted);
+  });
   input.start();
+  if (MAC) {
+    // The microphone is asked once; the Accessibility dialog shows at every start until it is granted.
+    void systemPreferences.askForMediaAccess("microphone").then((ok) => console.log("microphone access:", ok));
+    if (!systemPreferences.isTrustedAccessibilityClient(false)) systemPreferences.isTrustedAccessibilityClient(true);
+  }
 
   registerIpc();
-  tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, "tray.png")));
-  tray.on("click", () => openHistory());
+  const trayPng = path.join(ASSETS, "tray.png");
+  // The macOS menu bar is 22 pt tall: the 32 px icon goes in as 16 pt at 2x, sharp on Retina.
+  tray = new Tray(MAC ? nativeImage.createFromBuffer(fs.readFileSync(trayPng), { scaleFactor: 2 }) : nativeImage.createFromPath(trayPng));
+  // On macOS a click opens the menu (which has "History and settings"); Windows opens the window.
+  if (!MAC) tray.on("click", () => openHistory());
   // applySettings only re-registers the hotkey when it changes, and here prev === next.
   registerPasteLast();
   applySettings(settings);
@@ -344,7 +376,7 @@ void app.whenReady().then(() => {
     if (!historyWin || historyWin.isDestroyed()) return;
     const c = chrome();
     historyWin.setBackgroundColor(c.background);
-    historyWin.setTitleBarOverlay({ color: c.background, symbolColor: c.symbols, height: 44 });
+    if (!MAC) historyWin.setTitleBarOverlay({ color: c.background, symbolColor: c.symbols, height: 44 });
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);

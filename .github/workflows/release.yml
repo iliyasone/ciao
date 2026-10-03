@@ -1,9 +1,9 @@
 # Push a tag vX.Y.Z (matching package.json) to publish a release; installed copies of Ciao find it
 # through electron-updater (src/main/updater.ts) and offer to update. The release is created as a
-# draft, the Windows installer, the Linux AppImage and .deb and the Android APK are uploaded to it in
-# parallel, and it is published only once every file is there: clients read latest.yml /
-# latest-linux.yml from the latest published release, so a half-uploaded one would break their
-# checks. A rerun fills the same draft.
+# draft, the Windows installer, the macOS disk images, the Linux AppImage and .deb and the Android APK
+# are uploaded to it in parallel, and it is published only once every file is there: clients read
+# latest.yml / latest-mac.yml / latest-linux.yml from the latest published release, so a
+# half-uploaded one would break their checks. A rerun fills the same draft.
 name: Release
 
 on:
@@ -47,6 +47,22 @@ jobs:
       - run: npm run build:native
       - run: npm run build:kws
       - run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  mac:
+    needs: draft
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:native:mac
+      - run: npm run release:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -98,7 +114,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
-    needs: [windows, linux, android]
+    needs: [windows, mac, linux, android]
     runs-on: ubuntu-latest
     steps:
       - name: Publish the draft

@@ -1,7 +1,7 @@
 // Which app a dictation went to, as a coarse label for anonymous usage counts.
 // Only apps on this closed list are named; everything else is "other", so a rare or in-house
-// program never leaves the machine. Keys are process names (executable names on Linux),
-// lower-case, without ".exe".
+// program never leaves the machine. Keys are lower-case: process names without ".exe" (executable
+// names on Linux), and macOS app bundle names without ".app" (not localized, unlike the Dock name).
 
 const APPS: Record<string, string> = {
   // Coding agents and editors
@@ -22,6 +22,17 @@ const APPS: Record<string, string> = {
   clion64: "jetbrains",
   goland64: "jetbrains",
   datagrip64: "jetbrains",
+  "visual studio code": "vscode",
+  xcode: "xcode",
+  "intellij idea": "jetbrains",
+  "intellij idea ce": "jetbrains",
+  pycharm: "jetbrains",
+  "pycharm ce": "jetbrains",
+  webstorm: "jetbrains",
+  rider: "jetbrains",
+  clion: "jetbrains",
+  goland: "jetbrains",
+  datagrip: "jetbrains",
   // Terminals
   windowsterminal: "terminal",
   cmd: "terminal",
@@ -41,6 +52,10 @@ const APPS: Record<string, string> = {
   "xfce4-terminal": "terminal",
   tilix: "terminal",
   xterm: "terminal",
+  terminal: "terminal",
+  iterm: "terminal",
+  warp: "terminal",
+  wezterm: "terminal",
   // Browsers
   chrome: "browser",
   msedge: "browser",
@@ -52,6 +67,11 @@ const APPS: Record<string, string> = {
   vivaldi: "browser",
   arc: "browser",
   browser: "browser", // Yandex Browser
+  "google chrome": "browser",
+  safari: "browser",
+  "microsoft edge": "browser",
+  "brave browser": "browser",
+  yandex: "browser",
   // Messengers and calls
   telegram: "telegram",
   ayugram: "telegram",
@@ -61,6 +81,8 @@ const APPS: Record<string, string> = {
   "ms-teams": "teams",
   teams: "teams",
   zoom: "zoom",
+  "zoom.us": "zoom",
+  "microsoft teams": "teams",
   // Documents and notes
   winword: "word",
   excel: "excel",
@@ -68,11 +90,19 @@ const APPS: Record<string, string> = {
   outlook: "outlook",
   olk: "outlook",
   onenote: "onenote",
+  "microsoft word": "word",
+  "microsoft excel": "excel",
+  "microsoft powerpoint": "powerpoint",
+  "microsoft outlook": "outlook",
+  "microsoft onenote": "onenote",
+  textedit: "notepad",
+  notes: "notepad",
   notion: "notion",
   obsidian: "obsidian",
   notepad: "notepad",
   "notepad++": "notepad",
   explorer: "explorer",
+  finder: "explorer",
 };
 
 /** "WindowsTerminal" → "terminal", "Code" → "vscode", an unlisted program → "other". */

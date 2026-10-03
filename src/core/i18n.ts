@@ -2,7 +2,10 @@
 // The main process keeps the current language here (setLang); renderers subscribe through
 // src/renderer/lang.ts so a change in Settings applies without a restart.
 
+import { isMac } from "./platform";
 import type { Lang } from "./types";
+
+const PASTE = isMac ? "⌘V" : "Ctrl+V";
 
 const ru = {
   /** For toLocaleDateString / toLocaleTimeString. */
@@ -46,7 +49,8 @@ const ru = {
 
   overlay: {
     cancelled: "Отменено — запись в истории",
-    clipboard: "Окно сменилось — текст в буфере, Ctrl+V",
+    clipboard: `Окно сменилось — текст в буфере, ${PASTE}`,
+    noPermission: "Нет Универсального доступа — текст в буфере. Включи его: Настройки → Доступ",
     saved: "Не распозналось — аудио сохранено в истории",
     recovered: "Запись прервалась при перезапуске — вот что ты сказал",
     recoveredSaved: "Запись прервалась при перезапуске — аудио сохранено в истории",
@@ -60,10 +64,11 @@ const ru = {
 
   update: {
     noReleases: "На GitHub пока нет опубликованных версий",
-    incompleteRelease: "Последний релиз на GitHub собран не до конца — в нём нет latest.yml",
+    incompleteRelease: `Последний релиз на GitHub собран не до конца — в нём нет ${isMac ? "latest-mac.yml" : "latest.yml"}`,
     offline: "Нет интернета",
     githubStatus: (status: string) => `GitHub ответил ${status} — попробуй позже`,
-    buttonTitle: (current: string) => `Сейчас ${current}. Скачается и перезапустится само.`,
+    buttonTitle: (current: string) =>
+      isMac ? `Сейчас ${current}. Откроется страница загрузки.` : `Сейчас ${current}. Скачается и перезапустится само.`,
     retryUpdate: "Повторить обновление",
     updateTo: (v: string) => `Обновить до ${v}`,
     downloading: (v: string, percent: number) => `Скачивается ${v}: ${percent}%`,
@@ -80,7 +85,7 @@ const ru = {
     minutes: (n: number) => `${n} мин`,
     search: "Поиск по тексту",
     nothingFound: "Ничего не нашлось",
-    empty: "Пока пусто. Зажми правый Ctrl и скажи что-нибудь.",
+    empty: `Пока пусто. Зажми ${isMac ? "правый Option" : "правый Ctrl"} и скажи что-нибудь.`,
     source: { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком", formatted: "с абзацами" },
     status: {
       running: "идёт",
@@ -172,7 +177,10 @@ const ru = {
       idle: "Новые версии проверяются сами, раз в несколько часов.",
       checking: "Проверяю…",
       latest: (time: string) => `Это последняя версия. Проверено в ${time}.`,
-      available: (v: string) => `Вышла ${v}. Скачается и перезапустится само; идущая диктовка не потеряется.`,
+      available: (v: string) =>
+        isMac
+          ? `Вышла ${v}. Закрой Ciao (значок в строке меню → Выход), скачай новую и перетащи в «Программы» вместо старой.`
+          : `Вышла ${v}. Скачается и перезапустится само; идущая диктовка не потеряется.`,
       downloading: (v: string, percent: number) => `Скачивается ${v}: ${percent}%`,
       installing: (v: string) => `Устанавливается ${v}, Ciao сейчас перезапустится…`,
       whatsNew: "Что нового",
@@ -187,9 +195,18 @@ const ru = {
       delay: "Задержка",
       delayHint: "Меньше — слова появляются раньше, больше — точнее. На цену не влияет.",
     },
+    permissions: {
+      title: "Доступ",
+      accessibility: "Универсальный доступ",
+      accessibilityHint:
+        "Без него Ciao не слышит клавишу диктовки и не может вставить текст. Включи Ciao в Системных настройках → Конфиденциальность и безопасность → Универсальный доступ. Если он там уже включён (например, после обновления), убери его кнопкой «−», нажми эту кнопку ещё раз и включи Ciao снова.",
+      granted: "Разрешено",
+      open: "Открыть настройки",
+    },
   },
 
-  /** Key and mouse-button names (see core/triggers.ts); keys missing here are shown as they are. */
+  /** Key and mouse-button names (see core/triggers.ts); keys missing here are shown as they are. On a Mac,
+   * Alt and Win in trigger names are Option and Command (see native/mac-input). */
   keyNames: {
     RControlKey: "Правый Ctrl",
     LControlKey: "Левый Ctrl",
@@ -203,7 +220,21 @@ const ru = {
     XButton2: "Боковая кнопка «вперёд»",
     Space: "Пробел",
     Apps: "Меню",
-  },
+    ...(isMac && {
+      RControlKey: "Правый Control",
+      LControlKey: "Левый Control",
+      RMenu: "Правый Option",
+      LMenu: "Левый Option",
+      RWin: "Правый Command",
+      LWin: "Левый Command",
+      Ctrl: "Control",
+      Alt: "Option",
+      Win: "Command",
+      Super: "Command",
+      Back: "Delete",
+      Delete: "Удаление вперёд",
+    }),
+  } as Record<string, string>,
 };
 
 export type Strings = typeof ru;
@@ -249,7 +280,8 @@ const en: Strings = {
 
   overlay: {
     cancelled: "Cancelled — the recording is in history",
-    clipboard: "The window changed — the text is on the clipboard, press Ctrl+V to paste",
+    clipboard: `The window changed — the text is on the clipboard, press ${PASTE} to paste`,
+    noPermission: "No Accessibility permission — the text is on the clipboard. Turn it on: Settings → Permissions",
     saved: "Couldn't transcribe — the audio is saved in history",
     recovered: "The recording was cut short by a restart — here's what you said",
     recoveredSaved: "The recording was cut short by a restart — the audio is saved in history",
@@ -263,10 +295,11 @@ const en: Strings = {
 
   update: {
     noReleases: "No versions have been published on GitHub yet",
-    incompleteRelease: "The latest release on GitHub is incomplete — it has no latest.yml",
+    incompleteRelease: `The latest release on GitHub is incomplete — it has no ${isMac ? "latest-mac.yml" : "latest.yml"}`,
     offline: "No internet connection",
     githubStatus: (status) => `GitHub responded with ${status} — try again later`,
-    buttonTitle: (current) => `You have ${current}. Ciao downloads the update and restarts on its own.`,
+    buttonTitle: (current) =>
+      isMac ? `You have ${current}. Opens the download page.` : `You have ${current}. Ciao downloads the update and restarts on its own.`,
     retryUpdate: "Retry update",
     updateTo: (v) => `Update to ${v}`,
     downloading: (v, percent) => `Downloading ${v}: ${percent}%`,
@@ -283,7 +316,7 @@ const en: Strings = {
     minutes: (n) => `${n} min`,
     search: "Search text",
     nothingFound: "Nothing found",
-    empty: "Nothing here yet. Hold Right Ctrl and say something.",
+    empty: `Nothing here yet. Hold ${isMac ? "Right Option" : "Right Ctrl"} and say something.`,
     source: { live: "live", "retry-live": "live again", "retry-file": "whole recording", formatted: "with paragraphs" },
     status: {
       running: "in progress",
@@ -375,7 +408,10 @@ const en: Strings = {
       idle: "New versions are checked for automatically, every few hours.",
       checking: "Checking…",
       latest: (time) => `This is the latest version. Checked at ${time}.`,
-      available: (v) => `${v} is out. Ciao downloads it and restarts on its own; a dictation in progress won't be lost.`,
+      available: (v) =>
+        isMac
+          ? `${v} is out. Quit Ciao (menu bar icon → Quit), download the new one and drag it into Applications over the old one.`
+          : `${v} is out. Ciao downloads it and restarts on its own; a dictation in progress won't be lost.`,
       downloading: (v, percent) => `Downloading ${v}: ${percent}%`,
       installing: (v) => `Installing ${v}, Ciao will restart now…`,
       whatsNew: "What's new",
@@ -389,6 +425,14 @@ const en: Strings = {
       showDelayHint: "The recognition delay level — in the recording card, here and in the tray menu.",
       delay: "Delay",
       delayHint: "Lower means words appear sooner, higher means more accurate. Doesn't affect the price.",
+    },
+    permissions: {
+      title: "Permissions",
+      accessibility: "Accessibility",
+      accessibilityHint:
+        "Without it Ciao can't hear the dictation key or paste the text. Turn Ciao on in System Settings → Privacy & Security → Accessibility. If it is already on there (after an update, say), remove it with −, press this button again and turn Ciao on.",
+      granted: "Granted",
+      open: "Open settings",
     },
   },
 
@@ -405,6 +449,20 @@ const en: Strings = {
     XButton2: "Forward side button",
     Space: "Space",
     Apps: "Menu",
+    ...(isMac && {
+      RControlKey: "Right Control",
+      LControlKey: "Left Control",
+      RMenu: "Right Option",
+      LMenu: "Left Option",
+      RWin: "Right Command",
+      LWin: "Left Command",
+      Ctrl: "Control",
+      Alt: "Option",
+      Win: "Command",
+      Super: "Command",
+      Back: "Delete",
+      Delete: "Forward Delete",
+    }),
   },
 };
 
