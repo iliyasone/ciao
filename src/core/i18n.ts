@@ -265,7 +265,7 @@ const en: Strings = {
     search: "Search text",
     nothingFound: "Nothing found",
     empty: "Nothing here yet. Hold Right Ctrl and say something.",
-    source: { live: "live", "retry-live": "live again", "retry-file": "whole file", formatted: "with paragraphs" },
+    source: { live: "live", "retry-live": "live again", "retry-file": "whole recording", formatted: "with paragraphs" },
     status: {
       running: "in progress",
       failed: "not transcribed",
@@ -353,7 +353,7 @@ const en: Strings = {
       idle: "New versions are checked for automatically, every few hours.",
       checking: "Checking…",
       latest: (time) => `This is the latest version. Checked at ${time}.`,
-      available: (v) => `${v} is out. It downloads and restarts by itself; a dictation in progress won't be lost.`,
+      available: (v) => `${v} is out. Ciao downloads it and restarts on its own; a dictation in progress won't be lost.`,
       downloading: (v, percent) => `Downloading ${v}: ${percent}%`,
       installing: (v) => `Installing ${v}, Ciao will restart now…`,
       whatsNew: "What's new",
