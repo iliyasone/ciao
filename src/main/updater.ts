@@ -41,7 +41,8 @@ export class Updater {
       autoUpdater.updateConfigPath = file;
     }
     autoUpdater.on("download-progress", (p) => {
-      if (this.state.phase === "downloading") this.set({ ...this.state, percent: Math.floor(p.percent) });
+      const percent = Math.floor(p.percent);
+      if (this.state.phase === "downloading" && percent !== this.state.percent) this.set({ ...this.state, percent });
     });
     autoUpdater.on("error", (e) => {
       // quitAndInstall reports a missing download only through this event. A failed installer
