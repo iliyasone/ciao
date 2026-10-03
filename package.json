@@ -14,6 +14,8 @@
     "build": "npm run build:main && npm run build:renderer",
     "typecheck": "tsc --noEmit -p .",
     "dist:win": "npm run build && electron-builder --win dir",
+    "dist:win:installer": "npm run build && electron-builder --win nsis --publish never",
+    "release": "npm run build && electron-builder --win nsis --publish always",
     "build:kws": "node scripts/fetch-kws.mjs"
   },
   "build": {
@@ -48,9 +50,24 @@
       }
     ],
     "win": {
-      "target": "dir",
+      "target": "nsis",
+      "icon": "assets/icon.ico",
       "signAndEditExecutable": false
     },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "Ciao-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "iliyasone",
+        "repo": "ciao",
+        "releaseType": "draft"
+      }
+    ],
     "asar": true,
     "electronLanguages": [
       "en-US",
@@ -67,6 +84,7 @@
     "adm-zip": "^0.5.18",
     "electron": "^44.5.0",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.9",
     "esbuild": "^0.28.2",
     "lucide-react": "^1.49.0",
     "react": "^19.3.0",

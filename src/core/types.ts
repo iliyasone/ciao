@@ -97,3 +97,15 @@ export interface OverlayState {
 }
 
 export type RetryMode = "file" | "live";
+
+/** The app updating itself from GitHub Releases (src/main/updater.ts). */
+export type UpdateState =
+  | { phase: "disabled"; current: string } // a dev run: nothing to update
+  | { phase: "idle"; current: string } // not checked yet
+  | { phase: "checking"; current: string }
+  | { phase: "latest"; current: string; checkedAt: number }
+  | { phase: "available"; current: string; version: string }
+  | { phase: "downloading"; current: string; version: string; percent: number }
+  /** Downloaded; the app quits, the installer runs silently and starts the new version. */
+  | { phase: "installing"; current: string; version: string }
+  | { phase: "error"; current: string; message: string; version?: string };
