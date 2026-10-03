@@ -295,7 +295,7 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
-  telemetry.capture("app_started", { has_api_key: loadApiKey() !== null, wake_word: settings.wakeWord, format_text: settings.formatText });
+  telemetry.capture("app_started", { has_api_key: loadApiKey() !== null, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.formatText });
   void showRecovered(recovered);
   if (!loadApiKey()) openHistory("settings");
 });
