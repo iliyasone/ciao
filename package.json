@@ -1,7 +1,7 @@
 {
   "name": "ciao",
   "productName": "Ciao",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Dictation with a live preview: see what you say while you say it.",
   "private": true,
   "main": "dist/main/main.js",
