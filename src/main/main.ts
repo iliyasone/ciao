@@ -26,15 +26,16 @@ import { WakeWord } from "./wakeWord";
 const relaunchOnX11 =
   process.platform === "linux" &&
   app.commandLine.getSwitchValue("ozone-platform") === "wayland" &&
-  !process.argv.some((a) => a.startsWith("--ozone-platform")) &&
-  !!process.env.DISPLAY &&
-  !process.env.CIAO_X11_RELAUNCH;
+  !process.argv.some((a) => a === "--ozone-platform" || a.startsWith("--ozone-platform=")) &&
+  !!process.env.DISPLAY;
 if (relaunchOnX11) {
-  // Through the AppImage itself: the copy mounted for this run goes away when this process exits.
-  spawn(process.env.APPIMAGE ?? process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], {
+  // Through the AppImage itself, if this is one: its copy mounted for this run goes away when this
+  // process exits. APPIMAGE alone may be inherited from another AppImage app that started us.
+  const { APPIMAGE, APPDIR } = process.env;
+  const inAppImage = !!APPIMAGE && !!APPDIR && process.execPath.startsWith(`${APPDIR}/`);
+  spawn(inAppImage ? APPIMAGE : process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], {
     detached: true,
     stdio: "inherit",
-    env: { ...process.env, CIAO_X11_RELAUNCH: "1" },
   }).unref();
   app.exit(0);
 }

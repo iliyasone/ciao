@@ -40,7 +40,9 @@ must work on each platform it applies to, not only the one you develop on.
   tests the Android app.
 - CI builds every platform on every PR (`.github/workflows/ci.yml`): the Windows installer, the
   macOS disk images plus a smoke test (the input helper answers, the app is signed and starts),
-  the Linux AppImage and `.deb`, and the Android APK with its tests. The macOS helper compiles
-  only there or on a Mac. Nothing in CI presses keys, so the hooks and paste have to be tried on
-  a real machine.
+  the Linux AppImage and `.deb` plus a smoke test (under headless weston with XWayland the app
+  restarts on X11, starts, and its input helper answers), and the Android APK with its tests.
+  The Windows and Linux jobs also check that the wake word (`build/kws`) is packaged. The macOS
+  helper compiles only there or on a Mac. Nothing in CI presses keys, so the hooks and paste have
+  to be tried on a real machine.
 - The README documents behaviour per platform; update it in the same PR.
