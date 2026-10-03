@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { wavHeader } from "../core/audio";
+import { t } from "../core/i18n";
 import type { HistoryEntry } from "../core/types";
 
 /**
@@ -62,7 +63,7 @@ export class HistoryStore {
       const bytes = WavWriter.repair(this.audioPath(e.id));
       e.durationMs = Math.round(bytes / 48);
       e.status = "failed";
-      e.error = "Приложение закрылось до конца распознавания — аудио сохранено, можно распознать заново";
+      e.error = t().errors.closedMidTranscription;
       this.save(e);
       recovered.push(e);
     }

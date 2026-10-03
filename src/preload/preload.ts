@@ -45,6 +45,7 @@ const api = {
   settings: {
     get: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
     set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
+    onChanged: (cb: (s: Settings) => void) => on("settings:changed", cb),
     hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
     setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),

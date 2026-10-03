@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
+import { langFromLocale } from "../core/i18n";
 import type { Settings } from "../core/types";
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showCost: true,
   openAtLogin: true,
   theme: "system",
+  language: "en", // replaced by the OS language while none is saved (loadSettings)
   overlayPosition: null,
   overlayWidth: 640,
   showDelay: false,
@@ -31,13 +33,19 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const file = () => path.join(app.getPath("userData"), "config.json");
 
+/** Russian if the OS is in Russian, English otherwise. Call after app "ready". */
+function systemLanguage(): Settings["language"] {
+  return langFromLocale(app.getPreferredSystemLanguages()[0] ?? app.getSystemLocale());
+}
+
 export function loadSettings(): Settings {
   let raw: Partial<Settings> & { hotkey?: string; middleClick?: boolean };
   try {
     raw = JSON.parse(fs.readFileSync(file(), "utf8"));
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, language: systemLanguage() };
   }
+  if (raw.language !== "ru" && raw.language !== "en") raw.language = systemLanguage();
   // Older configs had a single `hotkey` plus a `middleClick` switch.
   if (!raw.triggers && (raw.hotkey || raw.middleClick !== undefined)) {
     raw.triggers = [raw.hotkey ?? "RControlKey", ...(raw.middleClick === false ? [] : ["MButton"])];

@@ -1,4 +1,5 @@
 import { toBase64 } from "./audio";
+import { t } from "./i18n";
 import type { Settings } from "./types";
 
 /** The slice of the WebSocket API we use — satisfied by browsers, React Native and the `ws` package. */
@@ -50,9 +51,9 @@ export class RealtimeSession {
       this.handlers.onConnected?.();
     };
     this.socket.onmessage = (ev) => this.handle(String(ev.data));
-    this.socket.onerror = () => this.fail("Не удалось связаться с OpenAI");
+    this.socket.onerror = () => this.fail(t().errors.cannotReachOpenAI);
     this.socket.onclose = (ev) => {
-      if (!this.closedByUs) this.fail(`Соединение закрыто${ev.reason ? `: ${ev.reason}` : ""}`);
+      if (!this.closedByUs) this.fail(t().errors.connectionClosed(ev.reason ?? ""));
     };
   }
 
@@ -121,7 +122,7 @@ export class RealtimeSession {
         this.handlers.onCompleted?.(msg.transcript ?? "");
         break;
       case "error":
-        this.fail(msg.error?.message ?? "Ошибка OpenAI");
+        this.fail(msg.error?.message ?? t().errors.openAIError);
         break;
     }
   }

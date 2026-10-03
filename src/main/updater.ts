@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
 import { autoUpdater } from "electron-updater";
+import { t } from "../core/i18n";
 import type { UpdateState } from "../core/types";
 
 export const REPO = { owner: "iliyasone", repo: "ciao" };
@@ -127,11 +128,11 @@ function describe(e: unknown): string {
     code === "ERR_XML_MISSED_ELEMENT" ||
     (code === "ERR_UPDATER_INVALID_RELEASE_FEED" && /please ensure a production release exists: HttpError: 40[46]\b/.test(text))
   )
-    return "На GitHub пока нет опубликованных версий";
-  if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return "Последний релиз на GitHub собран не до конца — в нём нет latest.yml";
-  if (/net::ERR_INTERNET_DISCONNECTED|ENOTFOUND|ERR_NAME_NOT_RESOLVED/.test(text)) return "Нет интернета";
+    return t().update.noReleases;
+  if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return t().update.incompleteRelease;
+  if (/net::ERR_INTERNET_DISCONNECTED|ENOTFOUND|ERR_NAME_NOT_RESOLVED/.test(text)) return t().update.offline;
   const status = /HttpError: (\d{3})/.exec(text)?.[1];
-  if (status) return `GitHub ответил ${status} — попробуй позже`;
+  if (status) return t().update.githubStatus(status);
   const line = text.split("\n")[0]!.trim();
   return line.length > 160 ? `${line.slice(0, 157)}…` : line;
 }
