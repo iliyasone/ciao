@@ -2,6 +2,8 @@
 # through electron-updater (src/main/updater.ts) and offer to update. The release is uploaded as a
 # draft and published only once every file is there: clients read latest.yml from the latest
 # published release, so a half-uploaded one would break their checks. A rerun fills the same draft.
+# electron-builder only builds: its own publishing races and splits the files over two releases
+# (two artifacts finish together and each creates the release).
 name: Release
 
 on:
@@ -15,12 +17,12 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
       - name: Tag matches package.json
@@ -32,10 +34,15 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:native
       - run: npm run build:kws
-      - run: npm run release
+      - run: npm run dist:win:installer
+      - name: Publish the release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish the draft
-        run: gh release edit "$env:GITHUB_REF_NAME" --draft=false --latest
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          files=(release/Ciao-Setup-$version.exe release/Ciao-Setup-$version.exe.blockmap release/latest.yml)
+          ls -l "${files[@]}"
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "$version" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

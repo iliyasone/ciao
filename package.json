@@ -15,7 +15,6 @@
     "typecheck": "tsc --noEmit -p .",
     "dist:win": "npm run build && electron-builder --win dir",
     "dist:win:installer": "npm run build && electron-builder --win nsis --publish never",
-    "release": "npm run build && electron-builder --win nsis --publish always",
     "build:kws": "node scripts/fetch-kws.mjs"
   },
   "build": {
@@ -64,8 +63,7 @@
       {
         "provider": "github",
         "owner": "iliyasone",
-        "repo": "ciao",
-        "releaseType": "draft"
+        "repo": "ciao"
       }
     ],
     "asar": true,
