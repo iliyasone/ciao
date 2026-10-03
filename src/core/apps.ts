@@ -4,8 +4,7 @@
 
 const APPS: Record<string, string> = {
   // Coding agents and editors
-  "t3 code": "t3code",
-  "t3 code (nightly)": "t3code",
+  "t3 code": "t3code", // channel builds are "T3 Code (Alpha)", "T3 Code (Nightly)": see appLabel
   claude: "claude",
   codex: "codex",
   chatgpt: "chatgpt",
@@ -65,5 +64,6 @@ const APPS: Record<string, string> = {
 
 /** "WindowsTerminal" → "terminal", "Code" → "vscode", an unlisted program → "other". */
 export function appLabel(process: string): string {
-  return APPS[process.trim().toLowerCase().replace(/\.exe$/, "")] ?? "other";
+  const name = process.trim().toLowerCase().replace(/\.exe$/, "").replace(/^t3 code \(.*\)$/, "t3 code");
+  return Object.hasOwn(APPS, name) ? APPS[name] : "other";
 }
