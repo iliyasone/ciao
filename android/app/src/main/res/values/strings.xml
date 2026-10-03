@@ -35,6 +35,7 @@
 
     <string name="cancel">Cancel</string>
     <string name="done">Finish</string>
+    <string name="retry">Transcribe again</string>
     <string name="need_key">Add your OpenAI API key in Ciao first</string>
     <string name="need_mic">Allow Ciao to use the microphone first</string>
     <string name="mic_error">Cannot open the microphone: %1$s</string>

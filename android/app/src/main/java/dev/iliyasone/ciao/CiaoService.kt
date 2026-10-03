@@ -46,7 +46,8 @@ class CiaoService : AccessibilityService() {
     private var imeTop = 0
     private var dictation: Dictation? = null
 
-    private enum class Phase { RECORDING, FINISHING, DONE }
+    /** FAILED: not transcribed; the recording is kept on the card until you retry or dismiss it. */
+    private enum class Phase { RECORDING, FINISHING, DONE, FAILED }
 
     private inner class Dictation(val target: AccessibilityNodeInfo?, val session: RealtimeSession, val pushToTalk: Boolean) {
         val startedAt = SystemClock.elapsedRealtime()
@@ -100,7 +101,7 @@ class CiaoService : AccessibilityService() {
         val field = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
             ?.takeIf { it.isEditable && !it.isPassword }
         if (ime != null) imeTop = Rect().also { ime.getBoundsInScreen(it) }.top
-        if (dictation != null || (ime != null && field != null)) showBubble() else hideBubble()
+        if (!idle || (ime != null && field != null)) showBubble() else hideBubble()
     }
 
     private fun overlayParams(width: Int, height: Int, gravity: Int) = WindowManager.LayoutParams(
@@ -180,10 +181,10 @@ class CiaoService : AccessibilityService() {
                     startY = bubbleParams.y
                     held = false
                     dragging = false
-                    if (dictation == null) main.postDelayed(hold, HOLD_MS)
+                    if (idle) main.postDelayed(hold, HOLD_MS)
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (!dragging && !held && dictation == null && hypot(e.rawX - downX, e.rawY - downY) > slop) {
+                    if (!dragging && !held && idle && hypot(e.rawX - downX, e.rawY - downY) > slop) {
                         dragging = true
                         main.removeCallbacks(hold)
                     }
@@ -205,7 +206,7 @@ class CiaoService : AccessibilityService() {
                         }
                         e.actionMasked == MotionEvent.ACTION_CANCEL -> if (held) stop()
                         held -> stop()
-                        dictation == null -> start(pushToTalk = false)
+                        idle -> start(pushToTalk = false)
                         dictation?.phase == Phase.RECORDING -> stop()
                     }
                     held = false
@@ -220,7 +221,7 @@ class CiaoService : AccessibilityService() {
     private fun showCard(): CardView {
         main.removeCallbacks(hideCardLater)
         card?.let { return it }
-        val c = CardView(this, onCancel = { cancel() }, onDone = { stop() })
+        val c = CardView(this, onCancel = { cancel() }, onDone = { stop() }, onRetry = { retry() })
         val host = FrameLayout(this).apply {
             setPadding(dp(10), dp(6), dp(10), dp(12))
             addView(c, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(20), dp(640)), FrameLayout.LayoutParams.WRAP_CONTENT))
@@ -249,12 +250,16 @@ class CiaoService : AccessibilityService() {
 
     // ── Dictation ────────────────────────────────────────────────────────
 
+    /** No dictation running; a failed one waiting for a retry gives way to a new one. */
+    private val idle: Boolean get() = dictation.let { it == null || it.phase == Phase.FAILED }
+
     private fun start(pushToTalk: Boolean) {
-        if (dictation != null) return
+        if (!idle) return
+        cancel()
         if (prefs.apiKey.isEmpty()) return openApp(R.string.need_key)
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return openApp(R.string.need_mic)
 
-        val target = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()?.takeIf { it.isEditable }
+        val target = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()?.takeIf { it.isEditable && !it.isPassword }
         val session = pool.take()
         val d = Dictation(target, session, pushToTalk)
         session.listener = object : RealtimeSession.Listener {
@@ -345,6 +350,10 @@ class CiaoService : AccessibilityService() {
         d.session.close()
         val live = d.final
         if (live != null && !timedOut) return deliver(d, live)
+        transcribeFile(d)
+    }
+
+    private fun transcribeFile(d: Dictation) {
         Thread {
             // runCatching also catches an OutOfMemoryError from reading a very long recording.
             val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes()) }
@@ -389,8 +398,20 @@ class CiaoService : AccessibilityService() {
     private fun fail(d: Dictation, message: String) {
         val live = d.liveText.toString()
         if (live.isNotBlank()) return deliver(d, live)
-        card?.setPhase(CardView.Phase.FAILED, getString(R.string.failed, message))
-        finish(6000)
+        // Nothing to deliver: keep the recording (offline, say) until the user retries or dismisses it.
+        d.phase = Phase.FAILED
+        bubble?.state = BubbleView.State.IDLE
+        card?.setPhase(CardView.Phase.FAILED, getString(R.string.failed, message), retry = true)
+        refreshBubble()
+    }
+
+    private fun retry() {
+        val d = dictation?.takeIf { it.phase == Phase.FAILED } ?: return
+        d.phase = Phase.DONE
+        showBubble()
+        bubble?.state = BubbleView.State.FINISHING
+        card?.setPhase(CardView.Phase.FINISHING)
+        transcribeFile(d)
     }
 
     /** Hides the card after [delayMs] and returns the bubble to idle. */

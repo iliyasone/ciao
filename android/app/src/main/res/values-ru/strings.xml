@@ -33,6 +33,7 @@
 
     <string name="cancel">Отменить</string>
     <string name="done">Готово</string>
+    <string name="retry">Распознать ещё раз</string>
     <string name="need_key">Сначала добавьте ключ OpenAI в Ciao</string>
     <string name="need_mic">Сначала разрешите Ciao микрофон</string>
     <string name="mic_error">Не удалось открыть микрофон: %1$s</string>

@@ -189,7 +189,8 @@ yours.
 - **✕** on the card cancels; **✓** finishes.
 - If the field won't take the text, it is copied to the clipboard instead.
 - If the live connection drops, recording continues and the audio is sent to
-  `gpt-transcribe` when you finish.
+  `gpt-transcribe` when you finish. If that fails too (still offline), the card
+  keeps the recording with a *Transcribe again* button until you dismiss it.
 
 ### Install on Android
 

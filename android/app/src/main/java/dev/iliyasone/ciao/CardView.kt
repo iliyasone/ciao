@@ -25,7 +25,12 @@ import java.util.Locale
  * The live card at the top of the screen: what you say appears word by word, new words bright and
  * settling to grey (as in src/renderer/overlay/Overlay.tsx), laid out in paragraphs and lists.
  */
-class CardView(context: Context, private val onCancel: () -> Unit, private val onDone: () -> Unit) : LinearLayout(context) {
+class CardView(
+    context: Context,
+    private val onCancel: () -> Unit,
+    private val onDone: () -> Unit,
+    private val onRetry: () -> Unit,
+) : LinearLayout(context) {
     enum class Phase { RECORDING, FINISHING, DONE, CLIPBOARD, FAILED }
 
     private class Token(val text: String, val at: Long)
@@ -53,6 +58,7 @@ class CardView(context: Context, private val onCancel: () -> Unit, private val o
     }
     private val cancelButton = iconButton(R.drawable.ic_close, R.string.cancel) { onCancel() }
     private val doneButton = iconButton(R.drawable.ic_check, R.string.done) { onDone() }
+    private val retryButton = iconButton(R.drawable.ic_retry, R.string.retry) { onRetry() }
     private val body = TextView(context).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
         setLineSpacing(0f, 1.15f)
@@ -108,6 +114,7 @@ class CardView(context: Context, private val onCancel: () -> Unit, private val o
             gravity = Gravity.CENTER_VERTICAL
             addView(status, LayoutParams(dp(20), dp(20)))
             addView(clock, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(10) })
+            addView(retryButton, LayoutParams(dp(36), dp(36)))
             addView(cancelButton, LayoutParams(dp(36), dp(36)))
             addView(doneButton, LayoutParams(dp(36), dp(36)))
         }
@@ -161,7 +168,8 @@ class CardView(context: Context, private val onCancel: () -> Unit, private val o
         render()
     }
 
-    fun setPhase(p: Phase, message: String? = null) {
+    /** [retry]: a FAILED card that kept the recording, with a button to transcribe it again. */
+    fun setPhase(p: Phase, message: String? = null, retry: Boolean = false) {
         phase = p
         if (message != null) this.message = message
         else if (p == Phase.DONE) this.message = null // an offline or mic notice is over once the text is in
@@ -176,7 +184,8 @@ class CardView(context: Context, private val onCancel: () -> Unit, private val o
             else -> {}
         }
         doneButton.visibility = if (p == Phase.RECORDING) VISIBLE else GONE
-        cancelButton.visibility = if (p == Phase.RECORDING || p == Phase.FINISHING) VISIBLE else INVISIBLE
+        retryButton.visibility = if (retry) VISIBLE else GONE
+        cancelButton.visibility = if (p == Phase.RECORDING || p == Phase.FINISHING || retry) VISIBLE else INVISIBLE
         removeCallbacks(tick)
         tick.run()
     }
