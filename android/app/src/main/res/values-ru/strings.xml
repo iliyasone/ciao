@@ -36,6 +36,7 @@
     <string name="need_key">Сначала добавьте ключ OpenAI в Ciao</string>
     <string name="need_mic">Сначала разрешите Ciao микрофон</string>
     <string name="mic_error">Не удалось открыть микрофон: %1$s</string>
+    <string name="mic_stopped">Микрофон перестал работать: %1$s</string>
     <string name="mic_silent">С микрофона идёт тишина. Его занимает другое приложение?</string>
     <string name="offline">Нет связи. Запись идёт, распознаю в конце</string>
     <string name="copied">Скопировано, вставьте куда нужно</string>

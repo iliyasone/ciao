@@ -164,6 +164,7 @@ class CardView(context: Context, private val onCancel: () -> Unit, private val o
     fun setPhase(p: Phase, message: String? = null) {
         phase = p
         if (message != null) this.message = message
+        else if (p == Phase.DONE) this.message = null // an offline or mic notice is over once the text is in
         if (p != Phase.RECORDING && endedAt == 0L) endedAt = SystemClock.elapsedRealtime()
         dot.visibility = if (p == Phase.RECORDING) VISIBLE else GONE
         spinner.visibility = if (p == Phase.FINISHING) VISIBLE else GONE

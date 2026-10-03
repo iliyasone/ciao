@@ -36,7 +36,10 @@ object TextInserter {
         val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + text
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
+        // Only plain text can be put back: a copied image or file is a content:// URI whose read
+        // grant ends once the clip is replaced, and setting it again would throw.
         val saved = runCatching { clipboard.primaryClip }.getOrNull()
+            ?.takeIf { clip -> (0 until clip.itemCount).all { clip.getItemAt(it).run { uri == null && intent == null } } }
         if (current.isNotEmpty() && saved != null && paste(context, node, piece, saved)) return true
 
         val updated = before + piece + current.substring(end)
@@ -58,14 +61,23 @@ object TextInserter {
     /** Pastes [text], then puts back [saved] (what was on the clipboard), if Android let us read it. */
     private fun paste(context: Context, node: AccessibilityNodeInfo, text: String, saved: ClipData?): Boolean {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText("Ciao", text))
+        clipboard.setPrimaryClip(ClipData.newPlainText(LABEL, text))
         val pasted = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-        if (pasted && saved != null) Handler(Looper.getMainLooper()).postDelayed({ clipboard.setPrimaryClip(saved) }, 500)
+        if (saved != null) {
+            // Give the app time to read the clip; don't undo something the user copied meanwhile.
+            val restore = {
+                runCatching { if (clipboard.primaryClipDescription?.label == LABEL) clipboard.setPrimaryClip(saved) }
+                Unit
+            }
+            if (pasted) Handler(Looper.getMainLooper()).postDelayed(restore, 500) else restore()
+        }
         return pasted
     }
 
     fun copy(context: Context, text: String) {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText("Ciao", text))
+        clipboard.setPrimaryClip(ClipData.newPlainText(LABEL, text))
     }
+
+    private const val LABEL = "Ciao"
 }

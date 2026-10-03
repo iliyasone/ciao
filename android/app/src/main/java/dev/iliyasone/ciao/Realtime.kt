@@ -130,19 +130,22 @@ class RealtimeSession(private val context: Context, apiKey: String) {
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */
 class SessionPool(private val context: Context, private val prefs: Prefs) {
     private var spare: RealtimeSession? = null
+    private var failedAt = Long.MIN_VALUE / 2
 
     /** Called on every keyboard event; a failed spare (offline, bad key) is retried at most every 30 s. */
     fun refill() {
         val s = spare
         val now = SystemClock.elapsedRealtime()
         if (s != null && s.usable && now - s.createdAt < MAX_AGE_MS) return
-        if (s != null && s.failure != null && now - s.createdAt < RETRY_MS) return
+        if (s?.failure != null) failedAt = maxOf(failedAt, s.createdAt)
+        if (now - failedAt < RETRY_MS) return
         s?.close()
         spare = prefs.apiKey.takeIf { it.isNotEmpty() }?.let { RealtimeSession(context, it) }
     }
 
     fun take(): RealtimeSession {
         val s = spare?.takeIf { it.usable && SystemClock.elapsedRealtime() - it.createdAt < MAX_AGE_MS }
+        if (spare?.failure != null) failedAt = SystemClock.elapsedRealtime()
         if (s == null) spare?.close()
         spare = null
         val session = s ?: RealtimeSession(context, prefs.apiKey)

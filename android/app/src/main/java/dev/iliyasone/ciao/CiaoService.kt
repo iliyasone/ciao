@@ -300,7 +300,7 @@ class CiaoService : AccessibilityService() {
             main.post {
                 if (dictation === d && d.phase == Phase.RECORDING) {
                     stop()
-                    card?.notice(getString(R.string.mic_error, message))
+                    card?.notice(getString(R.string.mic_stopped, message))
                 }
             }
         })

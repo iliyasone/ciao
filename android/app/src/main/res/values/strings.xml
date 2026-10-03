@@ -38,6 +38,7 @@
     <string name="need_key">Add your OpenAI API key in Ciao first</string>
     <string name="need_mic">Allow Ciao to use the microphone first</string>
     <string name="mic_error">Cannot open the microphone: %1$s</string>
+    <string name="mic_stopped">The microphone stopped: %1$s</string>
     <string name="mic_silent">The microphone gives silence. Is another app using it?</string>
     <string name="offline">Offline. Still recording, will transcribe at the end</string>
     <string name="copied">Copied. Paste it where you need it</string>
