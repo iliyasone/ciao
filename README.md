@@ -2,6 +2,11 @@
 
 **See what you say while you say it.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif" />
+  <img src="assets/demo-light.gif" alt="The Ciao card showing words appear as they are spoken: Ciao! This is the easiest way to talk to your computer." width="608" />
+</picture>
+
 Ciao is a dictation app that shows your words live, as you speak, in a small
 floating card at the bottom of the screen. When you let go of the key, the text
 is pasted into the app you were typing in.
@@ -11,8 +16,6 @@ Other dictation tools show nothing until you stop talking. You only find out tha
 the transcript form in real time and catch the one word that flips the meaning
 while you are still talking. It is built for talking to coding agents (T3 Code,
 Claude Code, Codex) in Russian and English mixed with technical terms.
-
-> Demo GIF: coming soon.
 
 ## Features
 
