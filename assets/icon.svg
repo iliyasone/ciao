@@ -1,39 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs>
-<linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0" stop-color="#fe775b"/>
-<stop offset="1" stop-color="#ec4a96"/>
-</linearGradient>
-<clipPath id="c">
-<rect x="16" y="16" width="480" height="480" rx="112"/>
-</clipPath>
-</defs>
-<rect x="16" y="16" width="480" height="480" rx="112" fill="url(#g)"/>
-<g clip-path="url(#c)">
-<path fill="#fff" d="M 30 520
-C 34 450 70 420 132 404
-C 150 398 160 386 160 366
-L 160 352
-C 122 326 104 288 104 244
-C 104 168 160 112 232 112
-C 290 112 322 144 330 192
-C 332 204 334 214 338 224
-L 360 262
-C 364 270 360 276 352 277
-L 338 279
-C 336 284 336 288 338 292
-L 312 304
-L 338 314
-C 340 318 338 330 334 338
-C 330 352 318 358 302 357
-L 272 354
-L 272 380
-C 272 394 280 402 296 406
-C 368 420 404 448 410 520 Z"/>
+<defs><linearGradient id="brand" gradientUnits="userSpaceOnUse" x1="0" y1="16" x2="0" y2="496"><stop stop-color="#fe775b"/><stop offset="1" stop-color="#ec4a96"/></linearGradient></defs>
+<rect x="16" y="16" width="480" height="480" rx="112" fill="url(#brand)"/>
+
+<g fill="#fff">
+<path d="M113 204 Q107 155 143 131 Q176 109 218 121 Q260 132 294 109 Q313 142 305 204 L305 296 Q305 350 277 379 Q252 404 209 404 Q166 404 141 379 Q113 350 113 296 Z"/>
+<ellipse cx="113" cy="249" rx="24" ry="33"/><ellipse cx="305" cy="249" rx="24" ry="33"/>
 </g>
-<g stroke="#fff" stroke-width="22" stroke-linecap="round">
-<line x1="392" y1="288" x2="392" y2="314"/>
-<line x1="430" y1="266" x2="430" y2="336"/>
-<line x1="468" y1="284" x2="468" y2="318"/>
+<g fill="url(#brand)">
+<path d="M132 178 Q172 157 214 170 Q252 182 286 159 L284 183 Q247 205 209 191 Q169 181 133 200 Z"/>
+<rect x="154" y="220" width="25" height="32" rx="12.5"/><rect x="239" y="220" width="25" height="32" rx="12.5"/>
+<path d="M209 271 C194 257 174 268 167 281 Q159 292 147 291 Q169 311 192 294 L209 284 L226 294 Q249 311 271 291 Q259 292 251 281 C244 268 224 257 209 271 Z"/>
+<ellipse cx="209" cy="338" rx="30" ry="33"/>
+</g>
+<g fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round">
+<path d="M354 281 L392 256"/><path d="M367 325 H427"/><path d="M354 369 L392 394"/>
 </g>
 </svg>
