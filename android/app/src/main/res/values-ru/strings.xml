@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Видишь, что говоришь, пока говоришь.</string>
+    <string name="service_label">Диктовка Ciao</string>
+    <string name="service_description">Показывает кнопку Ciao, пока открыта клавиатура, и вставляет надиктованное в поле ввода. Ciao смотрит только на то, какое поле в фокусе и что в нём написано, и никуда это не отправляет.</string>
+    <string name="bubble_description">Диктовать с Ciao</string>
+
+    <string name="section_setup">Настройка</string>
+    <string name="key_title">Ключ OpenAI API</string>
+    <string name="key_text">Нужен доступ к gpt-live-transcribe. Живая диктовка стоит $0.017 за минуту речи, простой бесплатен. Ключ хранится только на телефоне.</string>
+    <string name="mic_title">Микрофон</string>
+    <string name="mic_text">Запись начинается, только когда вы нажимаете кнопку Ciao, и заканчивается, когда вы закончили.</string>
+    <string name="mic_allow">Разрешить микрофон</string>
+    <string name="a11y_title">Кнопка Ciao над клавиатурой</string>
+    <string name="a11y_text">Включите «Диктовка Ciao» в Спец. возможностях. Через это Ciao видит, что открыта клавиатура, и вставляет текст в поле.</string>
+    <string name="a11y_open">Открыть Спец. возможности</string>
+    <string name="a11y_open_again">Спец. возможности</string>
+    <string name="a11y_restricted">Переключатель серый? Android так блокирует приложения, установленные из файла: откройте «О приложении», нажмите ⋮ в углу, выберите «Разрешить доступ к настройкам ограниченного доступа» и вернитесь.</string>
+    <string name="app_info">О приложении</string>
+    <string name="try_title">Попробовать</string>
+    <string name="try_text">Нажмите на поле ниже, потом на кнопку Ciao над клавиатурой и говорите. Нажмите ещё раз или скажите «чао-чао», чтобы закончить. Удерживайте, чтобы говорить, пока держите. Перетащите, чтобы подвинуть.</string>
+    <string name="try_hint">Нажмите сюда и диктуйте…</string>
+
+    <string name="section_recognition">Распознавание</string>
+    <string name="context_title">Контекст</string>
+    <string name="context_text">О чём вы обычно говорите. Помогает с названиями и терминами.</string>
+    <string name="terms_title">Термины</string>
+    <string name="terms_text">Слова, которые нужно писать точно, через запятую.</string>
+    <string name="format_text">Абзацы и списки</string>
+    <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
+    <string name="show_cost">Показывать стоимость диктовки</string>
+    <string name="version">Ciao %1$s для Android</string>
+
+    <string name="cancel">Отменить</string>
+    <string name="done">Готово</string>
+    <string name="need_key">Сначала добавьте ключ OpenAI в Ciao</string>
+    <string name="need_mic">Сначала разрешите Ciao микрофон</string>
+    <string name="mic_error">Не удалось открыть микрофон: %1$s</string>
+    <string name="mic_silent">С микрофона идёт тишина. Его занимает другое приложение?</string>
+    <string name="offline">Нет связи. Запись идёт, распознаю в конце</string>
+    <string name="copied">Скопировано, вставьте куда нужно</string>
+    <string name="nothing_heard">Ничего не услышал</string>
+    <string name="failed">Не распознано: %1$s</string>
+    <string name="failed_copied_live">Не распознано (%1$s). Живой текст скопирован</string>
+
+    <string name="error_cannot_reach">Нет связи с OpenAI</string>
+    <string name="error_bad_key">OpenAI не принял ключ</string>
+    <string name="error_status">Ошибка OpenAI %1$d</string>
+    <string name="error_closed">Соединение закрыто %1$s</string>
+    <string name="error_openai">Ошибка OpenAI</string>
+</resources>

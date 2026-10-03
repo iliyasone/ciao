@@ -1,4 +1,5 @@
-# Typecheck and build the Windows installer on every PR, so a release tag never meets a broken build.
+# Typecheck and build the Windows installer and the Android APK on every PR, so a release tag never
+# meets a broken build.
 name: CI
 
 on:
@@ -27,4 +28,24 @@ jobs:
         with:
           name: Ciao-Setup
           path: release/Ciao-Setup-*.exe
+          retention-days: 7
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      # Without signing secrets (pull requests) the APK is signed with the runner's debug key.
+      - run: ./gradlew testReleaseUnitTest lintRelease assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ciao-Android
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 7

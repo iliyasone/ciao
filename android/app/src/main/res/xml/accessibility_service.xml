@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Window and focus events tell us when a keyboard is up over a text field; the node tree lets us
+     put the transcript into that field. The service reads nothing else. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewFocused|typeWindowStateChanged|typeWindowsChanged|typeViewClicked"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/service_description"
+    android:notificationTimeout="100"
+    android:settingsActivity="dev.iliyasone.ciao.MainActivity" />

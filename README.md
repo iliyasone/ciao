@@ -89,7 +89,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 
 ## Requirements
 
-- Windows 10/11 (x64). macOS, Linux and Android are not supported yet.
+- Windows 10/11 (x64), or Android 8+ (see [Android](#android)). macOS and Linux
+  are not supported yet.
 - An OpenAI API key with access to `gpt-live-transcribe` and `gpt-transcribe`.
 
 Pricing is per minute of audio: live transcription is $0.017/min (about $1 per
@@ -173,6 +174,41 @@ In `%APPDATA%\Ciao\config.json` these are:
 - `pasteLastHotkey` — an
   [Electron accelerator](https://www.electronjs.org/docs/latest/api/accelerator).
 
+## Android
+
+The Android app works like Wispr Flow: whenever the keyboard is open over a text
+field, the Ciao icon floats above it. Tap it and speak. The card at the top of the
+screen shows your words live, the same way as on the desktop (bright new words,
+paragraphs and lists). Tap the icon again, or say **"ciao ciao"** ("чао-чао"), and
+the text is typed into the field. It works with any keyboard; Ciao doesn't replace
+yours.
+
+- **Hold** the icon to talk while you hold it; let go to finish.
+- **Drag** it to move it. It snaps to the nearest side and stays at that height
+  above the keyboard.
+- **✕** on the card cancels; **✓** finishes.
+- If the field won't take the text, it is copied to the clipboard instead.
+- If the live connection drops, recording continues and the audio is sent to
+  `gpt-transcribe` when you finish.
+
+### Install on Android
+
+1. Download `Ciao-<version>.apk` from the
+   [latest release](https://github.com/iliyasone/ciao/releases/latest) on the phone
+   and open it. Allow installing apps from that source if Android asks.
+2. Open Ciao and paste your OpenAI API key.
+3. Allow the microphone.
+4. Tap *Open Accessibility settings* and turn on **Ciao dictation**. Ciao uses the
+   accessibility service to see when a keyboard is open and to type into the
+   field; it reads only the focused field and sends nothing but your audio to OpenAI.
+   - If the switch is greyed out (Android 13+ does this for apps installed from a
+     file), open *App info*, tap **⋮** in the corner, choose *Allow restricted
+     settings*, and try again.
+5. Try it in the field at the bottom of the Ciao screen.
+
+The Android app has no history, wake word or usage counts yet, and it doesn't
+update itself: install a newer APK over the old one.
+
 ## Where things are stored
 
 Everything is under `%APPDATA%\Ciao`:
@@ -236,8 +272,13 @@ Run `npm version 0.3.0 && git push --follow-tags` on `main`. `npm version` bumps
 runner and uploads it to a draft GitHub release with `latest.yml`, which is the
 file installed copies check. The draft is published once all files are uploaded.
 The tag must equal `v` + the `package.json` version, or the workflow fails.
-[`ci.yml`](.github/workflows/ci.yml) builds the same installer on every PR and
-attaches it to the run as an artifact.
+An Ubuntu job builds the Android APK first, signed with the release key from the
+repository secrets (`CIAO_KEYSTORE_BASE64`, `CIAO_KEYSTORE_PASSWORD`,
+`CIAO_KEY_ALIAS`, `CIAO_KEY_PASSWORD`), and it is attached to the same draft.
+Every release must be signed with that key, or Android refuses to install it over
+the previous one.
+[`ci.yml`](.github/workflows/ci.yml) builds the same installer and APK on every PR
+and attaches them to the run as artifacts.
 
 ### Testing without speaking
 
@@ -297,14 +338,29 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   demo is also the GIF at the top of this README: `node site/record-demo.mjs`
   re-records `assets/demo-*.gif`.
 
-`npm run typecheck` checks the whole project.
+- `android/` — the Android app (Kotlin, no other dependencies than OkHttp):
+  - `CiaoService.kt` — the accessibility service: the icon over the keyboard,
+    the dictation pipeline, typing into the field;
+  - `CardView.kt` — the live card;
+  - `Realtime.kt`, `FileTranscriber.kt` — the same OpenAI calls as
+    `src/core/realtime.ts` and `src/main/transcribe.ts`;
+  - `LiveLayout.kt`, `VoiceCommands.kt` — ports of `src/core/liveLayout.ts` and
+    `src/core/voiceCommands.ts`. Their unit test holds the TypeScript outputs, so
+    change both together.
+
+`npm run typecheck` checks the desktop app. For Android you need JDK 17 and the
+Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds
+`app/build/outputs/apk/release/Ciao-<version>-release.apk`, and
+`./gradlew testReleaseUnitTest` runs the tests. Without
+`android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`,
+`keyPassword`) the APK is signed with your debug key.
 
 ## Roadmap
 
 - Built-in dictation and read-aloud in [T3 Code](https://github.com/pingdotgg/t3code).
   The stack is the same (Electron, React, Tailwind, Vite), so the UI and the core
   can move into it.
-- Android and macOS ([#4](https://github.com/iliyasone/ciao/issues/4)).
+- macOS ([#4](https://github.com/iliyasone/ciao/issues/4)).
 
 ## License
 
