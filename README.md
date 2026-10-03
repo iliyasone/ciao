@@ -2,6 +2,11 @@
 
 **See what you say while you say it.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif" />
+  <img src="assets/demo-light.gif" alt="The Ciao card showing words appear as they are spoken: Ciao! This is the easiest way to talk to your computer." width="608" />
+</picture>
+
 Ciao is a dictation app that shows your words live, as you speak, in a small
 floating card at the bottom of the screen. When you let go of the key, the text
 is pasted into the app you were typing in.
@@ -11,8 +16,6 @@ Other dictation tools show nothing until you stop talking. You only find out tha
 the transcript form in real time and catch the one word that flips the meaning
 while you are still talking. It is built for talking to coding agents (T3 Code,
 Claude Code, Codex) in Russian and English mixed with technical terms.
-
-> Demo GIF: coming soon.
 
 ## Features
 
@@ -246,6 +249,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `history/` — the history and settings window.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#).
+- `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
+  tray icons from it; don't edit those by hand.
+- `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app): one
+  static HTML file, deployed with `vercel deploy --prod` from `site/`. Its card
+  demo is also the GIF at the top of this README: `node site/record-demo.mjs`
+  re-records `assets/demo-*.gif`.
 
 `npm run typecheck` checks the whole project.
 
@@ -254,7 +263,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - Built-in dictation and read-aloud in [T3 Code](https://github.com/pingdotgg/t3code).
   The stack is the same (Electron, React, Tailwind, Vite), so the UI and the core
   can move into it.
-- Android and macOS.
+- Android and macOS ([#4](https://github.com/iliyasone/ciao/issues/4)).
 
 ## License
 
