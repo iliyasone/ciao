@@ -129,6 +129,8 @@ function describe(e: unknown): string {
     return "На GitHub пока нет опубликованных версий";
   if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return "Последний релиз на GitHub собран не до конца — в нём нет latest.yml";
   if (/net::ERR_INTERNET_DISCONNECTED|ENOTFOUND|ERR_NAME_NOT_RESOLVED/.test(text)) return "Нет интернета";
+  const status = /HttpError: (\d{3})/.exec(text)?.[1];
+  if (status) return `GitHub ответил ${status} — попробуй позже`;
   const line = text.split("\n")[0]!.trim();
   return line.length > 160 ? `${line.slice(0, 157)}…` : line;
 }
