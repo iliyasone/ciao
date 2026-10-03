@@ -15,13 +15,13 @@ for (const scheme of ["dark", "light"]) {
   await page.goto(`file://${root}/site/index.html?gif`);
   const loop = await page.evaluate(() => window.ciaoDemo.LOOP);
   let i = 0;
-  for (let t = 0; t < loop; t += 40) {
+  for (let t = 0; t < loop; t += 20) {
     await page.evaluate((t) => window.ciaoDemo.render(t), t);
     await page.screenshot({ path: join(frames, `${scheme}-${String(i++).padStart(4, "0")}.png`) });
   }
   await page.close();
   execFileSync("ffmpeg", [
-    "-loglevel", "error", "-y", "-framerate", "25", "-i", join(frames, `${scheme}-%04d.png`),
+    "-loglevel", "error", "-y", "-framerate", "50", "-i", join(frames, `${scheme}-%04d.png`),
     "-vf", "split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle",
     join(root, "assets", `demo-${scheme}.gif`),
   ]);

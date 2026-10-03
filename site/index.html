@@ -122,7 +122,7 @@
         padding: 0;
         list-style: none;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 28px;
         text-align: left;
         width: 100%;
@@ -131,6 +131,10 @@
         display: block;
         margin-bottom: 4px;
         font-size: 15px;
+      }
+      .points code {
+        font-size: 13px;
+        white-space: nowrap;
       }
       .points span {
         font-size: 14.5px;
@@ -190,8 +194,10 @@
         font-variant-numeric: tabular-nums;
         color: var(--fg2);
       }
+      .text-box {
+        overflow: hidden;
+      }
       .text {
-        min-height: 25px;
         font-size: 16px;
         line-height: 25px;
         overflow-wrap: break-word;
@@ -199,7 +205,6 @@
       }
       .ellipsis {
         color: var(--faint);
-        opacity: 0.6;
       }
 
       /* ?gif renders only the card, for the README demo. */
@@ -243,7 +248,7 @@
             <div class="clock" id="clock">0:00</div>
             <div></div>
           </header>
-          <div class="text" id="text"></div>
+          <div class="text-box" id="box"><div class="text" id="text"></div></div>
         </div>
       </div>
 
@@ -251,7 +256,7 @@
         <a class="btn" href="https://github.com/iliyasone/ciao/releases">Get Ciao on GitHub</a>
         <a class="btn ghost" href="https://github.com/iliyasone/ciao">Source</a>
       </div>
-      <p class="note">Windows · free and open source · Russian and English</p>
+      <p class="note">Windows · free and open source · Russian and English · uses your OpenAI API key</p>
 
       <ul class="points">
         <li>
@@ -261,6 +266,13 @@
         <li>
           <b>Hold a key, or just say "ciao"</b>
           <span>Push to talk on Right Ctrl, or start hands-free with your voice.</span>
+        </li>
+        <li>
+          <b>One of the best speech models</b>
+          <span>
+            Ciao listens with OpenAI's <code>gpt-live-transcribe</code>, one of the best voice-to-text models out there. It
+            runs on your own OpenAI API key: about $1 per hour of talking, nothing while idle.
+          </span>
         </li>
         <li>
           <b>Pastes where you started</b>
@@ -306,7 +318,11 @@
       const LEAVE = 8000; // card fades out
       const LOOP = 8800;
 
+      const LINE = 25; // px, the card's line height
+      const GROW_MS = 200; // the card grows a line at a time over this long, as in the app
+
       const card = document.getElementById("card");
+      const box = document.getElementById("box");
       const text = document.getElementById("text");
       const dot = document.getElementById("dot");
       const check = document.getElementById("check");
@@ -324,6 +340,36 @@
       ellipsis.textContent = "…";
 
       const ease = (x) => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
+
+      // heights[i] = text height with the first i words shown. Measured up front (and again on
+      // resize) so the height at any moment is known without depending on the previous frame.
+      let heights = [];
+      function measure() {
+        const probe = text.cloneNode();
+        probe.removeAttribute("id");
+        probe.style.cssText = `position:absolute;visibility:hidden;width:${text.clientWidth}px`;
+        box.appendChild(probe);
+        heights = [LINE];
+        let words = "";
+        for (const [, w] of WORDS) {
+          probe.textContent = words += w;
+          heights.push(Math.max(probe.offsetHeight, LINE));
+        }
+        probe.remove();
+      }
+
+      function boxHeight(t) {
+        let n = WORDS.findIndex(([at]) => at > t);
+        if (n === -1) n = WORDS.length;
+        // The last time the height changed, and what it changed from.
+        for (let i = n; i > 0; i--) {
+          if (heights[i] !== heights[i - 1]) {
+            const k = ease((t - WORDS[i - 1][0]) / GROW_MS);
+            return heights[i - 1] + (heights[i] - heights[i - 1]) * k;
+          }
+        }
+        return heights[0];
+      }
 
       function render(t) {
         const fresh = rgb("--fresh");
@@ -356,6 +402,9 @@
           text.replaceChildren(...(shown ? spans.slice(0, shown) : [ellipsis]));
         }
 
+        box.style.height = `${boxHeight(t)}px`;
+        ellipsis.style.opacity = String(0.35 + 0.35 * Math.cos(t / 320));
+
         // Header: the recording dot breathes with the voice, the clock ticks, then a check.
         const done = t >= DONE;
         dot.style.display = done ? "none" : "block";
@@ -371,9 +420,12 @@
       }
 
       window.ciaoDemo = { render, LOOP };
+      const gif = new URLSearchParams(location.search).has("gif");
+      document.body.classList.toggle("gif", gif);
+      measure();
+      addEventListener("resize", measure);
 
-      if (new URLSearchParams(location.search).has("gif")) {
-        document.body.classList.add("gif");
+      if (gif) {
         render(LOOP / 2);
       } else if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
         render(DONE - 1);
