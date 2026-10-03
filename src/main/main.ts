@@ -100,8 +100,8 @@ function applySettings(next: Settings): void {
   nativeTheme.themeSource = next.theme;
   saveSettings(next);
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.openAtLogin });
-  if (!prev || prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev?.pasteLastHotkey);
-  if (prev && prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
+  if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
+  if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   wake.setEnabled(next.wakeWord);
   overlay.setWake(next.wakeWord);
   tray?.setToolTip(t().tray.tooltip);
@@ -322,6 +322,8 @@ void app.whenReady().then(() => {
   registerIpc();
   tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, "tray.png")));
   tray.on("click", () => openHistory());
+  // applySettings only re-registers the hotkey when it changes, and here prev === next.
+  registerPasteLast();
   applySettings(settings);
   nativeTheme.on("updated", () => {
     if (!historyWin || historyWin.isDestroyed()) return;
