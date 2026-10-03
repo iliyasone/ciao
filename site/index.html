@@ -213,6 +213,15 @@
       body.gif footer {
         display: none;
       }
+      /* GitHub's page colours, so the GIF has no visible edge in the README. */
+      body.gif {
+        --bg: #fff;
+      }
+      @media (prefers-color-scheme: dark) {
+        body.gif {
+          --bg: #0d1117;
+        }
+      }
       body.gif main {
         padding: 0;
         max-width: none;
@@ -431,20 +440,22 @@
       const still = matchMedia("(prefers-reduced-motion: reduce)");
       const start = performance.now();
       let shownAt = FULL;
+      let pending = 0; // the scheduled animation frame, so a toggle never starts a second loop
       const frame = (now) => {
+        pending = 0;
         if (still.matches) return render((shownAt = FULL));
         render((shownAt = (now - start) % LOOP));
-        requestAnimationFrame(frame);
+        pending = requestAnimationFrame(frame);
       };
       addEventListener("resize", () => {
         measure();
         render(shownAt);
       });
-      still.addEventListener("change", () => requestAnimationFrame(frame));
+      still.addEventListener("change", () => (pending ||= requestAnimationFrame(frame)));
       // Word colours are inline, so a theme switch needs a redraw when nothing else is animating.
       matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render(shownAt));
       if (gif) render(FULL);
-      else requestAnimationFrame(frame);
+      else pending = requestAnimationFrame(frame);
     </script>
   </body>
 </html>

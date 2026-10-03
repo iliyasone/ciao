@@ -211,6 +211,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `history/` — the history and settings window.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#).
+- `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
+  tray icons from it; don't edit those by hand.
+- `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app): one
+  static HTML file, deployed with `vercel deploy --prod` from `site/`. Its card
+  demo is also the GIF at the top of this README: `node site/record-demo.mjs`
+  re-records `assets/demo-*.gif`.
 
 `npm run typecheck` checks the whole project.
 
@@ -219,7 +225,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - Built-in dictation and read-aloud in [T3 Code](https://github.com/pingdotgg/t3code).
   The stack is the same (Electron, React, Tailwind, Vite), so the UI and the core
   can move into it.
-- Android and macOS.
+- Android and macOS ([#4](https://github.com/iliyasone/ciao/issues/4)).
 
 ## License
 
