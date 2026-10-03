@@ -118,9 +118,14 @@ export class Updater {
 function describe(e: unknown): string {
   const code = (e as { code?: unknown } | null)?.code;
   const text = e instanceof Error ? e.message : String(e);
-  // An empty releases feed fails as a missing XML element; /releases/latest wraps any failure
-  // (a 5xx, a timeout) as "not found", so only its 404 means there is nothing published.
-  if (code === "ERR_UPDATER_NO_PUBLISHED_VERSIONS" || code === "ERR_XML_MISSED_ELEMENT" || (code === "ERR_UPDATER_LATEST_VERSION_NOT_FOUND" && /\b404\b/.test(text)))
+  // No tags at all: the releases feed is empty. Tags but no published release yet (the first one
+  // still a draft): /releases/latest answers 406 or 404, wrapped as an invalid feed. A 5xx or a
+  // timeout there is wrapped the same way, so it is told apart by the status.
+  if (
+    code === "ERR_UPDATER_NO_PUBLISHED_VERSIONS" ||
+    code === "ERR_XML_MISSED_ELEMENT" ||
+    (code === "ERR_UPDATER_INVALID_RELEASE_FEED" && /please ensure a production release exists: HttpError: 40[46]\b/.test(text))
+  )
     return "На GitHub пока нет опубликованных версий";
   if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return "Последний релиз на GitHub собран не до конца — в нём нет latest.yml";
   if (/net::ERR_INTERNET_DISCONNECTED|ENOTFOUND|ERR_NAME_NOT_RESOLVED/.test(text)) return "Нет интернета";
