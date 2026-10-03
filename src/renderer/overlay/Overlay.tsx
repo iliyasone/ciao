@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNod
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
 import type { OverlayState } from "../../core/types";
+import { useStrings } from "../lang";
 import { meter, setWake, startCapture, stopCapture } from "./capture";
 
 // ── Text model ────────────────────────────────────────────────────────────
@@ -215,6 +216,7 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
+  const tr = useStrings().overlay;
 
   useEffect(() => {
     const offs = [
@@ -353,7 +355,7 @@ export function Overlay() {
           <div className="flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">
             {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
             {withActions && (
-              <button onClick={dismiss} title="Закрыть" className="rounded-md p-0.5 text-faint hover:bg-tint/10 hover:text-fg">
+              <button onClick={dismiss} title={tr.close} className="rounded-md p-0.5 text-faint hover:bg-tint/10 hover:text-fg">
                 <X className="size-3.5" />
               </button>
             )}
@@ -373,7 +375,7 @@ export function Overlay() {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-tint/8 px-2.5 py-1 text-[12.5px] text-fg hover:bg-tint/12"
               >
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                {copied ? "Скопировано" : "Скопировать"}
+                {copied ? tr.copied : tr.copy}
               </button>
             )}
             <button
@@ -384,7 +386,7 @@ export function Overlay() {
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] text-muted hover:bg-tint/8 hover:text-fg"
             >
               <History className="size-3.5" />
-              История
+              {tr.history}
             </button>
           </div>
         )}
@@ -394,7 +396,7 @@ export function Overlay() {
           {...dragHandlers("move", dragging)}
           onMouseEnter={solid}
           onDoubleClick={() => ciao.overlay.resetPlacement()}
-          title="Перетащи, чтобы подвинуть. Двойной клик — вернуть на место."
+          title={tr.gripTitle}
           className="absolute -bottom-2.5 left-1/2 flex h-5 w-16 -translate-x-1/2 cursor-grab items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
         >
           <span className="h-1.5 w-10 rounded-full bg-tint/25 ring-1 ring-overlay" />
@@ -402,7 +404,7 @@ export function Overlay() {
         <div
           {...dragHandlers("resize", dragging)}
           onMouseEnter={solid}
-          title="Потяни, чтобы изменить ширину"
+          title={tr.resizeTitle}
           className="absolute right-1 bottom-1 size-4 cursor-ew-resize opacity-0 transition-opacity group-hover:opacity-100"
         >
           <svg viewBox="0 0 16 16" className="size-4 text-ghost">

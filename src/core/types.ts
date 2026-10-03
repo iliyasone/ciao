@@ -2,6 +2,8 @@
 
 export type Delay = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type Theme = "system" | "light" | "dark";
+/** Interface language (src/core/i18n.ts). */
+export type Lang = "ru" | "en";
 export const DELAYS: Delay[] = ["minimal", "low", "medium", "high", "xhigh"];
 
 export interface Settings {
@@ -28,6 +30,8 @@ export interface Settings {
   showCost: boolean;
   openAtLogin: boolean;
   theme: Theme;
+  /** Interface language; the first launch picks it from the OS locale. */
+  language: Lang;
   /** Where the live card sits (window top-left); null = bottom-centre. Set by dragging its grip. */
   overlayPosition: { x: number; y: number } | null;
   overlayWidth: number;

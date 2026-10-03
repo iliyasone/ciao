@@ -22,15 +22,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   release the key.
   - This is at the default recognizer delay of `low`. The level ranges from
     `minimal` to `xhigh`: lower shows words sooner, higher is more accurate, and the
-    price is the same. It is hidden by default. To see and change it, go to Settings
-    (the app's UI is in Russian): *Настройки → Для разработчика → Показывать
-    задержку*.
+    price is the same. It is hidden by default. To see and change it, go to
+    *Settings → For developers → Show delay*.
 - **Push to talk.** Hold **Right Ctrl**, speak, release, and the text is pasted.
   - The **middle mouse button** works the same way by default: click to start
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
-  - Or just say **"чао"** to start hands-free (*Настройки → Голосом*, off by default).
+  - Or just say **"ciao"** ("чао") to start hands-free (*Settings → By voice*, off by default).
     The word is spotted on your computer, so nothing is sent anywhere until you
     dictate: [Vosk](https://alphacephei.com/vosk/) hears it within ~0.2 s and
     [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotting double-checks
@@ -38,8 +37,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     It costs about 10% of one CPU core and ~280 MB of memory, adds ~170 MB to the app,
     and the mic stays open while it is on.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
-    or say **"чао-чао"** (the words themselves are not pasted; toggle in
-    *Настройки → Голосом*).
+    or say **"ciao ciao"** ("чао-чао"; the words themselves are not pasted; toggle in
+    *Settings → By voice*).
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
 - **The card stays out of your way.**
@@ -69,13 +68,17 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - a long pause (1.2 s) before a new sentence starts a paragraph;
   - a sentence starting with "первое", "во-вторых", "третий момент"… starts a
     numbered item (the word itself is dropped); inside a list "и ещё", "дальше",
-    "также" do too, and only a longer pause (2 s) ends the list.
+    "также" do too (in English: "first"… "third", "next", "also"), and only a
+    longer pause (2 s) ends the list.
   - These are fixed rules, no model, so it costs no time. Toggle in
-    *Настройки → Поведение → Абзацы и списки*.
+    *Settings → Behavior → Paragraphs and lists*.
 - **Context** (Settings tab). Describe what you usually talk about and list the
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
-- **Light, dark or system theme** (*Настройки → Оформление*). System is the
+- **English or Russian interface** (*Settings → Appearance → Language*). The
+  first start picks Russian if Windows is in Russian and English otherwise; a
+  change applies right away.
+- **Light, dark or system theme** (*Settings → Appearance*). System is the
   default and follows Windows live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
@@ -95,7 +98,7 @@ Download `Ciao-Setup-<version>.exe` from the
 [latest release](https://github.com/iliyasone/ciao/releases/latest) and run it. It
 installs for your user only (no admin prompt) into `%LOCALAPPDATA%\Programs\Ciao`
 and starts Ciao. If you already run a copy you built yourself, quit it first
-(tray → *Выход*); otherwise the new one hands over to it and exits.
+(tray → *Quit*); otherwise the new one hands over to it and exits.
 
 1. The installer is unsigned, so SmartScreen may warn you: choose *More info → Run
    anyway*.
@@ -109,13 +112,13 @@ Ciao starts with Windows by default. The toggle is in Settings.
 ### Updates
 
 Ciao checks GitHub Releases for a newer version 15 s after it starts and every
-4 hours after that. When there is one, an **Обновить до X** button shows in the
+4 hours after that. When there is one, an **Update to X** button shows in the
 window's title bar and in the tray menu. Click it: the new version downloads,
 Ciao quits, installs it silently and starts again. Settings, the key and the
 history in `%APPDATA%\Ciao` stay. Nothing is downloaded until you click, and a
 failed check in the background shows nothing.
 
-To check by hand, go to *Настройки → Обновления → Проверить*.
+To check by hand, go to *Settings → Updates → Check*.
 
 A portable copy (the `release/win-unpacked` folder from `npm run dist:win`) is
 updated the same way. The update installs Ciao into `%LOCALAPPDATA%\Programs\Ciao`,
@@ -148,9 +151,9 @@ that file.
 
 ### Hotkeys
 
-Set them in *Настройки → Клавиши*.
+Set them in *Settings → Keys*.
 
-- **Dictation triggers.** Click *Добавить* and press what you want: a key (Right
+- **Dictation triggers.** Click *Add* and press what you want: a key (Right
   Ctrl on its own works), a combo such as Ctrl+Alt+Space, or a mouse button
   (middle, side buttons, optionally with modifiers). You can have several.
 - **What other apps see.**

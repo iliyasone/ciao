@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import { BYTES_PER_MS, level, wavHeader } from "../core/audio";
+import { t } from "../core/i18n";
 import { RealtimeSession, type SocketLike } from "../core/realtime";
 import type { Settings } from "../core/types";
 
@@ -43,7 +44,7 @@ export function transcribeLive(apiKey: string, pcm: Buffer, settings: Settings):
     const s = openRealtime(apiKey);
     const timer = setTimeout(() => {
       s.close();
-      reject(new Error("OpenAI не ответил вовремя"));
+      reject(new Error(t().errors.openAITimeout));
     }, 60_000 + pcm.byteLength / BYTES_PER_MS / 2);
     s.handlers = {
       onCompleted: (text) => {
@@ -114,7 +115,7 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
       body: form,
     });
     const body = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
-    if (!res.ok) throw new Error(body.error?.message ?? `OpenAI ответил ${res.status}`);
+    if (!res.ok) throw new Error(body.error?.message ?? t().errors.openAIStatus(res.status));
     texts.push((body.text ?? "").trim());
   }
   return texts.filter(Boolean).join(" ");

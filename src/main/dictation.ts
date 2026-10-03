@@ -1,6 +1,7 @@
 import { clipboard } from "electron";
 import { level } from "../core/audio";
 import { costUsd, pricePerMinute } from "../core/cost";
+import { t } from "../core/i18n";
 import type { RealtimeSession } from "../core/realtime";
 import type { Delivery, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
@@ -134,8 +135,8 @@ export class DictationController {
   onCaptureError(seq: number, message: string): void {
     const a = this.active;
     if (!a || a.seq !== seq) return;
-    this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: `Микрофон: ${message}` });
-    this.cancel(true, `Микрофон: ${message}`);
+    this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: t().errors.microphone(message) });
+    this.cancel(true, t().errors.microphone(message));
   }
 
   /** The wake word was heard: start hands-free, beginning with the audio since the word. */
@@ -195,7 +196,7 @@ export class DictationController {
     const apiKey = this.deps.apiKey();
     const seq = ++this.seq;
     if (!apiKey) {
-      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: "Нет API-ключа — положи его в openai-key.txt" });
+      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint });
       return;
     }
     const session = this.deps.pool.take()!;
@@ -284,7 +285,7 @@ export class DictationController {
     a.entry.error = error;
     this.deps.store.save(a.entry);
     this.deps.changed(a.entry);
-    if (!error) this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: "Отменено — запись в истории" });
+    if (!error) this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: t().overlay.cancelled });
   }
 
   private waitForFinal(a: Active): Promise<void> {
@@ -327,7 +328,7 @@ export class DictationController {
         if (a.wakeStarted) text = stripWakeWord(text);
         add("retry-file", settings.fileModel, text);
       } catch (e) {
-        entry.error = `${a.offline ?? "Нет финального текста"}; файл: ${(e as Error).message}`;
+        entry.error = t().errors.fileFailed(a.offline ?? t().errors.noFinalText, (e as Error).message);
         text = live || null;
       }
     }
@@ -386,7 +387,7 @@ export class DictationController {
     this.deps.overlay.state({
       ...this.baseState(a),
       phase,
-      message: phase === "clipboard" ? "Окно сменилось — текст в буфере, Ctrl+V" : phase === "saved" ? "Не распозналось — аудио сохранено в истории" : undefined,
+      message: phase === "clipboard" ? t().overlay.clipboard : phase === "saved" ? t().overlay.saved : undefined,
     });
   }
 

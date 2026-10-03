@@ -2,19 +2,9 @@
 // and Electron accelerators ("Alt+Shift+Z"). The trigger syntax is defined by the native helper
 // (native/win-input/Triggers.cs): "+"-separated modifiers, then a .NET Keys name or mouse button.
 
+// Names that differ by language come from Strings.keyNames (core/i18n.ts).
 const TRIGGER_NAMES: Record<string, string> = {
-  RControlKey: "Правый Ctrl",
-  LControlKey: "Левый Ctrl",
-  RMenu: "Правый Alt",
-  LMenu: "Левый Alt",
-  RShiftKey: "Правый Shift",
-  LShiftKey: "Левый Shift",
   LWin: "Win",
-  RWin: "Правый Win",
-  MButton: "Колёсико мыши",
-  XButton1: "Боковая кнопка «назад»",
-  XButton2: "Боковая кнопка «вперёд»",
-  Space: "Пробел",
   Capital: "Caps Lock",
   CapsLock: "Caps Lock",
   Return: "Enter",
@@ -23,12 +13,11 @@ const TRIGGER_NAMES: Record<string, string> = {
   Oem3: "`",
   Scroll: "Scroll Lock",
   Pause: "Pause",
-  Apps: "Меню",
 };
 
 /** Each part is rendered as its own key cap. */
-export function triggerParts(spec: string): string[] {
-  return spec.split("+").map((p) => TRIGGER_NAMES[p] ?? p.replace(/^D(\d)$/, "$1").replace(/^NumPad/, "Num "));
+export function triggerParts(spec: string, keyNames: Record<string, string>): string[] {
+  return spec.split("+").map((p) => keyNames[p] ?? TRIGGER_NAMES[p] ?? p.replace(/^D(\d)$/, "$1").replace(/^NumPad/, "Num "));
 }
 
 export const isMouseTrigger = (spec: string) => /(^|\+)(MButton|XButton1|XButton2)$/.test(spec);
@@ -56,6 +45,6 @@ export function acceleratorFromEvent(e: { code: string; ctrlKey: boolean; altKey
   return [...mods, key].join("+");
 }
 
-export function acceleratorParts(accelerator: string): string[] {
-  return accelerator.split("+").map((p) => (p === "Super" ? "Win" : p === "Space" ? "Пробел" : p));
+export function acceleratorParts(accelerator: string, keyNames: Record<string, string>): string[] {
+  return accelerator.split("+").map((p) => (p === "Super" ? "Win" : p === "Space" ? (keyNames.Space ?? p) : p));
 }
