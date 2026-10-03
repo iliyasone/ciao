@@ -32,6 +32,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:native
       - run: npm run build:kws
+      # electron-builder uploads the files in parallel, and each upload creates the release if it
+      # doesn't exist yet: v0.3.1 ended up as two releases, the installer in one and the blockmap in
+      # the other. Creating the draft first gives them one release to find. A rerun reuses it.
+      - name: Create the draft
+        shell: bash
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "${GITHUB_REF_NAME#v}" --notes ""
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
