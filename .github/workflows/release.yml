@@ -1,7 +1,8 @@
 # Push a tag vX.Y.Z (matching package.json) to publish a release; installed copies of Ciao find it
 # through electron-updater (src/main/updater.ts) and offer to update. The release is uploaded as a
 # draft and published only once every file is there: clients read latest.yml from the latest
-# published release, so a half-uploaded one would break their checks. A rerun fills the same draft.
+# published release, so a half-uploaded one would break their checks. A rerun fills the same draft
+# and leaves an already published release alone.
 # electron-builder only builds: its own publishing races and splits the files over two releases
 # (two artifacts finish together and each creates the release).
 name: Release
@@ -43,6 +44,12 @@ jobs:
           version=${GITHUB_REF_NAME#v}
           files=(release/Ciao-Setup-$version.exe release/Ciao-Setup-$version.exe.blockmap release/latest.yml)
           ls -l "${files[@]}"
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "$version" --generate-notes
+          if draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>view.err); then
+            [ "$draft" = true ] || { echo "$GITHUB_REF_NAME is already published"; exit 0; }
+          elif grep -q "release not found" view.err; then
+            gh release create "$GITHUB_REF_NAME" --draft --title "$version" --generate-notes
+          else
+            cat view.err; exit 1
+          fi
           gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
