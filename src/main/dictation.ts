@@ -37,7 +37,7 @@ export interface DictationReport {
   trigger: string;
   ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
   hands_free: boolean;
-  /** "live" = the streaming transcript, "file" = the saved audio re-sent after the live one failed. */
+  /** "live" = the streaming transcript, "file" = the saved audio re-sent after the live one failed, "none" = no transcript (Esc, mic error). */
   transcribed_by: "live" | "file" | "none";
   voice_onset_ms?: number;
   first_text_ms?: number;
@@ -81,6 +81,8 @@ interface Active {
   trigger: string;
   endedBy?: DictationReport["ended_by"];
   miss?: PasteMiss;
+  /** The mic failed after the key was released (it was still opening); finish() reports it. */
+  micError?: string;
   voiceOnsetAt?: number;
   firstTextAt?: number;
   lastDeltaAt?: number;
@@ -168,8 +170,12 @@ export class DictationController {
 
   onCaptureError(seq: number, message: string): void {
     const a = this.active;
-    // Once finishing, finish() owns the entry (a slow mic can fail after the key was already released).
-    if (!a || a.seq !== seq || a.phase !== "recording") return;
+    if (!a || a.seq !== seq) return;
+    if (a.phase === "finishing") {
+      // A slow mic can fail after the key was already released: finish() owns the entry by now.
+      a.micError = message;
+      return;
+    }
     this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: `Микрофон: ${message}` });
     this.cancel(true, `Микрофон: ${message}`);
   }
@@ -392,6 +398,11 @@ export class DictationController {
       }
     }
 
+    if (a.micError && !text) {
+      entry.error = `Микрофон: ${a.micError}`;
+      a.endedBy = "mic_error";
+    }
+
     let phase: OverlayPhase;
     let delivery: Delivery = "none";
     if (!text) {
@@ -431,7 +442,12 @@ export class DictationController {
     this.deps.overlay.state({
       ...this.baseState(a),
       phase,
-      message: phase === "clipboard" ? "Окно сменилось — текст в буфере, Ctrl+V" : phase === "saved" ? "Не распозналось — аудио сохранено в истории" : undefined,
+      message:
+        phase === "clipboard"
+          ? "Окно сменилось — текст в буфере, Ctrl+V"
+          : phase === "saved"
+            ? a.micError ? `Микрофон: ${a.micError}` : "Не распозналось — аудио сохранено в истории"
+            : undefined,
     });
   }
 
