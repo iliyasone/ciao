@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showCost: true,
   openAtLogin: true,
   theme: "system",
-  language: "en", // replaced by the OS language on first launch (loadSettings)
+  language: "en", // replaced by the OS language while none is saved (loadSettings)
   overlayPosition: null,
   overlayWidth: 640,
   showDelay: false,

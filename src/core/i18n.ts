@@ -326,7 +326,7 @@ const en: Strings = {
       openAtLogin: "Start with Windows",
     },
     voice: {
-      title: "By voice",
+      title: "Voice",
       wakeWord: "Start with the word “ciao”",
       wakeWordHint:
         "Say “ciao” to start a hands-free recording. The microphone listens all the time, but the word is detected right on your computer: until you dictate, no audio leaves it. Windows will show the microphone icon.",

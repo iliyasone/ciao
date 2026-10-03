@@ -30,7 +30,7 @@ export interface Settings {
   showCost: boolean;
   openAtLogin: boolean;
   theme: Theme;
-  /** Interface language; the first launch picks it from the OS locale. */
+  /** Interface language; until one is saved (a new install, or a config from before the setting existed), the OS locale picks it. */
   language: Lang;
   /** Where the live card sits (window top-left); null = bottom-centre. Set by dragging its grip. */
   overlayPosition: { x: number; y: number } | null;

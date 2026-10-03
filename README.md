@@ -29,7 +29,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
-  - Or just say **"ciao"** ("чао") to start hands-free (*Settings → By voice*, off by default).
+  - Or just say **"ciao"** ("чао") to start hands-free (*Settings → Voice*, off by default).
     The word is spotted on your computer, so nothing is sent anywhere until you
     dictate: [Vosk](https://alphacephei.com/vosk/) hears it within ~0.2 s and
     [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotting double-checks
@@ -38,7 +38,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     and the mic stays open while it is on.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
     or say **"ciao ciao"** ("чао-чао"; the words themselves are not pasted; toggle in
-    *Settings → By voice*).
+    *Settings → Voice*).
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
 - **The card stays out of your way.**
@@ -76,8 +76,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
 - **English or Russian interface** (*Settings → Appearance → Language*). The
-  first start picks Russian if Windows is in Russian and English otherwise; a
-  change applies right away.
+  default is Russian if Windows is in Russian and English otherwise (also for
+  an existing install, the first time it starts with this setting); a change
+  applies right away.
 - **Light, dark or system theme** (*Settings → Appearance*). System is the
   default and follows Windows live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
