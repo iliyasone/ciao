@@ -23,24 +23,38 @@ import { WakeWord } from "./wakeWord";
 // picks Wayland before this file runs (and writes it into --ozone-platform); switching here would
 // reach only the child processes (the GPU process then crashes on Wayland window handles), so start
 // over with the flag. Not when the user chose a platform themselves, or there's no XWayland.
+//
+// Through the AppImage itself, if this is one: its copy unpacked for this run goes away when this
+// process exits. APPIMAGE alone may be inherited from another AppImage app that started us.
+const { APPIMAGE, APPDIR } = process.env;
+const inAppImage = !!APPIMAGE && !!APPDIR && process.execPath.startsWith(`${APPDIR}/`);
+const x11Target = inAppImage ? APPIMAGE : process.execPath;
 const relaunchOnX11 =
   process.platform === "linux" &&
   app.commandLine.getSwitchValue("ozone-platform") === "wayland" &&
   !process.argv.some((a) => a === "--ozone-platform" || a.startsWith("--ozone-platform=")) &&
-  !!process.env.DISPLAY;
+  !!process.env.DISPLAY &&
+  isExecutable(x11Target); // a spawn error would only arrive after this process is gone
 if (relaunchOnX11) {
-  // Through the AppImage itself, if this is one: its copy mounted for this run goes away when this
-  // process exits. APPIMAGE alone may be inherited from another AppImage app that started us.
-  const { APPIMAGE, APPDIR } = process.env;
-  const inAppImage = !!APPIMAGE && !!APPDIR && process.execPath.startsWith(`${APPDIR}/`);
   if (inAppImage) closeAppImageFds(APPIMAGE, APPDIR);
-  spawn(inAppImage ? APPIMAGE : process.execPath, ["--ozone-platform=x11", ...process.argv.slice(1)], { stdio: "inherit" })
-    .on("error", (e) => console.error("restart on X11 failed:", e))
-    .unref();
+  // Started with --appimage-extract-and-run (no FUSE here, maybe): the runtime took the flag out of
+  // our arguments, so ask for the same through the environment.
+  const extracted = inAppImage && path.basename(APPDIR).startsWith("appimage_extracted_");
+  const env = extracted ? { ...process.env, APPIMAGE_EXTRACT_AND_RUN: "1" } : process.env;
+  spawn(x11Target, ["--ozone-platform=x11", ...process.argv.slice(1)], { stdio: "inherit", env }).unref();
   app.exit(0);
 }
 // A second launch only forwards its arguments to the running instance (see "second-instance").
 else if (!app.requestSingleInstanceLock()) app.exit(0);
+
+function isExecutable(file: string): boolean {
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Keep the copy started next from inheriting what ties this process to its AppImage mount: that
