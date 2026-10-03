@@ -190,9 +190,10 @@ Run `npm version 0.3.0 && git push --follow-tags` on `main`. `npm version` bumps
 
 [`release.yml`](.github/workflows/release.yml) builds the installer on a Windows
 runner and uploads it to a draft GitHub release with `latest.yml`, which is the
-file installed copies check. The draft is published once all files are uploaded. The tag must equal `v` + the `package.json` version, or
-the workflow fails. [`ci.yml`](.github/workflows/ci.yml) builds the same installer
-on every PR and attaches it to the run as an artifact.
+file installed copies check. The draft is published once all files are uploaded.
+The tag must equal `v` + the `package.json` version, or the workflow fails.
+[`ci.yml`](.github/workflows/ci.yml) builds the same installer on every PR and
+attaches it to the run as an artifact.
 
 ### Testing without speaking
 

@@ -44,7 +44,8 @@ export class Updater {
       if (this.state.phase === "downloading") this.set({ ...this.state, percent: Math.floor(p.percent) });
     });
     autoUpdater.on("error", (e) => {
-      // quitAndInstall reports a failed installer launch only through this event.
+      // quitAndInstall reports a missing download only through this event. A failed installer
+      // launch also lands here, but by then the app is already quitting.
       if (this.state.phase === "installing") this.set({ phase: "error", current: this.state.current, version: this.state.version, message: describe(e) });
     });
     setTimeout(() => void this.check(false), FIRST_CHECK_AFTER_MS);
@@ -81,17 +82,27 @@ export class Updater {
   /** Download the found version, then quit and let its installer start the new one. */
   async install(): Promise<void> {
     const s = this.state;
-    const version = s.phase === "available" || s.phase === "error" ? s.version : undefined;
-    if (!version) return;
-    this.set({ phase: "downloading", current: s.current, version, percent: 0 });
+    const found = s.phase === "available" || s.phase === "error" ? s.version : undefined;
+    if (!found) return;
+    const { current } = s;
+    let version = found;
+    this.set({ phase: "downloading", current, version, percent: 0 });
     try {
+      // Ask again: the release may have been replaced or a newer one published since it was found.
+      const result = await autoUpdater.checkForUpdates();
+      if (!result?.isUpdateAvailable) {
+        this.set({ phase: "latest", current, checkedAt: Date.now() });
+        return;
+      }
+      version = result.updateInfo.version;
+      this.set({ phase: "downloading", current, version, percent: 0 });
       await autoUpdater.downloadUpdate();
     } catch (e) {
       console.warn("update download failed:", e);
-      this.set({ phase: "error", current: s.current, version, message: describe(e) });
+      this.set({ phase: "error", current, version, message: describe(e) });
       return;
     }
-    this.set({ phase: "installing", current: s.current, version });
+    this.set({ phase: "installing", current, version });
     console.log(`installing ${version}`);
     // Silent install, then the installer starts the new version.
     setTimeout(() => autoUpdater.quitAndInstall(true, true), 500);
@@ -106,9 +117,12 @@ export class Updater {
 /** electron-updater errors can carry whole HTTP responses; keep the first line. */
 function describe(e: unknown): string {
   const code = (e as { code?: unknown } | null)?.code;
-  if (code === "ERR_UPDATER_NO_PUBLISHED_VERSIONS" || code === "ERR_UPDATER_LATEST_VERSION_NOT_FOUND") return "На GitHub пока нет опубликованных версий";
-  if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return "Последний релиз на GitHub собран не до конца — в нём нет latest.yml";
   const text = e instanceof Error ? e.message : String(e);
+  // An empty releases feed fails as a missing XML element; /releases/latest wraps any failure
+  // (a 5xx, a timeout) as "not found", so only its 404 means there is nothing published.
+  if (code === "ERR_UPDATER_NO_PUBLISHED_VERSIONS" || code === "ERR_XML_MISSED_ELEMENT" || (code === "ERR_UPDATER_LATEST_VERSION_NOT_FOUND" && /\b404\b/.test(text)))
+    return "На GitHub пока нет опубликованных версий";
+  if (code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND") return "Последний релиз на GitHub собран не до конца — в нём нет latest.yml";
   if (/net::ERR_INTERNET_DISCONNECTED|ENOTFOUND|ERR_NAME_NOT_RESOLVED/.test(text)) return "Нет интернета";
   const line = text.split("\n")[0]!.trim();
   return line.length > 160 ? `${line.slice(0, 157)}…` : line;
