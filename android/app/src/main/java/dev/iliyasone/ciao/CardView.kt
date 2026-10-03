@@ -170,9 +170,10 @@ class CardView(
 
     /** [retry]: a FAILED card that kept the recording, with a button to transcribe it again. */
     fun setPhase(p: Phase, message: String? = null, retry: Boolean = false) {
-        phase = p
+        // An offline or mic notice is over once the text is in; a failure note once it is retried.
         if (message != null) this.message = message
-        else if (p == Phase.DONE) this.message = null // an offline or mic notice is over once the text is in
+        else if (p == Phase.DONE || phase == Phase.FAILED) this.message = null
+        phase = p
         if (p != Phase.RECORDING && endedAt == 0L) endedAt = SystemClock.elapsedRealtime()
         dot.visibility = if (p == Phase.RECORDING) VISIBLE else GONE
         spinner.visibility = if (p == Phase.FINISHING) VISIBLE else GONE

@@ -255,7 +255,6 @@ class CiaoService : AccessibilityService() {
 
     private fun start(pushToTalk: Boolean) {
         if (!idle) return
-        cancel()
         if (prefs.apiKey.isEmpty()) return openApp(R.string.need_key)
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return openApp(R.string.need_mic)
 
@@ -318,6 +317,8 @@ class CiaoService : AccessibilityService() {
             return
         }
         d.recorder = recorder
+        // Only now that the new one is running does a failed dictation waiting for a retry give way.
+        dictation?.let { closeAudio(it) }
         dictation = d
         showBubble()
         bubble?.state = BubbleView.State.RECORDING
