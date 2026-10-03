@@ -1,19 +1,28 @@
-import { Check, KeyRound, Monitor, Moon, MousePointerClick, Plus, Sun, X } from "lucide-react";
+import { ArrowDownToLine, Check, KeyRound, Loader2, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
-import { DELAYS, type Settings, type Theme } from "../../core/types";
+import type { Strings } from "../../core/i18n";
+import { DELAYS, type Lang, type Settings, type Theme, type UpdateState } from "../../core/types";
+import { useStrings } from "../lang";
 
-const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
-  { value: "system", label: "Системная", icon: Monitor },
-  { value: "light", label: "Светлая", icon: Sun },
-  { value: "dark", label: "Тёмная", icon: Moon },
+const THEMES: { value: Theme; icon: typeof Sun }[] = [
+  { value: "system", icon: Monitor },
+  { value: "light", icon: Sun },
+  { value: "dark", icon: Moon },
 ];
 
-export function SettingsPanel() {
+// Each language is named in itself, so it can be found whatever the current one is.
+const LANGUAGES: { value: Lang; label: string }[] = [
+  { value: "ru", label: "Русский" },
+  { value: "en", label: "English" },
+];
+
+export function SettingsPanel({ updateState }: { updateState: UpdateState | null }) {
   const [s, setS] = useState<Settings | null>(null);
   const [hasKey, setHasKey] = useState(true);
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tr = useStrings().settings;
 
   useEffect(() => {
     void ciao.settings.get().then(setS);
@@ -41,19 +50,19 @@ export function SettingsPanel() {
   return (
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 pt-5 pb-16">
-        <div className="h-4 text-right text-[12px] text-emerald-700 dark:text-emerald-400/80">{saved && <><Check className="mr-1 inline size-3.5" />сохранено</>}</div>
+        <div className="h-4 text-right text-[12px] text-emerald-700 dark:text-emerald-400/80">{saved && <><Check className="mr-1 inline size-3.5" />{tr.saved}</>}</div>
 
         <ApiKeyCard hasKey={hasKey} onSaved={() => setHasKey(true)} />
 
-        <Card title="Распознавание">
-          <Row label="Языки" hint="Коды через запятую: ru, en">
+        <Card title={tr.recognition.title}>
+          <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>
             <input
               value={s.languages.join(", ")}
               onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)}
               className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
             />
           </Row>
-          <Field label="Контекст" hint="О чём ты обычно говоришь — модель подстраивается.">
+          <Field label={tr.recognition.context} hint={tr.recognition.contextHint}>
             <textarea
               value={s.prompt}
               onChange={(e) => update({ prompt: e.target.value }, true)}
@@ -61,7 +70,7 @@ export function SettingsPanel() {
               className="selectable w-full resize-none rounded-xl bg-tint/5 px-3 py-2 text-[13px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
             />
           </Field>
-          <Field label="Термины" hint="Слова, которые надо писать точно так. По одному в строке.">
+          <Field label={tr.recognition.terms} hint={tr.recognition.termsHint}>
             <textarea
               value={s.keywords.join("\n")}
               onChange={(e) => update({ keywords: e.target.value.split("\n") }, true)}
@@ -71,68 +80,65 @@ export function SettingsPanel() {
           </Field>
         </Card>
 
-        <Card title="Оформление">
-          <Row label="Тема" hint="Системная — как в Windows, переключается вместе с ней.">
-            <Segmented value={s.theme} options={THEMES} onChange={(theme) => update({ theme })} />
+        <Card title={tr.appearance.title}>
+          <Row label={tr.appearance.language} hint={tr.appearance.languageHint}>
+            <Segmented value={s.language} options={LANGUAGES} onChange={(language) => update({ language })} />
+          </Row>
+          <Row label={tr.appearance.theme} hint={tr.appearance.themeHint}>
+            <Segmented value={s.theme} options={THEMES.map((o) => ({ ...o, label: tr.appearance.themes[o.value] }))} onChange={(theme) => update({ theme })} />
           </Row>
         </Card>
 
-        <Card title="Поведение">
+        <Card title={tr.behaviour.title}>
           <Toggle
-            label="Абзацы и списки"
-            hint="Пауза перед новым предложением — новый абзац, «первое… второе…» — нумерованный список. Видно сразу, пока говоришь."
+            label={tr.behaviour.formatText}
+            hint={tr.behaviour.formatTextHint}
             value={s.formatText}
             onChange={(v) => update({ formatText: v })}
           />
-          <Toggle label="Вставлять текст сразу" hint="Иначе он просто окажется в буфере обмена." value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
-          <Toggle label="Возвращать буфер обмена" hint="После вставки в буфере снова то, что было до диктовки." value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
-          <Toggle label="Показывать стоимость" hint="Сколько центов ты наговорил — прямо во время записи." value={s.showCost} onChange={(v) => update({ showCost: v })} />
-          <Toggle label="Запускать вместе с Windows" value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
-          <Toggle
-            label="Анонимная статистика"
-            hint="Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия Windows — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются."
-            value={s.telemetry}
-            onChange={(v) => update({ telemetry: v })}
-          />
+          <Toggle label={tr.behaviour.autoPaste} hint={tr.behaviour.autoPasteHint} value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
+          <Toggle label={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
+          <Toggle label={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
+          <Toggle label={tr.behaviour.openAtLogin} value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
+          <Toggle label={tr.behaviour.telemetry} hint={tr.behaviour.telemetryHint} value={s.telemetry} onChange={(v) => update({ telemetry: v })} />
         </Card>
 
-        <Card title="Голосом">
+        <Card title={tr.voice.title}>
           <Toggle
-            label="Включать словом «чао»"
-            hint="Скажи «чао» — начнётся запись без рук. Микрофон слушает постоянно, но слово ищется прямо на компьютере: пока ты не диктуешь, звук никуда не уходит. Windows покажет значок микрофона."
+            label={tr.voice.wakeWord}
+            hint={tr.voice.wakeWordHint}
             value={s.wakeWord}
             onChange={(v) => update({ wakeWord: v })}
           />
           <Toggle
-            label="Заканчивать словами «чао-чао»"
-            hint="В режиме без рук скажи «чао-чао» в конце — запись закончится, а сами слова не вставятся."
+            label={tr.voice.stopPhrase}
+            hint={tr.voice.stopPhraseHint}
             value={s.stopPhrase}
             onChange={(v) => update({ stopPhrase: v })}
           />
         </Card>
 
-        <Card title="Клавиши">
-          <Field
-            label="Диктовка"
-            hint="Держи и говори. Короткое нажатие — режим без рук, ещё одно — готово. Назначенные кнопки мыши другие приложения не получают."
-          >
+        <Card title={tr.keys.title}>
+          <Field label={tr.keys.dictation} hint={tr.keys.dictationHint}>
             <TriggerList value={s.triggers} onChange={(triggers) => update({ triggers })} />
           </Field>
-          <Keys label="Отмена" keys={["Esc"]} hint="Запись всё равно сохранится в истории." />
-          <Row label="Вставить последнее" hint="Нажми, чтобы задать другое сочетание.">
+          <Keys label={tr.keys.cancel} keys={["Esc"]} hint={tr.keys.cancelHint} />
+          <Row label={tr.keys.pasteLast} hint={tr.keys.pasteLastHint}>
             <AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />
           </Row>
         </Card>
 
-        <Card title="Для разработчика">
+        {updateState && <UpdateCard state={updateState} />}
+
+        <Card title={tr.developer.title}>
           <Toggle
-            label="Показывать задержку"
-            hint="Уровень задержки распознавания — в окошке записи, здесь и в меню трея."
+            label={tr.developer.showDelay}
+            hint={tr.developer.showDelayHint}
             value={s.showDelay}
             onChange={(v) => update({ showDelay: v })}
           />
           {s.showDelay && (
-            <Row label="Задержка" hint="Меньше — слова появляются раньше, больше — точнее. На цену не влияет.">
+            <Row label={tr.developer.delay} hint={tr.developer.delayHint}>
               <Segmented value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />
             </Row>
           )}
@@ -144,15 +150,16 @@ export function SettingsPanel() {
 
 function ApiKeyCard({ hasKey, onSaved }: { hasKey: boolean; onSaved: () => void }) {
   const [value, setValue] = useState("");
+  const tr = useStrings().settings.apiKey;
   return (
     <Card title="OpenAI">
-      <Row label="API-ключ" hint={hasKey ? "Ключ сохранён локально." : "Без ключа ничего не распознается."}>
+      <Row label={tr.label} hint={hasKey ? tr.saved : tr.missing}>
         <div className="flex items-center gap-2">
           <KeyRound className={`size-4 ${hasKey ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
           <input
             type="password"
             value={value}
-            placeholder={hasKey ? "заменить ключ…" : "sk-…"}
+            placeholder={hasKey ? tr.replace : "sk-…"}
             onChange={(e) => setValue(e.target.value)}
             className="selectable w-56 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
           />
@@ -165,8 +172,65 @@ function ApiKeyCard({ hasKey, onSaved }: { hasKey: boolean; onSaved: () => void 
             }}
             className="rounded-lg bg-tint/10 px-3 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-tint/15 disabled:opacity-40"
           >
-            Сохранить
+            {tr.save}
           </button>
+        </div>
+      </Row>
+    </Card>
+  );
+}
+
+function updateHint(state: UpdateState, strings: Strings): string {
+  const tr = strings.settings.updates;
+  switch (state.phase) {
+    case "disabled":
+      return tr.disabled;
+    case "idle":
+      return tr.idle;
+    case "checking":
+      return tr.checking;
+    case "latest":
+      return tr.latest(new Date(state.checkedAt).toLocaleTimeString(strings.locale, { hour: "2-digit", minute: "2-digit" }));
+    case "available":
+      return tr.available(state.version);
+    case "downloading":
+      return tr.downloading(state.version, state.percent);
+    case "installing":
+      return tr.installing(state.version);
+    case "error":
+      return state.message;
+  }
+}
+
+function UpdateCard({ state }: { state: UpdateState }) {
+  const target = state.phase === "available" || state.phase === "downloading" || state.phase === "installing" || state.phase === "error" ? state.version : undefined;
+  const busy = state.phase === "checking" || state.phase === "downloading" || state.phase === "installing";
+  const button = "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors disabled:opacity-40";
+  const strings = useStrings();
+  const tr = strings.settings.updates;
+  return (
+    <Card title={tr.title}>
+      <Row label={tr.version(state.current)} hint={updateHint(state, strings)}>
+        <div className="flex shrink-0 items-center gap-2">
+          {target && (
+            <button onClick={() => void ciao.update.openNotes(target)} className="text-[12.5px] text-muted underline-offset-2 hover:text-fg hover:underline">
+              {tr.whatsNew}
+            </button>
+          )}
+          {busy && <Loader2 className="size-4 animate-spin text-faint" />}
+          {state.phase === "available" || (state.phase === "error" && state.version) ? (
+            <button onClick={() => void ciao.update.install()} className={`${button} bg-accent text-white hover:bg-accent/90`}>
+              <ArrowDownToLine className="size-3.5" />
+              {state.phase === "error" ? tr.retry : tr.update}
+            </button>
+          ) : (
+            state.phase !== "disabled" && (
+              <button disabled={busy} onClick={() => void ciao.update.check()} className={`${button} bg-tint/10 text-fg hover:bg-tint/15`}>
+                <RefreshCw className="size-3.5" />
+                {tr.check}
+              </button>
+            )
+          )}
         </div>
       </Row>
     </Card>
@@ -259,14 +323,15 @@ function Caps({ parts }: { parts: string[] }) {
 /** Dictation triggers; new ones are recorded by the native helper, so lone modifiers and mouse buttons work. */
 function TriggerList({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [capturing, setCapturing] = useState(false);
+  const tr = useStrings();
   return (
     <div className="flex flex-wrap items-center gap-2">
       {value.map((spec) => (
         <span key={spec} className="inline-flex items-center gap-1.5 rounded-xl bg-tint/5 py-1 pr-1 pl-2 ring-1 ring-tint/[0.07]">
           {isMouseTrigger(spec) && <MousePointerClick className="size-3.5 text-faint" />}
-          <Caps parts={triggerParts(spec)} />
+          <Caps parts={triggerParts(spec, tr.keyNames)} />
           <button
-            title="Убрать"
+            title={tr.settings.keys.remove}
             disabled={value.length === 1}
             onClick={() => onChange(value.filter((v) => v !== spec))}
             className="rounded-md p-0.5 text-faint transition-colors hover:bg-tint/10 hover:text-fg disabled:opacity-30"
@@ -288,11 +353,11 @@ function TriggerList({ value, onChange }: { value: string[]; onChange: (v: strin
         }`}
       >
         {capturing ? (
-          <span className="animate-pulse">Нажми клавишу, сочетание или кнопку мыши… Esc — отмена</span>
+          <span className="animate-pulse">{tr.settings.keys.capturing}</span>
         ) : (
           <>
             <Plus className="size-3.5" />
-            Добавить
+            {tr.settings.keys.add}
           </>
         )}
       </button>
@@ -303,6 +368,7 @@ function TriggerList({ value, onChange }: { value: string[]; onChange: (v: strin
 /** Records an Electron accelerator from the next key combo pressed while focused. */
 function AcceleratorRecorder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [recording, setRecording] = useState(false);
+  const tr = useStrings();
   return (
     <button
       onClick={() => setRecording(true)}
@@ -322,7 +388,7 @@ function AcceleratorRecorder({ value, onChange }: { value: string; onChange: (v:
       }}
       className={`rounded-xl px-1.5 py-1 transition-colors ${recording ? "bg-accent/15 ring-1 ring-accent/40" : "hover:bg-tint/5"}`}
     >
-      {recording ? <span className="animate-pulse px-1 text-[12.5px] text-accent">Нажми сочетание… Esc — отмена</span> : <Caps parts={acceleratorParts(value)} />}
+      {recording ? <span className="animate-pulse px-1 text-[12.5px] text-accent">{tr.settings.keys.recording}</span> : <Caps parts={acceleratorParts(value, tr.keyNames)} />}
     </button>
   );
 }

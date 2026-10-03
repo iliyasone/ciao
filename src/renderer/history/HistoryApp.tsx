@@ -3,13 +3,18 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCost } from "../../core/cost";
-import type { HistoryEntry, RetryMode, Transcript } from "../../core/types";
+import type { Strings } from "../../core/i18n";
+import type { HistoryEntry, RetryMode } from "../../core/types";
+import { useStrings } from "../lang";
 import { SettingsPanel } from "./SettingsPanel";
+import { UpdateButton, useUpdateState } from "./update";
 
 type Tab = "history" | "settings";
 
 export function HistoryApp() {
   const [tab, setTab] = useState<Tab>(location.hash === "#settings" ? "settings" : "history");
+  const update = useUpdateState();
+  const tr = useStrings();
   return (
     <div className="flex h-full flex-col">
       <header className="drag flex h-11 shrink-0 items-center gap-5 border-b border-tint/5 pl-4 pr-40">
@@ -24,25 +29,28 @@ export function HistoryApp() {
               onClick={() => setTab(t)}
               className={`rounded-lg px-3 py-1 text-[13px] transition-colors ${tab === t ? "bg-tint/10 text-fg" : "text-muted hover:text-fg"}`}
             >
-              {t === "history" ? "История" : "Настройки"}
+              {tr.tabs[t]}
             </button>
           ))}
         </nav>
+        <div className="ml-auto">
+          <UpdateButton state={update} />
+        </div>
       </header>
-      <main className="min-h-0 flex-1">{tab === "history" ? <History /> : <SettingsPanel />}</main>
+      <main className="min-h-0 flex-1">{tab === "history" ? <History /> : <SettingsPanel updateState={update} />}</main>
     </div>
   );
 }
 
 // ── History list ──────────────────────────────────────────────────────────
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, tr: Strings): string {
   const d = new Date(iso);
   const today = new Date();
   const yesterday = new Date(Date.now() - 86_400_000);
-  if (d.toDateString() === today.toDateString()) return "Сегодня";
-  if (d.toDateString() === yesterday.toDateString()) return "Вчера";
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+  if (d.toDateString() === today.toDateString()) return tr.history.today;
+  if (d.toDateString() === yesterday.toDateString()) return tr.history.yesterday;
+  return d.toLocaleDateString(tr.locale, { day: "numeric", month: "long", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" });
 }
 
 const duration = (ms: number) => {
@@ -55,6 +63,7 @@ const entryCost = (e: HistoryEntry) => e.transcripts.reduce((sum, t) => sum + t.
 function History() {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [query, setQuery] = useState("");
+  const tr = useStrings();
 
   useEffect(() => {
     void ciao.history.list().then(setEntries);
@@ -78,11 +87,11 @@ function History() {
   const groups = useMemo(() => {
     const map = new Map<string, HistoryEntry[]>();
     for (const e of filtered) {
-      const k = dayLabel(e.createdAt);
+      const k = dayLabel(e.createdAt, tr);
       map.set(k, [...(map.get(k) ?? []), e]);
     }
     return [...map];
-  }, [filtered]);
+  }, [filtered, tr]);
 
   const today = (entries ?? []).filter((e) => new Date(e.createdAt).toDateString() === new Date().toDateString());
   const total = entries ?? [];
@@ -94,16 +103,16 @@ function History() {
       <div className="mx-auto max-w-3xl px-6 pt-5 pb-16">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div className="text-[12.5px] text-faint">
-            <Stat label="сегодня" entries={today} />
+            <Stat label={tr.history.statToday} entries={today} />
             <span className="mx-2 text-ghost">·</span>
-            <Stat label="всего" entries={total} />
+            <Stat label={tr.history.statTotal} entries={total} />
           </div>
           <label className="flex w-64 items-center gap-2 rounded-xl bg-tint/5 px-3 py-1.5 ring-1 ring-tint/5 focus-within:ring-tint/15">
             <Search className="size-3.5 text-faint" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск по тексту"
+              placeholder={tr.history.search}
               className="selectable w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-ghost"
             />
           </label>
@@ -111,7 +120,7 @@ function History() {
 
         {groups.length === 0 && (
           <div className="mt-24 text-center text-[14px] text-faint">
-            {query ? "Ничего не нашлось" : "Пока пусто. Зажми правый Ctrl и скажи что-нибудь."}
+            {query ? tr.history.nothingFound : tr.history.empty}
           </div>
         )}
 
@@ -133,24 +142,24 @@ function History() {
 function Stat({ label, entries }: { label: string; entries: HistoryEntry[] }) {
   const ms = entries.reduce((s, e) => s + e.durationMs, 0);
   const usd = entries.reduce((s, e) => s + entryCost(e), 0);
+  const tr = useStrings().history;
   return (
     <span>
-      {label}: <span className="text-fg2 tabular-nums">{entries.length}</span> · <span className="tabular-nums">{Math.round(ms / 60_000)} мин</span> ·{" "}
+      {label}: <span className="text-fg2 tabular-nums">{entries.length}</span> · <span className="tabular-nums">{tr.minutes(Math.round(ms / 60_000))}</span> ·{" "}
       <span className="tabular-nums">{formatCost(usd)}</span>
     </span>
   );
 }
 
-const SOURCE_LABEL: Record<Transcript["source"], string> = { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком", formatted: "с абзацами" };
-
 function StatusBadge({ entry }: { entry: HistoryEntry }) {
   const base = "inline-flex items-center gap-1 rounded-md px-1.5 py-px text-[11px]";
+  const tr = useStrings().history.status;
   if (entry.status === "recording" || entry.status === "transcribing")
-    return <span className={`${base} bg-tint/5 text-muted`}><Loader2 className="size-3 animate-spin" />идёт</span>;
-  if (entry.status === "failed") return <span className={`${base} bg-amber-400/10 text-amber-700 dark:text-amber-300`}><AlertTriangle className="size-3" />не распознано</span>;
-  if (entry.status === "cancelled") return <span className={`${base} bg-tint/5 text-muted`}><X className="size-3" />отменено</span>;
-  if (entry.delivery === "pasted") return <span className={`${base} bg-emerald-400/10 text-emerald-700 dark:text-emerald-300`}><Check className="size-3" />вставлено</span>;
-  if (entry.delivery === "clipboard") return <span className={`${base} bg-sky-400/10 text-sky-700 dark:text-sky-300`}><ClipboardCheck className="size-3" />в буфере</span>;
+    return <span className={`${base} bg-tint/5 text-muted`}><Loader2 className="size-3 animate-spin" />{tr.running}</span>;
+  if (entry.status === "failed") return <span className={`${base} bg-amber-400/10 text-amber-700 dark:text-amber-300`}><AlertTriangle className="size-3" />{tr.failed}</span>;
+  if (entry.status === "cancelled") return <span className={`${base} bg-tint/5 text-muted`}><X className="size-3" />{tr.cancelled}</span>;
+  if (entry.delivery === "pasted") return <span className={`${base} bg-emerald-400/10 text-emerald-700 dark:text-emerald-300`}><Check className="size-3" />{tr.pasted}</span>;
+  if (entry.delivery === "clipboard") return <span className={`${base} bg-sky-400/10 text-sky-700 dark:text-sky-300`}><ClipboardCheck className="size-3" />{tr.clipboard}</span>;
   return null;
 }
 
@@ -161,9 +170,11 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const strings = useStrings();
+  const tr = strings.history;
 
   const current = entry.transcripts.find((t) => t.id === shown) ?? entry.transcripts.at(-1);
-  const time = new Date(entry.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const time = new Date(entry.createdAt).toLocaleTimeString(strings.locale, { hour: "2-digit", minute: "2-digit" });
   const needsAttention = entry.status === "failed" || entry.status === "cancelled";
 
   const retry = async (mode: RetryMode) => {
@@ -197,7 +208,7 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
           {current.text}
         </p>
       ) : (
-        <p className="text-[13.5px] text-faint italic">Текста нет — можно распознать запись заново.</p>
+        <p className="text-[13.5px] text-faint italic">{tr.noText}</p>
       )}
 
       {(entry.error || error) && <p className="mt-1.5 text-[12px] text-amber-700 dark:text-amber-300/90">{error ?? entry.error}</p>}
@@ -210,7 +221,7 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
               onClick={() => setShown(t.id)}
               className={`rounded-md px-2 py-0.5 text-[11px] transition-colors ${t.id === current?.id ? "bg-tint/12 text-fg" : "bg-tint/[0.04] text-faint hover:text-fg2"}`}
             >
-              {SOURCE_LABEL[t.source]} · {t.model}
+              {tr.source[t.source]} · {t.model}
             </button>
           ))}
         </div>
@@ -220,7 +231,7 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
         <Player id={entry.id} />
         <Action
           icon={copied ? Check : Copy}
-          label={copied ? "Скопировано" : "Копировать"}
+          label={copied ? tr.copied : tr.copy}
           disabled={!current?.text}
           onClick={async () => {
             await ciao.history.copy(current!.text);
@@ -228,14 +239,14 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
             setTimeout(() => setCopied(false), 1200);
           }}
         />
-        <Action icon={busy === "file" ? Loader2 : Sparkles} spin={busy === "file"} label="Точнее" title="Распознать всю запись заново файловой моделью" disabled={busy !== null} onClick={() => retry("file")} />
-        <Action icon={busy === "live" ? Loader2 : RotateCcw} spin={busy === "live"} label="Вживую" title="Прогнать запись через live-модель ещё раз" disabled={busy !== null} onClick={() => retry("live")} />
-        <Action icon={FolderOpen} title="Открыть папку записи" onClick={() => void ciao.history.openFolder(entry.id)} />
+        <Action icon={busy === "file" ? Loader2 : Sparkles} spin={busy === "file"} label={tr.retryFile} title={tr.retryFileTitle} disabled={busy !== null} onClick={() => retry("file")} />
+        <Action icon={busy === "live" ? Loader2 : RotateCcw} spin={busy === "live"} label={tr.retryLive} title={tr.retryLiveTitle} disabled={busy !== null} onClick={() => retry("live")} />
+        <Action icon={FolderOpen} title={tr.openFolder} onClick={() => void ciao.history.openFolder(entry.id)} />
         <div className="ml-auto">
           <Action
             icon={Trash2}
-            title="Удалить запись и аудио"
-            label={confirmDelete ? "Точно удалить?" : undefined}
+            title={tr.delete}
+            label={confirmDelete ? tr.confirmDelete : undefined}
             danger={confirmDelete}
             onClick={async () => {
               if (!confirmDelete) {
@@ -281,11 +292,12 @@ function Action(props: {
 function Player({ id }: { id: string }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  const tr = useStrings().history;
   useEffect(() => () => audio.current?.pause(), []);
   return (
     <Action
       icon={playing ? Pause : Play}
-      label={playing ? "Пауза" : "Слушать"}
+      label={playing ? tr.pause : tr.play}
       onClick={() => {
         if (!audio.current) {
           audio.current = new Audio(ciao.history.audioUrl(id));

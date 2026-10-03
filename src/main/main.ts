@@ -2,14 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from "electron";
-import { DELAYS, type HistoryEntry, type RetryMode, type Settings } from "../core/types";
+import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
+import { setLang, t } from "../core/i18n";
 import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
+import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
 import { WinInput } from "./winInput";
 
@@ -55,6 +57,10 @@ const wake = new WakeWord();
 const telemetry = new Telemetry(() => Telemetry.allowed() && settings?.telemetry !== false);
 let historyWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
+const updater = new Updater((state) => {
+  historyWin?.webContents.send("update:state", state);
+  buildTrayMenu();
+});
 
 function notifyChanged(entry: HistoryEntry): void {
   historyWin?.webContents.send("history:changed", entry);
@@ -90,6 +96,7 @@ function openHistory(tab?: "settings"): void {
 function applySettings(next: Settings): void {
   const prev = settings;
   settings = next;
+  setLang(next.language);
   nativeTheme.themeSource = next.theme;
   saveSettings(next);
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.openAtLogin });
@@ -97,7 +104,10 @@ function applySettings(next: Settings): void {
   if (prev && prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   wake.setEnabled(next.wakeWord);
   overlay.setWake(next.wakeWord);
+  tray?.setToolTip(t().tray.tooltip);
   buildTrayMenu();
+  // Open windows re-render in the new language right away.
+  for (const win of [historyWin, overlay.win]) if (win && !win.isDestroyed()) win.webContents.send("settings:changed", next);
 }
 
 function registerPasteLast(previous?: string): void {
@@ -110,22 +120,41 @@ function registerPasteLast(previous?: string): void {
   }
 }
 
+function updateMenuItem(state: UpdateState): Electron.MenuItemConstructorOptions[] {
+  switch (state.phase) {
+    case "available":
+      return [{ label: t().tray.updateTo(state.version), click: () => void updater.install() }];
+    case "downloading":
+      return [{ label: t().tray.updating(state.version, state.percent), enabled: false }];
+    case "installing":
+      return [{ label: t().tray.installing(state.version), enabled: false }];
+    case "error":
+      return state.version ? [{ label: t().tray.retryUpdate(state.version), click: () => void updater.install() }] : [];
+    default:
+      return [];
+  }
+}
+
 function buildTrayMenu(): void {
   if (!tray) return;
+  const update = updateMenuItem(updater.get());
+  const s = t().tray;
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "История и настройки", click: () => openHistory() },
-      { label: `Вставить последнее  (${settings.pasteLastHotkey})`, click: () => void dictation.pasteLast() },
+      ...update,
+      ...(update.length ? [{ type: "separator" as const }] : []),
+      { label: s.historyAndSettings, click: () => openHistory() },
+      { label: s.pasteLast(settings.pasteLastHotkey), click: () => void dictation.pasteLast() },
       { type: "separator" },
       ...(settings.showDelay
         ? [{
-            label: `Задержка: ${settings.delay}`,
+            label: s.delay(settings.delay),
             submenu: DELAYS.map((d) => ({ label: d, type: "radio" as const, checked: settings.delay === d, click: () => applySettings({ ...settings, delay: d }) })),
           }]
         : []),
-      { label: "Показывать стоимость", type: "checkbox", checked: settings.showCost, click: () => applySettings({ ...settings, showCost: !settings.showCost }) },
+      { label: s.showCost, type: "checkbox", checked: settings.showCost, click: () => applySettings({ ...settings, showCost: !settings.showCost }) },
       { type: "separator" },
-      { label: "Выход", click: () => app.quit() },
+      { label: s.quit, click: () => app.quit() },
     ]),
   );
 }
@@ -133,8 +162,8 @@ function buildTrayMenu(): void {
 async function retry(id: string, mode: RetryMode): Promise<HistoryEntry> {
   const key = loadApiKey();
   const entry = store.get(id);
-  if (!key) throw new Error("Нет API-ключа");
-  if (!entry) throw new Error("Запись не найдена");
+  if (!key) throw new Error(t().errors.noApiKey);
+  if (!entry) throw new Error(t().errors.entryNotFound);
   const pcm = WavWriter.readPcm(store.audioPath(id));
   const model = mode === "file" ? settings.fileModel : settings.liveModel;
   const text = (mode === "file" ? await transcribeFile(key, pcm, settings) : await transcribeLive(key, pcm, settings)).trim();
@@ -177,10 +206,10 @@ async function showRecovered(entries: HistoryEntry[]): Promise<void> {
     console.warn("recovering", recent.id, e);
   }
   if (text) {
-    overlay.state({ ...base, phase: "recovered", message: "Запись прервалась при перезапуске — вот что ты сказал" });
+    overlay.state({ ...base, phase: "recovered", message: t().overlay.recovered });
     overlay.final(seq, text);
   } else {
-    overlay.state({ ...base, phase: "saved", message: "Запись прервалась при перезапуске — аудио сохранено в истории" });
+    overlay.state({ ...base, phase: "saved", message: t().overlay.recoveredSaved });
   }
 }
 
@@ -216,6 +245,13 @@ function registerIpc(): void {
     fs.writeFileSync(path.join(app.getPath("userData"), "openai-key.txt"), key.trim());
     pool.refill();
   });
+
+  ipcMain.handle("update:get", () => updater.get());
+  ipcMain.handle("update:check", () => updater.check());
+  ipcMain.handle("update:install", () => updater.install());
+  ipcMain.handle("update:open-notes", (_e, version: string) =>
+    shell.openExternal(`https://github.com/${REPO.owner}/${REPO.repo}/releases/tag/v${encodeURIComponent(version)}`),
+  );
 }
 
 /** `Ciao.exe --replay=file.wav` (24 kHz mono PCM16) sends a recording through the running app. */
@@ -234,12 +270,14 @@ app.on("window-all-closed", () => {
 });
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  updater.stop();
   input?.stop();
   pool?.close();
 });
 
 void app.whenReady().then(() => {
   settings = loadSettings();
+  setLang(settings.language); // before store.recover(), which writes user-facing errors
   if (process.platform === "win32") app.setAppUserModelId("dev.iliyasone.ciao");
 
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media"));
@@ -283,7 +321,6 @@ void app.whenReady().then(() => {
 
   registerIpc();
   tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, "tray.png")));
-  tray.setToolTip("Ciao — диктовка с живым превью");
   tray.on("click", () => openHistory());
   applySettings(settings);
   nativeTheme.on("updated", () => {
@@ -295,6 +332,7 @@ void app.whenReady().then(() => {
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
   telemetry.capture("app_started", { has_api_key: loadApiKey() !== null, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.formatText });
+  updater.start();
   void showRecovered(recovered);
   if (!loadApiKey()) openHistory("settings");
 });

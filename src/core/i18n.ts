@@ -1,0 +1,407 @@
+// Every user-facing string, in Russian and English. Developer logs stay in English and out of here.
+// The main process keeps the current language here (setLang); renderers subscribe through
+// src/renderer/lang.ts so a change in Settings applies without a restart.
+
+import type { Lang } from "./types";
+
+const ru = {
+  /** For toLocaleDateString / toLocaleTimeString. */
+  locale: "ru-RU",
+
+  tray: {
+    tooltip: "Ciao — диктовка с живым превью",
+    updateTo: (v: string) => `Обновить до ${v}`,
+    updating: (v: string, percent: number) => `Обновление ${v}: ${percent}%`,
+    installing: (v: string) => `Устанавливается ${v}…`,
+    retryUpdate: (v: string) => `Повторить обновление до ${v}`,
+    historyAndSettings: "История и настройки",
+    pasteLast: (hotkey: string) => `Вставить последнее  (${hotkey})`,
+    delay: (d: string) => `Задержка: ${d}`,
+    showCost: "Показывать стоимость",
+    quit: "Выход",
+  },
+
+  errors: {
+    noApiKey: "Нет API-ключа",
+    noApiKeyHint: "Нет API-ключа — положи его в openai-key.txt",
+    entryNotFound: "Запись не найдена",
+    cannotReachOpenAI: "Не удалось связаться с OpenAI",
+    connectionClosed: (reason: string) => `Соединение закрыто${reason ? `: ${reason}` : ""}`,
+    openAIError: "Ошибка OpenAI",
+    openAITimeout: "OpenAI не ответил вовремя",
+    openAIStatus: (status: number) => `OpenAI ответил ${status}`,
+    microphone: (message: string) => `Микрофон: ${message}`,
+    noFinalText: "Нет финального текста",
+    fileFailed: (reason: string, message: string) => `${reason}; файл: ${message}`,
+    closedMidTranscription: "Приложение закрылось до конца распознавания — аудио сохранено, можно распознать заново",
+  },
+
+  overlay: {
+    cancelled: "Отменено — запись в истории",
+    clipboard: "Окно сменилось — текст в буфере, Ctrl+V",
+    saved: "Не распозналось — аудио сохранено в истории",
+    recovered: "Запись прервалась при перезапуске — вот что ты сказал",
+    recoveredSaved: "Запись прервалась при перезапуске — аудио сохранено в истории",
+    close: "Закрыть",
+    copy: "Скопировать",
+    copied: "Скопировано",
+    history: "История",
+    gripTitle: "Перетащи, чтобы подвинуть. Двойной клик — вернуть на место.",
+    resizeTitle: "Потяни, чтобы изменить ширину",
+  },
+
+  update: {
+    noReleases: "На GitHub пока нет опубликованных версий",
+    incompleteRelease: "Последний релиз на GitHub собран не до конца — в нём нет latest.yml",
+    offline: "Нет интернета",
+    githubStatus: (status: string) => `GitHub ответил ${status} — попробуй позже`,
+    buttonTitle: (current: string) => `Сейчас ${current}. Скачается и перезапустится само.`,
+    retryUpdate: "Повторить обновление",
+    updateTo: (v: string) => `Обновить до ${v}`,
+    downloading: (v: string, percent: number) => `Скачивается ${v}: ${percent}%`,
+    restarting: "Перезапуск…",
+  },
+
+  tabs: { history: "История", settings: "Настройки" },
+
+  history: {
+    today: "Сегодня",
+    yesterday: "Вчера",
+    statToday: "сегодня",
+    statTotal: "всего",
+    minutes: (n: number) => `${n} мин`,
+    search: "Поиск по тексту",
+    nothingFound: "Ничего не нашлось",
+    empty: "Пока пусто. Зажми правый Ctrl и скажи что-нибудь.",
+    source: { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком", formatted: "с абзацами" },
+    status: {
+      running: "идёт",
+      failed: "не распознано",
+      cancelled: "отменено",
+      pasted: "вставлено",
+      clipboard: "в буфере",
+    },
+    noText: "Текста нет — можно распознать запись заново.",
+    copy: "Копировать",
+    copied: "Скопировано",
+    retryFile: "Точнее",
+    retryFileTitle: "Распознать всю запись заново файловой моделью",
+    retryLive: "Вживую",
+    retryLiveTitle: "Прогнать запись через live-модель ещё раз",
+    openFolder: "Открыть папку записи",
+    delete: "Удалить запись и аудио",
+    confirmDelete: "Точно удалить?",
+    play: "Слушать",
+    pause: "Пауза",
+  },
+
+  settings: {
+    saved: "сохранено",
+    apiKey: {
+      label: "API-ключ",
+      saved: "Ключ сохранён локально.",
+      missing: "Без ключа ничего не распознается.",
+      replace: "заменить ключ…",
+      save: "Сохранить",
+    },
+    recognition: {
+      title: "Распознавание",
+      languages: "Языки",
+      languagesHint: "Коды через запятую: ru, en",
+      context: "Контекст",
+      contextHint: "О чём ты обычно говоришь — модель подстраивается.",
+      terms: "Термины",
+      termsHint: "Слова, которые надо писать точно так. По одному в строке.",
+    },
+    appearance: {
+      title: "Оформление",
+      language: "Язык",
+      languageHint: "Язык интерфейса.",
+      theme: "Тема",
+      themeHint: "Системная — как в Windows, переключается вместе с ней.",
+      themes: { system: "Системная", light: "Светлая", dark: "Тёмная" },
+    },
+    behaviour: {
+      title: "Поведение",
+      formatText: "Абзацы и списки",
+      formatTextHint: "Пауза перед новым предложением — новый абзац, «первое… второе…» — нумерованный список. Видно сразу, пока говоришь.",
+      autoPaste: "Вставлять текст сразу",
+      autoPasteHint: "Иначе он просто окажется в буфере обмена.",
+      restoreClipboard: "Возвращать буфер обмена",
+      restoreClipboardHint: "После вставки в буфере снова то, что было до диктовки.",
+      showCost: "Показывать стоимость",
+      showCostHint: "Сколько центов ты наговорил — прямо во время записи.",
+      openAtLogin: "Запускать вместе с Windows",
+      telemetry: "Анонимная статистика",
+      telemetryHint:
+        "Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия Windows — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются.",
+    },
+    voice: {
+      title: "Голосом",
+      wakeWord: "Включать словом «чао»",
+      wakeWordHint:
+        "Скажи «чао» — начнётся запись без рук. Микрофон слушает постоянно, но слово ищется прямо на компьютере: пока ты не диктуешь, звук никуда не уходит. Windows покажет значок микрофона.",
+      stopPhrase: "Заканчивать словами «чао-чао»",
+      stopPhraseHint: "В режиме без рук скажи «чао-чао» в конце — запись закончится, а сами слова не вставятся.",
+    },
+    keys: {
+      title: "Клавиши",
+      dictation: "Диктовка",
+      dictationHint: "Держи и говори. Короткое нажатие — режим без рук, ещё одно — готово. Назначенные кнопки мыши другие приложения не получают.",
+      cancel: "Отмена",
+      cancelHint: "Запись всё равно сохранится в истории.",
+      pasteLast: "Вставить последнее",
+      pasteLastHint: "Нажми, чтобы задать другое сочетание.",
+      remove: "Убрать",
+      add: "Добавить",
+      capturing: "Нажми клавишу, сочетание или кнопку мыши… Esc — отмена",
+      recording: "Нажми сочетание… Esc — отмена",
+    },
+    updates: {
+      title: "Обновления",
+      version: (v: string) => `Версия ${v}`,
+      disabled: "Это запуск из исходников — обновляй через git.",
+      idle: "Новые версии проверяются сами, раз в несколько часов.",
+      checking: "Проверяю…",
+      latest: (time: string) => `Это последняя версия. Проверено в ${time}.`,
+      available: (v: string) => `Вышла ${v}. Скачается и перезапустится само; идущая диктовка не потеряется.`,
+      downloading: (v: string, percent: number) => `Скачивается ${v}: ${percent}%`,
+      installing: (v: string) => `Устанавливается ${v}, Ciao сейчас перезапустится…`,
+      whatsNew: "Что нового",
+      retry: "Повторить",
+      update: "Обновить",
+      check: "Проверить",
+    },
+    developer: {
+      title: "Для разработчика",
+      showDelay: "Показывать задержку",
+      showDelayHint: "Уровень задержки распознавания — в окошке записи, здесь и в меню трея.",
+      delay: "Задержка",
+      delayHint: "Меньше — слова появляются раньше, больше — точнее. На цену не влияет.",
+    },
+  },
+
+  /** Key and mouse-button names (see core/triggers.ts); keys missing here are shown as they are. */
+  keyNames: {
+    RControlKey: "Правый Ctrl",
+    LControlKey: "Левый Ctrl",
+    RMenu: "Правый Alt",
+    LMenu: "Левый Alt",
+    RShiftKey: "Правый Shift",
+    LShiftKey: "Левый Shift",
+    RWin: "Правый Win",
+    MButton: "Колёсико мыши",
+    XButton1: "Боковая кнопка «назад»",
+    XButton2: "Боковая кнопка «вперёд»",
+    Space: "Пробел",
+    Apps: "Меню",
+  },
+};
+
+export type Strings = typeof ru;
+
+const en: Strings = {
+  locale: "en-US",
+
+  tray: {
+    tooltip: "Ciao — dictation with a live preview",
+    updateTo: (v) => `Update to ${v}`,
+    updating: (v, percent) => `Updating to ${v}: ${percent}%`,
+    installing: (v) => `Installing ${v}…`,
+    retryUpdate: (v) => `Retry update to ${v}`,
+    historyAndSettings: "History and settings",
+    pasteLast: (hotkey) => `Paste last  (${hotkey})`,
+    delay: (d) => `Delay: ${d}`,
+    showCost: "Show cost",
+    quit: "Quit",
+  },
+
+  errors: {
+    noApiKey: "No API key",
+    noApiKeyHint: "No API key — put it in openai-key.txt",
+    entryNotFound: "Recording not found",
+    cannotReachOpenAI: "Couldn't reach OpenAI",
+    connectionClosed: (reason) => `Connection closed${reason ? `: ${reason}` : ""}`,
+    openAIError: "OpenAI error",
+    openAITimeout: "OpenAI didn't respond in time",
+    openAIStatus: (status) => `OpenAI responded with ${status}`,
+    microphone: (message) => `Microphone: ${message}`,
+    noFinalText: "No final text",
+    fileFailed: (reason, message) => `${reason}; file: ${message}`,
+    closedMidTranscription: "The app closed before transcription finished — the audio is saved, you can transcribe it again",
+  },
+
+  overlay: {
+    cancelled: "Cancelled — the recording is in history",
+    clipboard: "The window changed — the text is on the clipboard, press Ctrl+V to paste",
+    saved: "Couldn't transcribe — the audio is saved in history",
+    recovered: "The recording was cut short by a restart — here's what you said",
+    recoveredSaved: "The recording was cut short by a restart — the audio is saved in history",
+    close: "Close",
+    copy: "Copy",
+    copied: "Copied",
+    history: "History",
+    gripTitle: "Drag to move. Double-click to put it back.",
+    resizeTitle: "Drag to change the width",
+  },
+
+  update: {
+    noReleases: "No versions have been published on GitHub yet",
+    incompleteRelease: "The latest release on GitHub is incomplete — it has no latest.yml",
+    offline: "No internet connection",
+    githubStatus: (status) => `GitHub responded with ${status} — try again later`,
+    buttonTitle: (current) => `You have ${current}. Ciao downloads the update and restarts on its own.`,
+    retryUpdate: "Retry update",
+    updateTo: (v) => `Update to ${v}`,
+    downloading: (v, percent) => `Downloading ${v}: ${percent}%`,
+    restarting: "Restarting…",
+  },
+
+  tabs: { history: "History", settings: "Settings" },
+
+  history: {
+    today: "Today",
+    yesterday: "Yesterday",
+    statToday: "today",
+    statTotal: "total",
+    minutes: (n) => `${n} min`,
+    search: "Search text",
+    nothingFound: "Nothing found",
+    empty: "Nothing here yet. Hold Right Ctrl and say something.",
+    source: { live: "live", "retry-live": "live again", "retry-file": "whole recording", formatted: "with paragraphs" },
+    status: {
+      running: "in progress",
+      failed: "not transcribed",
+      cancelled: "cancelled",
+      pasted: "pasted",
+      clipboard: "on clipboard",
+    },
+    noText: "No text — you can transcribe the recording again.",
+    copy: "Copy",
+    copied: "Copied",
+    retryFile: "More accurate",
+    retryFileTitle: "Transcribe the whole recording again with the file model",
+    retryLive: "Live",
+    retryLiveTitle: "Run the recording through the live model again",
+    openFolder: "Open the recording's folder",
+    delete: "Delete the recording and its audio",
+    confirmDelete: "Really delete?",
+    play: "Listen",
+    pause: "Pause",
+  },
+
+  settings: {
+    saved: "saved",
+    apiKey: {
+      label: "API key",
+      saved: "The key is stored locally.",
+      missing: "Nothing gets transcribed without a key.",
+      replace: "replace key…",
+      save: "Save",
+    },
+    recognition: {
+      title: "Recognition",
+      languages: "Languages",
+      languagesHint: "Comma-separated codes: ru, en",
+      context: "Context",
+      contextHint: "What you usually talk about — the model adapts to it.",
+      terms: "Terms",
+      termsHint: "Words to spell exactly as written. One per line.",
+    },
+    appearance: {
+      title: "Appearance",
+      language: "Language",
+      languageHint: "The language of the interface.",
+      theme: "Theme",
+      themeHint: "System follows Windows and switches along with it.",
+      themes: { system: "System", light: "Light", dark: "Dark" },
+    },
+    behaviour: {
+      title: "Behavior",
+      formatText: "Paragraphs and lists",
+      formatTextHint: "A pause before a new sentence starts a paragraph; “first… second…” becomes a numbered list. You see it as you speak.",
+      autoPaste: "Paste text right away",
+      autoPasteHint: "Otherwise it just lands on the clipboard.",
+      restoreClipboard: "Restore the clipboard",
+      restoreClipboardHint: "After pasting, the clipboard holds what it had before the dictation.",
+      showCost: "Show cost",
+      showCostHint: "What the dictation costs in cents, shown while you record.",
+      openAtLogin: "Start with Windows",
+      telemetry: "Anonymous usage stats",
+      telemetryHint:
+        "How many people use Ciao and how dictation goes: what started it, how long it took and what it cost, which kind of app it pasted into and whether that worked, the Windows version — with a random install id. No text, audio or window titles are sent.",
+    },
+    voice: {
+      title: "Voice",
+      wakeWord: "Start with the word “ciao”",
+      wakeWordHint:
+        "Say “ciao” to start a hands-free recording. The microphone listens all the time, but the word is detected right on your computer: until you dictate, no audio leaves it. Windows will show the microphone icon.",
+      stopPhrase: "Finish with “ciao ciao”",
+      stopPhraseHint: "In hands-free mode, say “ciao ciao” at the end — the recording stops, and the words themselves aren't pasted.",
+    },
+    keys: {
+      title: "Keys",
+      dictation: "Dictation",
+      dictationHint: "Hold and speak. A short press starts hands-free mode, another one finishes. Other apps don't receive the mouse buttons assigned here.",
+      cancel: "Cancel",
+      cancelHint: "The recording is still saved in history.",
+      pasteLast: "Paste last",
+      pasteLastHint: "Click to set a different shortcut.",
+      remove: "Remove",
+      add: "Add",
+      capturing: "Press a key, a combination or a mouse button… Esc to cancel",
+      recording: "Press a shortcut… Esc to cancel",
+    },
+    updates: {
+      title: "Updates",
+      version: (v) => `Version ${v}`,
+      disabled: "Running from source — update with git.",
+      idle: "New versions are checked for automatically, every few hours.",
+      checking: "Checking…",
+      latest: (time) => `This is the latest version. Checked at ${time}.`,
+      available: (v) => `${v} is out. Ciao downloads it and restarts on its own; a dictation in progress won't be lost.`,
+      downloading: (v, percent) => `Downloading ${v}: ${percent}%`,
+      installing: (v) => `Installing ${v}, Ciao will restart now…`,
+      whatsNew: "What's new",
+      retry: "Retry",
+      update: "Update",
+      check: "Check",
+    },
+    developer: {
+      title: "For developers",
+      showDelay: "Show delay",
+      showDelayHint: "The recognition delay level — in the recording card, here and in the tray menu.",
+      delay: "Delay",
+      delayHint: "Lower means words appear sooner, higher means more accurate. Doesn't affect the price.",
+    },
+  },
+
+  keyNames: {
+    RControlKey: "Right Ctrl",
+    LControlKey: "Left Ctrl",
+    RMenu: "Right Alt",
+    LMenu: "Left Alt",
+    RShiftKey: "Right Shift",
+    LShiftKey: "Left Shift",
+    RWin: "Right Win",
+    MButton: "Middle mouse button",
+    XButton1: "Back side button",
+    XButton2: "Forward side button",
+    Space: "Space",
+    Apps: "Menu",
+  },
+};
+
+export const STRINGS: Record<Lang, Strings> = { ru, en };
+
+/** The language for an OS locale: Russian for Russian, English for everything else. */
+export const langFromLocale = (locale: string | undefined): Lang => (/^ru\b/i.test(locale ?? "") ? "ru" : "en");
+
+let current: Lang = "en";
+
+/** The main process's language; renderers keep their own (src/renderer/lang.ts). */
+export function setLang(lang: Lang): void {
+  current = lang;
+}
+
+export const t = (): Strings => STRINGS[current];

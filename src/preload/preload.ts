@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HistoryEntry, OverlayState, RetryMode, Settings } from "../core/types";
+import type { HistoryEntry, OverlayState, RetryMode, Settings, UpdateState } from "../core/types";
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
@@ -45,11 +45,20 @@ const api = {
   settings: {
     get: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
     set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
+    onChanged: (cb: (s: Settings) => void) => on("settings:changed", cb),
     hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
     setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
     captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),
+  },
+  update: {
+    get: (): Promise<UpdateState> => ipcRenderer.invoke("update:get"),
+    onState: (cb: (s: UpdateState) => void) => on("update:state", cb),
+    check: (): Promise<void> => ipcRenderer.invoke("update:check"),
+    /** Downloads the found version, then the app restarts into it. */
+    install: (): Promise<void> => ipcRenderer.invoke("update:install"),
+    openNotes: (version: string): Promise<void> => ipcRenderer.invoke("update:open-notes", version),
   },
 };
 

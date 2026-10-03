@@ -1,6 +1,7 @@
 import { clipboard } from "electron";
 import { level } from "../core/audio";
 import { costUsd, pricePerMinute } from "../core/cost";
+import { t } from "../core/i18n";
 import type { RealtimeSession } from "../core/realtime";
 import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
@@ -188,8 +189,8 @@ export class DictationController {
       this.captureEnded(a);
       return;
     }
-    this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: `Микрофон: ${message}` });
-    this.cancel(true, `Микрофон: ${message}`);
+    this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: t().errors.microphone(message) });
+    this.cancel(true, t().errors.microphone(message));
   }
 
   /** The wake word was heard: start hands-free, beginning with the audio since the word. */
@@ -249,7 +250,7 @@ export class DictationController {
     const apiKey = this.deps.apiKey();
     const seq = ++this.seq;
     if (!apiKey) {
-      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: "Нет API-ключа — положи его в openai-key.txt" });
+      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint });
       return;
     }
     const session = this.deps.pool.take()!;
@@ -343,7 +344,7 @@ export class DictationController {
     this.deps.changed(a.entry);
     a.endedBy = error ? "mic_error" : "escape";
     this.ended(a, error ? "failed" : "cancelled");
-    if (!error) this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: "Отменено — запись в истории" });
+    if (!error) this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: t().overlay.cancelled });
   }
 
   private waitForFinal(a: Active): Promise<void> {
@@ -386,7 +387,7 @@ export class DictationController {
         if (a.wakeStarted) text = stripWakeWord(text);
         add("retry-file", settings.fileModel, text);
       } catch (e) {
-        entry.error = `${a.offline ?? "Нет финального текста"}; файл: ${(e as Error).message}`;
+        entry.error = t().errors.fileFailed(a.offline ?? t().errors.noFinalText, (e as Error).message);
         text = live || null;
       }
     }
@@ -411,7 +412,7 @@ export class DictationController {
     }
 
     if (a.micError && !text) {
-      entry.error = `Микрофон: ${a.micError}`;
+      entry.error = t().errors.microphone(a.micError);
       a.endedBy = "mic_error";
     }
 
@@ -456,9 +457,9 @@ export class DictationController {
       phase,
       message:
         phase === "clipboard"
-          ? "Окно сменилось — текст в буфере, Ctrl+V"
+          ? t().overlay.clipboard
           : phase === "saved"
-            ? a.micError ? `Микрофон: ${a.micError}` : "Не распозналось — аудио сохранено в истории"
+            ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     });
   }
@@ -466,7 +467,7 @@ export class DictationController {
   private ended(a: Active, outcome: DictationOutcome): void {
     if (a.replay) return;
     const { entry, miss } = a;
-    const t = entry.timings;
+    const timings = entry.timings;
     this.deps.ended({
       outcome,
       duration_s: Math.round(entry.durationMs / 1000),
@@ -476,9 +477,9 @@ export class DictationController {
       // A partial live transcript is kept even when the saved file had to be transcribed instead.
       transcribed_by: entry.transcripts.some((x) => x.source === "retry-file") ? "file" : entry.transcripts.length ? "live" : "none",
       // A wake-word start begins with the audio since the word, so its onset is ~0 and means nothing.
-      voice_onset_ms: a.wakeStarted ? undefined : t?.voiceOnsetMs,
-      first_text_ms: t?.firstTextMs,
-      final_after_release_ms: t?.finalAfterReleaseMs,
+      voice_onset_ms: a.wakeStarted ? undefined : timings?.voiceOnsetMs,
+      first_text_ms: timings?.firstTextMs,
+      final_after_release_ms: timings?.finalAfterReleaseMs,
       cost_usd: Math.round(entry.transcripts.reduce((sum, x) => sum + x.costUsd, 0) * 10_000) / 10_000,
       target_app: entry.target?.process ? appLabel(entry.target.process) : undefined,
       paste_miss: miss?.reason,

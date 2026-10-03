@@ -2,6 +2,11 @@
 
 **See what you say while you say it.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/demo-dark.gif" />
+  <img src="assets/demo-light.gif" alt="The Ciao card showing words appear as they are spoken: Ciao! This is the easiest way to talk to your computer." width="608" />
+</picture>
+
 Ciao is a dictation app that shows your words live, as you speak, in a small
 floating card at the bottom of the screen. When you let go of the key, the text
 is pasted into the app you were typing in.
@@ -12,8 +17,6 @@ the transcript form in real time and catch the one word that flips the meaning
 while you are still talking. It is built for talking to coding agents (T3 Code,
 Claude Code, Codex) in Russian and English mixed with technical terms.
 
-> Demo GIF: coming soon.
-
 ## Features
 
 - **Live preview.** New words fade in bright and settle to grey. On a real
@@ -22,15 +25,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   release the key.
   - This is at the default recognizer delay of `low`. The level ranges from
     `minimal` to `xhigh`: lower shows words sooner, higher is more accurate, and the
-    price is the same. It is hidden by default. To see and change it, go to Settings
-    (the app's UI is in Russian): *Настройки → Для разработчика → Показывать
-    задержку*.
+    price is the same. It is hidden by default. To see and change it, go to
+    *Settings → For developers → Show delay*.
 - **Push to talk.** Hold **Right Ctrl**, speak, release, and the text is pasted.
   - The **middle mouse button** works the same way by default: click to start
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
-  - Or just say **"чао"** to start hands-free (*Настройки → Голосом*, off by default).
+  - Or just say **"ciao"** ("чао") to start hands-free (*Settings → Voice*, off by default).
     The word is spotted on your computer, so nothing is sent anywhere until you
     dictate: [Vosk](https://alphacephei.com/vosk/) hears it within ~0.2 s and
     [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotting double-checks
@@ -38,8 +40,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     It costs about 10% of one CPU core and ~280 MB of memory, adds ~170 MB to the app,
     and the mic stays open while it is on.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
-    or say **"чао-чао"** (the words themselves are not pasted; toggle in
-    *Настройки → Голосом*).
+    or say **"ciao ciao"** ("чао-чао"; the words themselves are not pasted; toggle in
+    *Settings → Voice*).
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
 - **The card stays out of your way.**
@@ -69,13 +71,18 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - a long pause (1.2 s) before a new sentence starts a paragraph;
   - a sentence starting with "первое", "во-вторых", "третий момент"… starts a
     numbered item (the word itself is dropped); inside a list "и ещё", "дальше",
-    "также" do too, and only a longer pause (2 s) ends the list.
+    "также" do too (in English: "first"… "third", "next", "also"), and only a
+    longer pause (2 s) ends the list.
   - These are fixed rules, no model, so it costs no time. Toggle in
-    *Настройки → Поведение → Абзацы и списки*.
+    *Settings → Behavior → Paragraphs and lists*.
 - **Context** (Settings tab). Describe what you usually talk about and list the
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
-- **Light, dark or system theme** (*Настройки → Оформление*). System is the
+- **English or Russian interface** (*Settings → Appearance → Language*). The
+  default is Russian if Windows is in Russian and English otherwise (also for
+  an existing install, the first time it starts with this setting); a change
+  applies right away.
+- **Light, dark or system theme** (*Settings → Appearance*). System is the
   default and follows Windows live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
@@ -91,29 +98,54 @@ Idle time costs nothing.
 
 ## Install
 
-There are no prebuilt releases yet, so build it yourself. You need Node.js 22+ and
-the .NET 8 SDK. The build runs on Windows, Linux or macOS and always produces the
-Windows app. Wine is not needed.
+Download `Ciao-Setup-<version>.exe` from the
+[latest release](https://github.com/iliyasone/ciao/releases/latest) and run it. It
+installs for your user only (no admin prompt) into `%LOCALAPPDATA%\Programs\Ciao`
+and starts Ciao. If you already run a copy you built yourself, quit it first
+(tray → *Quit*); otherwise the new one hands over to it and exits.
+
+1. The installer is unsigned, so SmartScreen may warn you: choose *More info → Run
+   anyway*.
+2. Ciao lives in the system tray. On first start the Settings tab opens: paste
+   your API key there.
+3. If nothing is recorded, allow microphone access for desktop apps. It is in
+   Windows Settings → Privacy & security → Microphone.
+
+Ciao starts with Windows by default. The toggle is in Settings.
+
+### Updates
+
+Ciao checks GitHub Releases for a newer version 15 s after it starts and every
+4 hours after that. When there is one, an **Update to X** button shows in the
+window's title bar and in the tray menu. Click it: the new version downloads,
+Ciao quits, installs it silently and starts again. Settings, the key and the
+history in `%APPDATA%\Ciao` stay. Nothing is downloaded until you click, and a
+failed check in the background shows nothing.
+
+To check by hand, go to *Settings → Updates → Check*.
+
+A portable copy (the `release/win-unpacked` folder from `npm run dist:win`) is
+updated the same way. The update installs Ciao into `%LOCALAPPDATA%\Programs\Ciao`,
+and from then on that copy runs and starts with Windows. You can delete the old
+folder. A dev run (`electron .`) never updates.
+
+### Build it yourself
+
+You need Node.js 22+ and the .NET 8 SDK. The build runs on Windows, Linux or macOS
+and always produces the Windows app.
 
 ```sh
 git clone https://github.com/iliyasone/ciao.git
 cd ciao
 npm install
-npm run build:native   # the input helper → build/win-input/Ciao.Input.exe
-npm run build:kws      # the wake-word detector and model (~50 MB) → build/kws
-npm run dist:win       # the app → release/win-unpacked/Ciao.exe
+npm run build:native        # the input helper → build/win-input/Ciao.Input.exe
+npm run build:kws           # the wake-word detector and model (~50 MB) → build/kws
+npm run dist:win            # a portable folder → release/win-unpacked/Ciao.exe
+npm run dist:win:installer  # the installer → release/Ciao-Setup-<version>.exe
 ```
 
-1. Copy the `release/win-unpacked` folder to the Windows machine, anywhere you
-   like.
-2. Start `Ciao.exe`. The exe is unsigned, so SmartScreen may warn you: choose
-   *More info → Run anyway*.
-3. Ciao lives in the system tray. On first start the Settings tab opens: paste
-   your API key there.
-4. If nothing is recorded, allow microphone access for desktop apps. It is in
-   Windows Settings → Privacy & security → Microphone.
-
-Ciao starts with Windows by default. The toggle is in Settings.
+`dist:win` needs nothing else. `dist:win:installer` needs Wine on Linux and macOS
+(NSIS uses it for the uninstaller). On Windows it needs nothing extra.
 
 ### API key
 
@@ -123,9 +155,9 @@ that file.
 
 ### Hotkeys
 
-Set them in *Настройки → Клавиши*.
+Set them in *Settings → Keys*.
 
-- **Dictation triggers.** Click *Добавить* and press what you want: a key (Right
+- **Dictation triggers.** Click *Add* and press what you want: a key (Right
   Ctrl on its own works), a combo such as Ctrl+Alt+Space, or a mouse button
   (middle, side buttons, optionally with modifiers). You can have several.
 - **What other apps see.**
@@ -188,12 +220,24 @@ not derived from your machine or accounts. No text, audio, window titles, prompt
 terms or API keys are ever sent. PostHog keeps no person profiles for these events, does
 not look up a location from your IP address, and the project discards IP addresses.
 
-To turn it off, use *Настройки → Поведение → Анонимная статистика*, or set
+To turn it off, use *Settings → Behavior → Anonymous usage stats* (*Настройки → Поведение → Анонимная статистика* in Russian), or set
 `CIAO_TELEMETRY=0`. An unpackaged dev run (`electron .`) sends nothing unless
 `CIAO_TELEMETRY=1`. `CIAO_POSTHOG_KEY` and `CIAO_POSTHOG_HOST`
 point it at your own PostHog project.
 
 ## Development
+
+### Releasing
+
+Run `npm version 0.3.0 && git push --follow-tags` on `main`. `npm version` bumps
+`package.json`, commits and tags `v0.3.0`; pushing the tag starts the release.
+
+[`release.yml`](.github/workflows/release.yml) builds the installer on a Windows
+runner and uploads it to a draft GitHub release with `latest.yml`, which is the
+file installed copies check. The draft is published once all files are uploaded.
+The tag must equal `v` + the `package.json` version, or the workflow fails.
+[`ci.yml`](.github/workflows/ci.yml) builds the same installer on every PR and
+attaches it to the run as an artifact.
 
 ### Testing without speaking
 
@@ -239,12 +283,19 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `dictation.ts` — the hotkey state machine and the pipeline;
   - `history.ts` — storage and crash recovery;
   - `transcribe.ts` — live and file transcription;
-  - `paste.ts` — clipboard-preserving paste.
+  - `paste.ts` — clipboard-preserving paste;
+  - `updater.ts` — updates from GitHub Releases.
 - `src/renderer/` — React 19 + Tailwind 4:
   - `overlay/` — the live card and microphone capture;
   - `history/` — the history and settings window.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#).
+- `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
+  tray icons from it; don't edit those by hand.
+- `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app): one
+  static HTML file, deployed with `vercel deploy --prod` from `site/`. Its card
+  demo is also the GIF at the top of this README: `node site/record-demo.mjs`
+  re-records `assets/demo-*.gif`.
 
 `npm run typecheck` checks the whole project.
 
@@ -253,7 +304,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - Built-in dictation and read-aloud in [T3 Code](https://github.com/pingdotgg/t3code).
   The stack is the same (Electron, React, Tailwind, Vite), so the UI and the core
   can move into it.
-- Android and macOS.
+- Android and macOS ([#4](https://github.com/iliyasone/ciao/issues/4)).
 
 ## License
 
