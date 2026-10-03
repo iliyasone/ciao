@@ -131,9 +131,12 @@ class RealtimeSession(private val context: Context, apiKey: String) {
 class SessionPool(private val context: Context, private val prefs: Prefs) {
     private var spare: RealtimeSession? = null
 
+    /** Called on every keyboard event; a failed spare (offline, bad key) is retried at most every 30 s. */
     fun refill() {
         val s = spare
-        if (s != null && s.usable && SystemClock.elapsedRealtime() - s.createdAt < MAX_AGE_MS) return
+        val now = SystemClock.elapsedRealtime()
+        if (s != null && s.usable && now - s.createdAt < MAX_AGE_MS) return
+        if (s != null && s.failure != null && now - s.createdAt < RETRY_MS) return
         s?.close()
         spare = prefs.apiKey.takeIf { it.isNotEmpty() }?.let { RealtimeSession(context, it) }
     }
@@ -154,5 +157,6 @@ class SessionPool(private val context: Context, private val prefs: Prefs) {
 
     private companion object {
         const val MAX_AGE_MS = 10 * 60_000L
+        const val RETRY_MS = 30_000L
     }
 }

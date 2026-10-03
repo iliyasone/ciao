@@ -14,11 +14,13 @@ object TextInserter {
      * Inserts [text] at the cursor of [node] (replacing the selection), with a space before it when
      * it would otherwise stick to the previous word.
      *
-     * A field with text in it gets a paste: ACTION_SET_TEXT replaces the whole content with plain
-     * text, which would drop formatting, mentions and the app's undo. An empty field, or one that
-     * refuses the paste, gets ACTION_SET_TEXT. Either action returning true counts as done: Chrome
-     * and WebViews update their accessibility tree later, so reading the text back would look like
-     * a miss and insert twice.
+     * A field with text in it gets a paste when we can put the clipboard back afterwards:
+     * ACTION_SET_TEXT replaces the whole content with plain text, which drops formatting and the
+     * app's undo. Android 10+ hides the clipboard from apps without focus, though, and losing what
+     * the user copied is worse, so then (and for empty fields) it is ACTION_SET_TEXT, with a paste
+     * only if that is refused. Either action returning true counts as done: Chrome and WebViews
+     * update their accessibility tree later, so reading the text back would look like a miss and
+     * insert twice.
      */
     fun insert(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
         if (!node.refresh() || !node.isEditable) return false
@@ -33,12 +35,14 @@ object TextInserter {
         val before = current.substring(0, start)
         val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + text
 
-        if (current.isNotEmpty() && paste(context, node, piece)) return true
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        val saved = runCatching { clipboard.primaryClip }.getOrNull()
+        if (current.isNotEmpty() && saved != null && paste(context, node, piece, saved)) return true
 
         val updated = before + piece + current.substring(end)
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated) }
         if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
-            return current.isEmpty() && paste(context, node, piece)
+            return paste(context, node, piece, saved)
         }
         val caret = before.length + piece.length
         node.performAction(
@@ -51,13 +55,12 @@ object TextInserter {
         return true
     }
 
-    /** Pastes [text], then puts back what was on the clipboard if Android let us read it. */
-    private fun paste(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
+    /** Pastes [text], then puts back [saved] (what was on the clipboard), if Android let us read it. */
+    private fun paste(context: Context, node: AccessibilityNodeInfo, text: String, saved: ClipData?): Boolean {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
-        val previous = runCatching { clipboard.primaryClip }.getOrNull()
         clipboard.setPrimaryClip(ClipData.newPlainText("Ciao", text))
         val pasted = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-        if (pasted && previous != null) Handler(Looper.getMainLooper()).postDelayed({ clipboard.setPrimaryClip(previous) }, 500)
+        if (pasted && saved != null) Handler(Looper.getMainLooper()).postDelayed({ clipboard.setPrimaryClip(saved) }, 500)
         return pasted
     }
 

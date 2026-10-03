@@ -21,7 +21,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.FrameLayout
 import android.widget.Toast
-import java.io.ByteArrayOutputStream
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.hypot
 
 /**
@@ -49,7 +51,9 @@ class CiaoService : AccessibilityService() {
     private inner class Dictation(val target: AccessibilityNodeInfo?, val session: RealtimeSession, val pushToTalk: Boolean) {
         val startedAt = SystemClock.elapsedRealtime()
         var endedAt = 0L
-        val audio = ByteArrayOutputStream()
+        /** The recording, written as it comes in so a long one doesn't sit in memory; read back only for the file model. */
+        val audioFile = File(cacheDir, "dictation-$startedAt.pcm")
+        val audio = BufferedOutputStream(FileOutputStream(audioFile))
         var recorder: Recorder? = null
         var phase = Phase.RECORDING
         val liveText = StringBuilder()
@@ -57,6 +61,7 @@ class CiaoService : AccessibilityService() {
         var lastDeltaAt = 0L
         var final: String? = null
         var offline: String? = null
+        var stoppedByPhrase = false
 
         @Volatile var heardAnything = false
     }
@@ -69,6 +74,8 @@ class CiaoService : AccessibilityService() {
         prefs = Prefs(this)
         pool = SessionPool(this, prefs)
         wm = getSystemService(WindowManager::class.java)
+        // Recordings left behind by a crash or a kill mid-dictation.
+        cacheDir.listFiles { f -> f.name.startsWith("dictation-") }?.forEach { it.delete() }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -138,6 +145,7 @@ class CiaoService : AccessibilityService() {
     }
 
     private fun hideBubble() {
+        if (bubble == null) return
         bubble?.let { runCatching { wm.removeView(it) } }
         bubble = null
         // A drag cut short by the keyboard closing never gets its ACTION_UP.
@@ -215,10 +223,11 @@ class CiaoService : AccessibilityService() {
         val c = CardView(this, onCancel = { cancel() }, onDone = { stop() })
         val host = FrameLayout(this).apply {
             setPadding(dp(10), dp(6), dp(10), dp(12))
-            addView(c, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(20), dp(640)), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL))
+            addView(c, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(20), dp(640)), FrameLayout.LayoutParams.WRAP_CONTENT))
             clipToPadding = false
         }
-        val params = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP)
+        // As wide as the card, so taps beside it (tablets, landscape) reach the app underneath.
+        val params = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
         params.y = statusBarHeight()
         wm.addView(host, params)
         cardHost = host
@@ -257,7 +266,10 @@ class CiaoService : AccessibilityService() {
                 d.lastDeltaAt = now
                 d.liveText.append(text)
                 card?.delta(text, gap)
-                if (!d.pushToTalk && prefs.stopPhrase && d.phase == Phase.RECORDING && VoiceCommands.endsWithStopPhrase(d.liveText.toString())) stop()
+                if (!d.pushToTalk && prefs.stopPhrase && d.phase == Phase.RECORDING && VoiceCommands.endsWithStopPhrase(d.liveText.toString())) {
+                    d.stoppedByPhrase = true
+                    stop()
+                }
             }
 
             override fun onCompleted(text: String) {
@@ -274,8 +286,8 @@ class CiaoService : AccessibilityService() {
         }
         session.configure(prefs)
 
-        val recorder = Recorder { pcm, level ->
-            synchronized(d.audio) { d.audio.write(pcm) }
+        val recorder = Recorder(onChunk = { pcm, level ->
+            runCatching { d.audio.write(pcm) } // a full disk only costs the fallback
             session.append(pcm)
             if (level > 0) d.heardAnything = true
             main.post {
@@ -284,11 +296,19 @@ class CiaoService : AccessibilityService() {
                     card?.level(level)
                 }
             }
-        }
+        }, onError = { message ->
+            main.post {
+                if (dictation === d && d.phase == Phase.RECORDING) {
+                    stop()
+                    card?.notice(getString(R.string.mic_error, message))
+                }
+            }
+        })
         try {
             recorder.start()
         } catch (e: Exception) {
             session.close()
+            closeAudio(d)
             Toast.makeText(this, getString(R.string.mic_error, e.message ?: ""), Toast.LENGTH_LONG).show()
             return
         }
@@ -309,6 +329,7 @@ class CiaoService : AccessibilityService() {
         d.phase = Phase.FINISHING
         d.endedAt = SystemClock.elapsedRealtime()
         d.recorder?.stop()
+        runCatching { d.audio.close() }
         d.session.commit()
         bubble?.state = BubbleView.State.FINISHING
         bubble?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -324,9 +345,9 @@ class CiaoService : AccessibilityService() {
         d.session.close()
         val live = d.final
         if (live != null && !timedOut) return deliver(d, live)
-        val pcm = synchronized(d.audio) { d.audio.toByteArray() }
         Thread {
-            val result = runCatching { FileTranscriber.transcribe(this, prefs, pcm) }
+            // runCatching also catches an OutOfMemoryError from reading a very long recording.
+            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes()) }
             main.post {
                 if (dictation !== d) return@post
                 result.fold(onSuccess = { deliver(d, it) }, onFailure = { fail(d, it.message ?: getString(R.string.error_openai)) })
@@ -336,7 +357,7 @@ class CiaoService : AccessibilityService() {
 
     private fun deliver(d: Dictation, raw: String) {
         var text = raw.trim()
-        if (!d.pushToTalk && prefs.stopPhrase) text = VoiceCommands.stripStopPhrase(text)
+        if (d.stoppedByPhrase) text = VoiceCommands.stripStopPhrase(text)
         if (prefs.formatText && text.isNotEmpty()) {
             // Pauses are offsets in the live deltas; the final text has the same words, so shift them over.
             val live = d.liveText.toString()
@@ -376,6 +397,7 @@ class CiaoService : AccessibilityService() {
     private fun finish(delayMs: Long) {
         val d = dictation
         dictation = null
+        d?.let { closeAudio(it) }
         bubble?.state = BubbleView.State.IDLE
         main.removeCallbacks(hideCardLater)
         main.postDelayed(hideCardLater, delayMs)
@@ -387,10 +409,16 @@ class CiaoService : AccessibilityService() {
         val d = dictation ?: return
         d.recorder?.stop()
         d.session.close()
+        closeAudio(d)
         dictation = null
         bubble?.state = BubbleView.State.IDLE
         hideCard()
         refreshBubble()
+    }
+
+    private fun closeAudio(d: Dictation) {
+        runCatching { d.audio.close() }
+        d.audioFile.delete()
     }
 
     private fun openApp(message: Int) {

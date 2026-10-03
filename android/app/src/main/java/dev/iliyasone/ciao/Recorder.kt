@@ -8,9 +8,10 @@ import kotlin.math.abs
 
 /**
  * Microphone → 24 kHz PCM16 mono in 40 ms chunks, the one format used end to end. [onChunk] runs on
- * the recording thread with each chunk and its mean absolute level (0..32768).
+ * the recording thread with each chunk and its mean absolute level (0..32768); [onError] runs there
+ * once if the microphone stops delivering (audio server restarted, device taken away).
  */
-class Recorder(private val onChunk: (pcm: ByteArray, level: Double) -> Unit) {
+class Recorder(private val onChunk: (pcm: ByteArray, level: Double) -> Unit, private val onError: (String) -> Unit) {
     private var record: AudioRecord? = null
     private var thread: Thread? = null
 
@@ -42,12 +43,18 @@ class Recorder(private val onChunk: (pcm: ByteArray, level: Double) -> Unit) {
             while (running) {
                 val buf = ByteArray(CHUNK_BYTES)
                 var n = 0
+                var error = 0
                 while (n < buf.size && running) {
                     val got = r.read(buf, n, buf.size - n)
+                    if (got < 0) error = got
                     if (got <= 0) break
                     n += got
                 }
                 if (n > 0) onChunk(if (n == buf.size) buf else buf.copyOf(n), level(buf, 0, n))
+                if (error != 0 && running) {
+                    running = false
+                    onError("AudioRecord error $error")
+                }
                 if (n == 0 && running) Thread.sleep(5)
             }
         }, "ciao-mic").apply { start() }
