@@ -166,19 +166,20 @@ we can see how many people use it. Two events:
   is set and the wake word and paragraph layout are on.
 - `dictation`, once per dictation kept in the history:
   - how it ended: `outcome` (pasted, clipboard, empty, failed, cancelled) and
-    `transcribed_by` (`live`, or `file` when the live transcript failed and the saved
-    audio was sent instead);
+    `transcribed_by` (`live`; `file` when the live transcript failed and the saved
+    audio was sent instead; `none` when nothing was transcribed, as on Esc);
   - how it was driven: `trigger` (the key or button that started it, such as
     `RControlKey` or `MButton`, or `wake_word`), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
-  - time and money: `duration_s`, `voice_onset_ms`, `first_text_ms`,
-    `final_after_release_ms` and `cost_usd`;
+  - time and money: `duration_s`, `voice_onset_ms` (not for wake-word starts, whose
+    audio begins with speech), `first_text_ms`, `final_after_release_ms` and `cost_usd`;
   - where the text went: `target_app`, the process name of the window it was meant
     for (such as `WindowsTerminal` or `T3 Code`). When the text could not be pasted,
-    `paste_miss` says why (`focus-changed`, `no-target`, `auto-paste-off`). On
-    `focus-changed` there is also `switched_to_app` (the process in front instead),
-    plus `target_closed` or `target_on_other_desktop` when the window was closed or
-    you switched to another virtual desktop.
+    `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`, or
+    `no-helper` / `timeout` / `unknown` when the input helper failed. On
+    `focus-changed` there are also `switched_to_app` (the process in front instead),
+    `target_closed`, and `target_on_other_desktop` (true when you switched to another
+    virtual desktop; absent when Windows can't tell).
 
 Each event carries a random install id from `%APPDATA%\Ciao\telemetry-id`. It is
 not derived from your machine or accounts. No text, audio, window titles, prompts,

@@ -45,7 +45,7 @@ export interface DictationReport {
   cost_usd: number;
   /** Process name of the window it was meant for, e.g. "WindowsTerminal". */
   target_app?: string;
-  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", "no-helper". */
+  /** Why it was not pasted: "focus-changed", "no-target", "auto-paste-off", or "no-helper" / "timeout" / "unknown" (helper failed). */
   paste_miss?: string;
   /** focus-changed: the app in front instead, whether the target window was closed or left on another desktop. */
   switched_to_app?: string;
@@ -447,7 +447,8 @@ export class DictationController {
       hands_free: a.handsFree ?? this.handsFree,
       // A partial live transcript is kept even when the saved file had to be transcribed instead.
       transcribed_by: entry.transcripts.some((x) => x.source === "retry-file") ? "file" : entry.transcripts.length ? "live" : "none",
-      voice_onset_ms: t?.voiceOnsetMs,
+      // A wake-word start begins with the audio since the word, so its onset is ~0 and means nothing.
+      voice_onset_ms: a.wakeStarted ? undefined : t?.voiceOnsetMs,
       first_text_ms: t?.firstTextMs,
       final_after_release_ms: t?.finalAfterReleaseMs,
       cost_usd: Math.round(entry.transcripts.reduce((sum, x) => sum + x.costUsd, 0) * 10_000) / 10_000,
