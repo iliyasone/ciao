@@ -1,5 +1,6 @@
-# Typecheck and build the Windows installer, the macOS disk images (with a smoke test), the Linux
-# AppImage and .deb, and the Android APK on every PR, so a release tag never meets a broken build.
+# Typecheck and build the Windows installer, the macOS disk images and the Linux AppImage and .deb
+# (both with a smoke test), and the Android APK on every PR, so a release tag never meets a broken
+# build.
 name: CI
 
 on:
@@ -24,6 +25,8 @@ jobs:
       - run: npm run build:native
       - run: npm run build:kws
       - run: npm run dist:win:installer
+      - run: test -f release/win-unpacked/resources/kws/model/tokens.txt
+        shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: Ciao-Setup
@@ -42,6 +45,31 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:kws:linux
       - run: npm run dist:linux
+      # On a Wayland desktop (headless weston with XWayland) the app must restart itself on X11:
+      # an X11 GPU process given Wayland windows crashes. The wake word and the input helper ship.
+      - name: The app starts on X11 under Wayland
+        run: |
+          test -f release/linux-unpacked/resources/kws/model/tokens.txt
+          test -d release/linux-unpacked/resources/kws/koffi
+          sudo apt-get update -q && sudo apt-get install -yq weston xwayland libfuse2t64
+          export XDG_RUNTIME_DIR=$(mktemp -d)
+          weston --backend=headless --xwayland --socket=wl-ci > weston.log 2>&1 &
+          for i in $(seq 30); do grep -q "xserver listening" weston.log && break; sleep 1; done
+          export WAYLAND_DISPLAY=wl-ci XDG_SESSION_TYPE=wayland
+          export DISPLAY=$(sed -n 's/.*xserver listening on display \(:[0-9]*\).*/\1/p' weston.log)
+          test -n "$DISPLAY"
+          chmod +x release/Ciao-*.AppImage
+          # Returns once the app has restarted itself; without the restart it runs on and times out.
+          timeout 30 release/Ciao-*.AppImage --no-sandbox > ciao.out 2>&1
+          sleep 20
+          cat ciao.out
+          ps -eo args | grep -qE '^/tmp/\.mount_Ciao[^ ]*/ciao --ozone-platform=x11'
+          test "$(mount | grep -c Ciao)" = 1
+          log="$HOME/.config/Ciao/ciao.log"
+          cat "$log"
+          grep -q "started; history" "$log"
+          grep -q '"type":"ready"' "$log"
+          if grep -q "XGetWindowAttributes failed" ciao.out; then exit 1; fi
       - uses: actions/upload-artifact@v4
         with:
           name: Ciao-Linux

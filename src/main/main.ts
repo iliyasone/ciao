@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,12 +18,79 @@ import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
 
-// A second launch only forwards its arguments to the running instance (see "second-instance").
-if (!app.requestSingleInstanceLock()) app.exit(0);
-
 // Run as an X11 app on Linux, through XWayland on a Wayland desktop: only X11 lets the card sit at
-// the bottom of the screen above everything, and lets Ciao grab Esc during a dictation.
-if (process.platform === "linux") app.commandLine.appendSwitch("ozone-platform", "x11");
+// the bottom of the screen above everything, and lets Ciao grab Esc during a dictation. Electron
+// picks Wayland before this file runs (and writes it into --ozone-platform); switching here would
+// reach only the child processes (the GPU process then crashes on Wayland window handles), so start
+// over with the flag. Not when the user chose a platform themselves, or there's no XWayland.
+//
+// Through the AppImage itself, if this is one: its copy unpacked for this run goes away when this
+// process exits. APPIMAGE alone may be inherited from another AppImage app that started us.
+const { APPIMAGE, APPDIR } = process.env;
+const inAppImage = !!APPIMAGE && !!APPDIR && process.execPath.startsWith(`${APPDIR}/`);
+const x11Target = inAppImage ? APPIMAGE : process.execPath;
+const relaunchOnX11 =
+  process.platform === "linux" &&
+  app.commandLine.getSwitchValue("ozone-platform") === "wayland" &&
+  !process.argv.some((a) => a === "--ozone-platform" || a.startsWith("--ozone-platform=")) &&
+  !!process.env.DISPLAY &&
+  isExecutable(x11Target); // a spawn error would only arrive after this process is gone
+if (relaunchOnX11) {
+  if (inAppImage) closeAppImageFds(APPIMAGE, APPDIR);
+  // Started with --appimage-extract-and-run (no FUSE here, maybe): the runtime took the flag out of
+  // our arguments, so ask for the same through the environment.
+  const extracted = inAppImage && path.basename(APPDIR).startsWith("appimage_extracted_");
+  const env = extracted ? { ...process.env, APPIMAGE_EXTRACT_AND_RUN: "1" } : process.env;
+  spawn(x11Target, ["--ozone-platform=x11", ...process.argv.slice(1)], { stdio: "inherit", env }).unref();
+  app.exit(0);
+}
+// A second launch only forwards its arguments to the running instance (see "second-instance").
+else if (!app.requestSingleInstanceLock()) app.exit(0);
+
+function isExecutable(file: string): boolean {
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keep the copy started next from inheriting what ties this process to its AppImage mount: that
+ * would keep the mount and its FUSE process alive for the whole session. Files inside the mount
+ * are closed. The pipe the AppImage runtime waits on to unmount must stay open until this process
+ * exits (its code runs from the mount), so it is reopened close-on-exec instead.
+ */
+function closeAppImageFds(appImage: string, appDir: string): void {
+  // The runtime serves the mount from the image: it has both open (its exe may be a launcher).
+  const runtimePipes = new Set<string>();
+  for (const pid of fs.readdirSync("/proc")) {
+    try {
+      const files = fs.readdirSync(`/proc/${pid}/fd`).map((fd) => fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      if (!files.includes("/dev/fuse") || !files.includes(appImage)) continue;
+      for (const f of files) if (f.startsWith("pipe:")) runtimePipes.add(f);
+    } catch {
+      // Not a process, gone, or not ours.
+    }
+  }
+  for (const fd of fs.readdirSync("/proc/self/fd")) {
+    if (Number(fd) <= 2) continue; // stdio is passed on on purpose
+    try {
+      const file = fs.readlinkSync(`/proc/self/fd/${fd}`);
+      if (file.startsWith("pipe:") && runtimePipes.has(file)) {
+        const flags = parseInt(/flags:\s*(\d+)/.exec(fs.readFileSync(`/proc/self/fdinfo/${fd}`, "utf8"))?.[1] ?? "0", 8);
+        const access = (flags & 3) === fs.constants.O_WRONLY ? fs.constants.O_WRONLY : fs.constants.O_RDONLY;
+        fs.openSync(`/proc/self/fd/${fd}`, access | fs.constants.O_NONBLOCK); // libuv opens close-on-exec
+        fs.closeSync(Number(fd));
+      } else if (file === appDir || file.startsWith(`${appDir}/`)) {
+        fs.closeSync(Number(fd));
+      }
+    } catch {
+      // Gone already (the directory listing's own descriptor).
+    }
+  }
+}
 
 // Mirror console output into userData/ciao.log — the only way to see what happened on someone's machine.
 {
