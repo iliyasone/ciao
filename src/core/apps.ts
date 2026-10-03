@@ -65,5 +65,5 @@ const APPS: Record<string, string> = {
 /** "WindowsTerminal" → "terminal", "Code" → "vscode", an unlisted program → "other". */
 export function appLabel(process: string): string {
   const name = process.trim().toLowerCase().replace(/\.exe$/, "").replace(/^t3 code \(.*\)$/, "t3 code");
-  return Object.hasOwn(APPS, name) ? APPS[name] : "other";
+  return (Object.hasOwn(APPS, name) && APPS[name]) || "other";
 }
