@@ -41,7 +41,6 @@
     <string name="copied">Скопировано, вставьте куда нужно</string>
     <string name="nothing_heard">Ничего не услышал</string>
     <string name="failed">Не распознано: %1$s</string>
-    <string name="failed_copied_live">Не распознано (%1$s). Живой текст скопирован</string>
 
     <string name="error_cannot_reach">Нет связи с OpenAI</string>
     <string name="error_bad_key">OpenAI не принял ключ</string>

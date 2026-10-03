@@ -62,6 +62,7 @@ class CiaoService : AccessibilityService() {
     }
 
     private val refresh = Runnable { refreshBubble() }
+    private val hideCardLater = Runnable { if (dictation == null) hideCard() }
     private val closePool = Runnable { pool.close() }
 
     override fun onServiceConnected() {
@@ -139,6 +140,8 @@ class CiaoService : AccessibilityService() {
     private fun hideBubble() {
         bubble?.let { runCatching { wm.removeView(it) } }
         bubble = null
+        // A drag cut short by the keyboard closing never gets its ACTION_UP.
+        dragging = false
         // Keep the warm connection a little, in case the keyboard comes right back.
         main.removeCallbacks(closePool)
         if (::pool.isInitialized) main.postDelayed(closePool, 120_000)
@@ -207,6 +210,7 @@ class CiaoService : AccessibilityService() {
     // ── Card ─────────────────────────────────────────────────────────────
 
     private fun showCard(): CardView {
+        main.removeCallbacks(hideCardLater)
         card?.let { return it }
         val c = CardView(this, onCancel = { cancel() }, onDone = { stop() })
         val host = FrameLayout(this).apply {
@@ -360,10 +364,11 @@ class CiaoService : AccessibilityService() {
         }
     }
 
+    /** The file model failed too: deliver what the live model managed (as the desktop does), if anything. */
     private fun fail(d: Dictation, message: String) {
-        val text = d.liveText.toString().trim()
-        if (text.isNotEmpty()) TextInserter.copy(this, text)
-        card?.setPhase(CardView.Phase.FAILED, if (text.isNotEmpty()) getString(R.string.failed_copied_live, message) else getString(R.string.failed, message))
+        val live = d.liveText.toString()
+        if (live.isNotBlank()) return deliver(d, live)
+        card?.setPhase(CardView.Phase.FAILED, getString(R.string.failed, message))
         finish(6000)
     }
 
@@ -372,8 +377,8 @@ class CiaoService : AccessibilityService() {
         val d = dictation
         dictation = null
         bubble?.state = BubbleView.State.IDLE
-        val c = card
-        main.postDelayed({ if (card === c && dictation == null) hideCard() }, delayMs)
+        main.removeCallbacks(hideCardLater)
+        main.postDelayed(hideCardLater, delayMs)
         d?.session?.close()
         refreshBubble()
     }

@@ -43,7 +43,6 @@
     <string name="copied">Copied. Paste it where you need it</string>
     <string name="nothing_heard">Nothing heard</string>
     <string name="failed">Not transcribed: %1$s</string>
-    <string name="failed_copied_live">Not transcribed (%1$s). The live text is copied</string>
 
     <string name="error_cannot_reach">Cannot reach OpenAI</string>
     <string name="error_bad_key">OpenAI rejected the API key</string>

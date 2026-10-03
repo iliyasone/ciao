@@ -7,7 +7,10 @@ plugins {
 
 // One version for the whole product: the desktop app's package.json.
 val version: String = Regex("\"version\":\\s*\"([^\"]+)\"").find(rootDir.resolve("../package.json").readText())!!.groupValues[1]
-val versionParts = version.split(".").map { it.toInt() }
+// versionCode = MAJOR*10000 + MINOR*100 + PATCH, so each part must stay below 100.
+val versionParts = Regex("(\\d+)\\.(\\d+)\\.(\\d+)").matchEntire(version)?.groupValues?.drop(1)?.map { it.toInt() }
+    ?.takeIf { parts -> parts.all { it < 100 } }
+    ?: error("package.json version $version must be X.Y.Z with each part below 100 for the Android versionCode")
 
 // Release signing comes from the environment (CI secrets) or android/keystore.properties; without
 // either, release builds are signed with the debug key, which is fine for trying a build locally.

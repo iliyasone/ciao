@@ -4,13 +4,21 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Puts the transcript into a text field through the accessibility node of that field. */
 object TextInserter {
     /**
      * Inserts [text] at the cursor of [node] (replacing the selection), with a space before it when
-     * it would otherwise stick to the previous word. Fields that ignore ACTION_SET_TEXT get it pasted.
+     * it would otherwise stick to the previous word.
+     *
+     * A field with text in it gets a paste: ACTION_SET_TEXT replaces the whole content with plain
+     * text, which would drop formatting, mentions and the app's undo. An empty field, or one that
+     * refuses the paste, gets ACTION_SET_TEXT. Either action returning true counts as done: Chrome
+     * and WebViews update their accessibility tree later, so reading the text back would look like
+     * a miss and insert twice.
      */
     fun insert(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
         if (!node.refresh() || !node.isEditable) return false
@@ -24,27 +32,33 @@ object TextInserter {
         if (start > end) start = end.also { end = start }
         val before = current.substring(0, start)
         val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + text
-        val updated = before + piece + current.substring(end)
 
+        if (current.isNotEmpty() && paste(context, node, piece)) return true
+
+        val updated = before + piece + current.substring(end)
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated) }
-        if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
-            node.refresh()
-            val now = node.text?.toString().orEmpty()
-            if (now == updated || now.contains(text)) {
-                val caret = before.length + piece.length
-                node.performAction(
-                    AccessibilityNodeInfo.ACTION_SET_SELECTION,
-                    Bundle().apply {
-                        putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, caret)
-                        putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, caret)
-                    },
-                )
-                return true
-            }
+        if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+            return current.isEmpty() && paste(context, node, piece)
         }
-        // Rich editors and some web fields ignore SET_TEXT but accept a paste.
-        copy(context, piece)
-        return node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        val caret = before.length + piece.length
+        node.performAction(
+            AccessibilityNodeInfo.ACTION_SET_SELECTION,
+            Bundle().apply {
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, caret)
+                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, caret)
+            },
+        )
+        return true
+    }
+
+    /** Pastes [text], then puts back what was on the clipboard if Android let us read it. */
+    private fun paste(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        val previous = runCatching { clipboard.primaryClip }.getOrNull()
+        clipboard.setPrimaryClip(ClipData.newPlainText("Ciao", text))
+        val pasted = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        if (pasted && previous != null) Handler(Looper.getMainLooper()).postDelayed({ clipboard.setPrimaryClip(previous) }, 500)
+        return pasted
     }
 
     fun copy(context: Context, text: String) {

@@ -7,8 +7,10 @@ class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("ciao", Context.MODE_PRIVATE)
 
     var apiKey: String
-        get() = sp.getString("apiKey", "")!!.trim()
-        set(v) = sp.edit().putString("apiKey", v.trim()).apply()
+        // Only printable ASCII: a stray zero-width space or line break from a copy would make every
+        // request header invalid (OkHttp throws on it).
+        get() = sp.getString("apiKey", "")!!.filter { it in '!'..'~' }
+        set(v) = sp.edit().putString("apiKey", v).apply()
 
     val liveModel: String get() = "gpt-live-transcribe"
     val fileModel: String get() = "gpt-transcribe"
