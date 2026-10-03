@@ -83,6 +83,8 @@ interface Active {
   miss?: PasteMiss;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
+  /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
+  captureEnded?: boolean;
   voiceOnsetAt?: number;
   firstTextAt?: number;
   lastDeltaAt?: number;
@@ -161,7 +163,13 @@ export class DictationController {
 
   onCaptureStopped(seq: number): void {
     const a = this.active;
-    if (!a || a.seq !== seq || a.phase !== "finishing") return;
+    if (a?.seq === seq && a.phase === "finishing") this.captureEnded(a);
+  }
+
+  /** Runs once per dictation, on capture:stopped or on a mic error after release, whichever comes first. */
+  private captureEnded(a: Active): void {
+    if (a.captureEnded) return;
+    a.captureEnded = true;
     a.wav.close();
     a.entry.durationMs = Math.round(a.wav.bytes / 48);
     if (!a.offline) a.session.commit();
@@ -172,8 +180,11 @@ export class DictationController {
     const a = this.active;
     if (!a || a.seq !== seq) return;
     if (a.phase === "finishing") {
-      // A slow mic can fail after the key was already released: finish() owns the entry by now.
+      // A slow mic can fail after the key was already released. If the renderer had not reported
+      // capture:stopped yet, it never will (the failed capture is no longer active there).
+      // An error arriving after finish() has passed its check is not shown.
       a.micError = message;
+      this.captureEnded(a);
       return;
     }
     this.deps.overlay.state({ ...this.baseState(a), phase: "saved", message: `Микрофон: ${message}` });
