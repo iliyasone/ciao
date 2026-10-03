@@ -236,7 +236,7 @@
       <h1>Know you're heard.</h1>
       <p class="lead">
         Ciao is the easiest way to talk to your computer. Your words appear while you are still speaking, so you see
-        what it heard — and fix the one word that flips the meaning before it lands in your prompt.
+        what it heard — and catch the one word that flips the meaning before it lands in your prompt.
       </p>
 
       <div class="stage" aria-hidden="true">
@@ -266,7 +266,7 @@
         </li>
         <li>
           <b>Hold a key, or just say "ciao"</b>
-          <span>Push to talk on Right Ctrl, or start hands-free with your voice.</span>
+          <span>Push to talk on Right Ctrl, or turn on the wake word and start hands-free with your voice.</span>
         </li>
         <li>
           <b>One of the best speech models</b>
@@ -441,6 +441,8 @@
         render(shownAt);
       });
       still.addEventListener("change", () => requestAnimationFrame(frame));
+      // Word colours are inline, so a theme switch needs a redraw when nothing else is animating.
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render(shownAt));
       if (gif) render(FULL);
       else requestAnimationFrame(frame);
     </script>

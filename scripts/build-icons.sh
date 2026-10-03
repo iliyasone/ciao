@@ -2,7 +2,10 @@
 # Renders assets/icon.svg into every icon the app and the site use. Needs rsvg-convert and ImageMagick.
 set -e
 # ImageMagick 7 is "magick"; on Windows a bare "convert" is the system disk tool.
-magick=$(command -v magick || echo convert)
+magick=$(command -v magick || command -v convert || true)
+case "$magick" in
+  "" | */[Ss]ystem32/*) echo "build-icons: ImageMagick is required" >&2; exit 1 ;;
+esac
 cd "$(dirname "$0")/.."
 rsvg-convert -w 512 assets/icon.svg -o assets/icon.png
 rsvg-convert -w 32 assets/icon.svg -o assets/tray.png
