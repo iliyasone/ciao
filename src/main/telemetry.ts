@@ -10,7 +10,7 @@ import { app, net } from "electron";
 // Same approach as T3 Code: PostHog's HTTP batch API, public project key, no SDK.
 
 // A PostHog project key is public by design: it can only send events, not read them.
-const KEY = process.env.CIAO_POSTHOG_KEY ?? "phc_REPLACE_ME";
+const KEY = process.env.CIAO_POSTHOG_KEY ?? "phc_v7UzA6jJYZNZa7e2RPbQJspyqUfQ6vAWmuLJCQ4hr2rV";
 const HOST = process.env.CIAO_POSTHOG_HOST ?? "https://eu.i.posthog.com";
 const FLUSH_MS = 5 * 60_000;
 const MAX_QUEUED = 200;
