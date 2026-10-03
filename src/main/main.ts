@@ -2,13 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from "electron";
-import { DELAYS, type HistoryEntry, type RetryMode, type Settings } from "../core/types";
+import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
+import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
 import { WinInput } from "./winInput";
 
@@ -53,6 +54,10 @@ let dictation: DictationController;
 const wake = new WakeWord();
 let historyWin: BrowserWindow | null = null;
 let tray: Tray | null = null;
+const updater = new Updater((state) => {
+  historyWin?.webContents.send("update:state", state);
+  buildTrayMenu();
+});
 
 function notifyChanged(entry: HistoryEntry): void {
   historyWin?.webContents.send("history:changed", entry);
@@ -108,10 +113,26 @@ function registerPasteLast(previous?: string): void {
   }
 }
 
+function updateMenuItem(state: UpdateState): Electron.MenuItemConstructorOptions[] {
+  switch (state.phase) {
+    case "available":
+      return [{ label: `Обновить до ${state.version}`, click: () => void updater.install() }];
+    case "downloading":
+      return [{ label: `Обновление ${state.version}: ${state.percent}%`, enabled: false }];
+    case "installing":
+      return [{ label: `Устанавливается ${state.version}…`, enabled: false }];
+    default:
+      return [];
+  }
+}
+
 function buildTrayMenu(): void {
   if (!tray) return;
+  const update = updateMenuItem(updater.get());
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      ...update,
+      ...(update.length ? [{ type: "separator" as const }] : []),
       { label: "История и настройки", click: () => openHistory() },
       { label: `Вставить последнее  (${settings.pasteLastHotkey})`, click: () => void dictation.pasteLast() },
       { type: "separator" },
@@ -214,6 +235,13 @@ function registerIpc(): void {
     fs.writeFileSync(path.join(app.getPath("userData"), "openai-key.txt"), key.trim());
     pool.refill();
   });
+
+  ipcMain.handle("update:get", () => updater.get());
+  ipcMain.handle("update:check", () => updater.check());
+  ipcMain.handle("update:install", () => updater.install());
+  ipcMain.handle("update:open-notes", (_e, version: string) =>
+    shell.openExternal(`https://github.com/${REPO.owner}/${REPO.repo}/releases/tag/v${encodeURIComponent(version)}`),
+  );
 }
 
 /** `Ciao.exe --replay=file.wav` (24 kHz mono PCM16) sends a recording through the running app. */
@@ -232,6 +260,7 @@ app.on("window-all-closed", () => {
 });
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  updater.stop();
   input?.stop();
   pool?.close();
 });
@@ -282,6 +311,7 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
+  updater.start();
   void showRecovered(recovered);
   if (!loadApiKey()) openHistory("settings");
 });

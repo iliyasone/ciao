@@ -1,0 +1,35 @@
+# Push a tag vX.Y.Z (matching package.json) to publish a release; installed copies of Ciao find it
+# through electron-updater (src/main/updater.ts) and offer to update.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Tag matches package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:native
+      - run: npm run build:kws
+      - run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

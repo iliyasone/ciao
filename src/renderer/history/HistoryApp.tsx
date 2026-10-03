@@ -5,11 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCost } from "../../core/cost";
 import type { HistoryEntry, RetryMode, Transcript } from "../../core/types";
 import { SettingsPanel } from "./SettingsPanel";
+import { UpdateButton, useUpdateState } from "./update";
 
 type Tab = "history" | "settings";
 
 export function HistoryApp() {
   const [tab, setTab] = useState<Tab>(location.hash === "#settings" ? "settings" : "history");
+  const update = useUpdateState();
   return (
     <div className="flex h-full flex-col">
       <header className="drag flex h-11 shrink-0 items-center gap-5 border-b border-tint/5 pl-4 pr-40">
@@ -28,8 +30,11 @@ export function HistoryApp() {
             </button>
           ))}
         </nav>
+        <div className="ml-auto">
+          <UpdateButton state={update} />
+        </div>
       </header>
-      <main className="min-h-0 flex-1">{tab === "history" ? <History /> : <SettingsPanel />}</main>
+      <main className="min-h-0 flex-1">{tab === "history" ? <History /> : <SettingsPanel updateState={update} />}</main>
     </div>
   );
 }
