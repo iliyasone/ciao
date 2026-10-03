@@ -94,29 +94,54 @@ Idle time costs nothing.
 
 ## Install
 
-There are no prebuilt releases yet, so build it yourself. You need Node.js 22+ and
-the .NET 8 SDK. The build runs on Windows, Linux or macOS and always produces the
-Windows app. Wine is not needed.
+Download `Ciao-Setup-<version>.exe` from the
+[latest release](https://github.com/iliyasone/ciao/releases/latest) and run it. It
+installs for your user only (no admin prompt) into `%LOCALAPPDATA%\Programs\Ciao`
+and starts Ciao. If you already run a copy you built yourself, quit it first
+(tray → *Выход*); otherwise the new one hands over to it and exits.
+
+1. The installer is unsigned, so SmartScreen may warn you: choose *More info → Run
+   anyway*.
+2. Ciao lives in the system tray. On first start the Settings tab opens: paste
+   your API key there.
+3. If nothing is recorded, allow microphone access for desktop apps. It is in
+   Windows Settings → Privacy & security → Microphone.
+
+Ciao starts with Windows by default. The toggle is in Settings.
+
+### Updates
+
+Ciao checks GitHub Releases for a newer version 15 s after it starts and every
+4 hours after that. When there is one, an **Обновить до X** button shows in the
+window's title bar and in the tray menu. Click it: the new version downloads,
+Ciao quits, installs it silently and starts again. Settings, the key and the
+history in `%APPDATA%\Ciao` stay. Nothing is downloaded until you click, and a
+failed check in the background shows nothing.
+
+To check by hand, go to *Настройки → Обновления → Проверить*.
+
+A portable copy (the `release/win-unpacked` folder from `npm run dist:win`) is
+updated the same way. The update installs Ciao into `%LOCALAPPDATA%\Programs\Ciao`,
+and from then on that copy runs and starts with Windows. You can delete the old
+folder. A dev run (`electron .`) never updates.
+
+### Build it yourself
+
+You need Node.js 22+ and the .NET 8 SDK. The build runs on Windows, Linux or macOS
+and always produces the Windows app.
 
 ```sh
 git clone https://github.com/iliyasone/ciao.git
 cd ciao
 npm install
-npm run build:native   # the input helper → build/win-input/Ciao.Input.exe
-npm run build:kws      # the wake-word detector and model (~50 MB) → build/kws
-npm run dist:win       # the app → release/win-unpacked/Ciao.exe
+npm run build:native        # the input helper → build/win-input/Ciao.Input.exe
+npm run build:kws           # the wake-word detector and model (~50 MB) → build/kws
+npm run dist:win            # a portable folder → release/win-unpacked/Ciao.exe
+npm run dist:win:installer  # the installer → release/Ciao-Setup-<version>.exe
 ```
 
-1. Copy the `release/win-unpacked` folder to the Windows machine, anywhere you
-   like.
-2. Start `Ciao.exe`. The exe is unsigned, so SmartScreen may warn you: choose
-   *More info → Run anyway*.
-3. Ciao lives in the system tray. On first start the Settings tab opens: paste
-   your API key there.
-4. If nothing is recorded, allow microphone access for desktop apps. It is in
-   Windows Settings → Privacy & security → Microphone.
-
-Ciao starts with Windows by default. The toggle is in Settings.
+`dist:win` needs nothing else. `dist:win:installer` needs Wine on Linux and macOS
+(NSIS uses it for the uninstaller). On Windows it needs nothing extra.
 
 ### API key
 
@@ -160,6 +185,18 @@ Recordings and transcripts stay on your machine. Audio leaves it only to be
 transcribed by OpenAI.
 
 ## Development
+
+### Releasing
+
+Run `npm version 0.3.0 && git push --follow-tags` on `main`. `npm version` bumps
+`package.json`, commits and tags `v0.3.0`; pushing the tag starts the release.
+
+[`release.yml`](.github/workflows/release.yml) builds the installer on a Windows
+runner and uploads it to a draft GitHub release with `latest.yml`, which is the
+file installed copies check. The draft is published once all files are uploaded.
+The tag must equal `v` + the `package.json` version, or the workflow fails.
+[`ci.yml`](.github/workflows/ci.yml) builds the same installer on every PR and
+attaches it to the run as an artifact.
 
 ### Testing without speaking
 
@@ -205,7 +242,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `dictation.ts` — the hotkey state machine and the pipeline;
   - `history.ts` — storage and crash recovery;
   - `transcribe.ts` — live and file transcription;
-  - `paste.ts` — clipboard-preserving paste.
+  - `paste.ts` — clipboard-preserving paste;
+  - `updater.ts` — updates from GitHub Releases.
 - `src/renderer/` — React 19 + Tailwind 4:
   - `overlay/` — the live card and microphone capture;
   - `history/` — the history and settings window.

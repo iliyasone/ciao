@@ -1,7 +1,7 @@
-import { Check, KeyRound, Monitor, Moon, MousePointerClick, Plus, Sun, X } from "lucide-react";
+import { ArrowDownToLine, Check, KeyRound, Loader2, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
-import { DELAYS, type Settings, type Theme } from "../../core/types";
+import { DELAYS, type Settings, type Theme, type UpdateState } from "../../core/types";
 
 const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "system", label: "Системная", icon: Monitor },
@@ -9,7 +9,7 @@ const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "dark", label: "Тёмная", icon: Moon },
 ];
 
-export function SettingsPanel() {
+export function SettingsPanel({ updateState }: { updateState: UpdateState | null }) {
   const [s, setS] = useState<Settings | null>(null);
   const [hasKey, setHasKey] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -118,6 +118,8 @@ export function SettingsPanel() {
           </Row>
         </Card>
 
+        {updateState && <UpdateCard state={updateState} />}
+
         <Card title="Для разработчика">
           <Toggle
             label="Показывать задержку"
@@ -161,6 +163,60 @@ function ApiKeyCard({ hasKey, onSaved }: { hasKey: boolean; onSaved: () => void 
           >
             Сохранить
           </button>
+        </div>
+      </Row>
+    </Card>
+  );
+}
+
+function updateHint(state: UpdateState): string {
+  switch (state.phase) {
+    case "disabled":
+      return "Это запуск из исходников — обновляй через git.";
+    case "idle":
+      return "Новые версии проверяются сами, раз в несколько часов.";
+    case "checking":
+      return "Проверяю…";
+    case "latest":
+      return `Это последняя версия. Проверено в ${new Date(state.checkedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}.`;
+    case "available":
+      return `Вышла ${state.version}. Скачается и перезапустится само; идущая диктовка не потеряется.`;
+    case "downloading":
+      return `Скачивается ${state.version}: ${state.percent}%`;
+    case "installing":
+      return `Устанавливается ${state.version}, Ciao сейчас перезапустится…`;
+    case "error":
+      return state.message;
+  }
+}
+
+function UpdateCard({ state }: { state: UpdateState }) {
+  const target = state.phase === "available" || state.phase === "downloading" || state.phase === "installing" || state.phase === "error" ? state.version : undefined;
+  const busy = state.phase === "checking" || state.phase === "downloading" || state.phase === "installing";
+  const button = "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors disabled:opacity-40";
+  return (
+    <Card title="Обновления">
+      <Row label={`Версия ${state.current}`} hint={updateHint(state)}>
+        <div className="flex shrink-0 items-center gap-2">
+          {target && (
+            <button onClick={() => void ciao.update.openNotes(target)} className="text-[12.5px] text-muted underline-offset-2 hover:text-fg hover:underline">
+              Что нового
+            </button>
+          )}
+          {busy && <Loader2 className="size-4 animate-spin text-faint" />}
+          {state.phase === "available" || (state.phase === "error" && state.version) ? (
+            <button onClick={() => void ciao.update.install()} className={`${button} bg-accent text-white hover:bg-accent/90`}>
+              <ArrowDownToLine className="size-3.5" />
+              {state.phase === "error" ? "Повторить" : "Обновить"}
+            </button>
+          ) : (
+            state.phase !== "disabled" && (
+              <button disabled={busy} onClick={() => void ciao.update.check()} className={`${button} bg-tint/10 text-fg hover:bg-tint/15`}>
+                <RefreshCw className="size-3.5" />
+                Проверить
+              </button>
+            )
+          )}
         </div>
       </Row>
     </Card>
