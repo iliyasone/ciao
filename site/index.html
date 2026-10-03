@@ -8,7 +8,8 @@
     <link rel="icon" href="icon.png" />
     <meta property="og:title" content="Ciao" />
     <meta property="og:description" content="See what you say while you say it." />
-    <meta property="og:image" content="/icon.png" />
+    <meta property="og:image" content="https://sayciao.vercel.app/icon.png" />
+    <meta property="og:url" content="https://sayciao.vercel.app/" />
     <style>
       :root {
         color-scheme: light dark;
@@ -122,7 +123,7 @@
         padding: 0;
         list-style: none;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
         gap: 28px;
         text-align: left;
         width: 100%;
@@ -238,7 +239,7 @@
         what it heard — and fix the one word that flips the meaning before it lands in your prompt.
       </p>
 
-      <div class="stage">
+      <div class="stage" aria-hidden="true">
         <div class="card" id="card">
           <header>
             <div>
@@ -419,24 +420,29 @@
         clock.style.color = done ? "var(--faint)" : "";
       }
 
-      window.ciaoDemo = { render, LOOP };
+      // FULL: the whole sentence on the card, still recording. Shown when motion is reduced, and
+      // the first frame of the GIFs (what GitHub shows when it doesn't autoplay them).
+      const FULL = DONE - 1;
+      window.ciaoDemo = { render, LOOP, FULL };
       const gif = new URLSearchParams(location.search).has("gif");
       document.body.classList.toggle("gif", gif);
       measure();
-      addEventListener("resize", measure);
 
-      if (gif) {
-        render(LOOP / 2);
-      } else if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        render(DONE - 1);
-      } else {
-        const start = performance.now();
-        const frame = (now) => {
-          render((now - start) % LOOP);
-          requestAnimationFrame(frame);
-        };
+      const still = matchMedia("(prefers-reduced-motion: reduce)");
+      const start = performance.now();
+      let shownAt = FULL;
+      const frame = (now) => {
+        if (still.matches) return render((shownAt = FULL));
+        render((shownAt = (now - start) % LOOP));
         requestAnimationFrame(frame);
-      }
+      };
+      addEventListener("resize", () => {
+        measure();
+        render(shownAt);
+      });
+      still.addEventListener("change", () => requestAnimationFrame(frame));
+      if (gif) render(FULL);
+      else requestAnimationFrame(frame);
     </script>
   </body>
 </html>
