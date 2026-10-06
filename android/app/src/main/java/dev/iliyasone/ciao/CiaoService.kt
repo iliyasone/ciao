@@ -50,7 +50,9 @@ class CiaoService : AccessibilityService() {
     /** The keyboard top as last seen, and since when: the bubble waits for it to stop moving. */
     private var imeTopSeen = -1
     private var imeTopSince = 0L
-    private val motion = Spring(onFrame = { x, y -> moveBubble(x.roundToInt(), y.roundToInt()) }, onEnd = { if (bubble?.alpha == 1f) setBubbleTouchable(true) })
+    private val motion = Spring(onFrame = { x, y -> moveBubble(x.roundToInt(), y.roundToInt().coerceAtMost(glideFloor)) }, onEnd = { if (bubble?.alpha == 1f) setBubbleTouchable(true) })
+    /** The lowest the current glide may go: one coming down stops at its spot instead of bouncing over the keys. */
+    private var glideFloor = Int.MAX_VALUE
     private var dictation: Dictation? = null
 
     /** FAILED: not transcribed; the recording is kept on the card until you retry or dismiss it. */
@@ -173,14 +175,21 @@ class CiaoService : AccessibilityService() {
             return
         }
         if (touching) return
-        // Moving our own window raises another windows-changed event; don't loop on it.
+        // Moving our own window raises another windows-changed event; don't loop on it, and leave a
+        // glide that is already headed there (a throw, which stays catchable) alone.
+        if (motion.running && motion.toX == x.toFloat() && motion.toY == y.toFloat()) return
         if (x != bubbleParams.x || y != bubbleParams.y) {
             // The keyboard changed under it: glide over, letting taps through to the keyboard meanwhile.
             setBubbleTouchable(false)
-            motion.animate(bubbleParams.x.toFloat(), bubbleParams.y.toFloat(), x.toFloat(), y.toFloat())
+            glide(x, y)
         } else if (!motion.running && view.alpha == 1f) {
             setBubbleTouchable(true)
         }
+    }
+
+    private fun glide(x: Int, y: Int, vx: Float = 0f, vy: Float = 0f) {
+        glideFloor = if (bubbleParams.y <= y) y else Int.MAX_VALUE
+        motion.animate(bubbleParams.x.toFloat(), bubbleParams.y.toFloat(), x.toFloat(), y.toFloat(), vx, vy)
     }
 
     private fun moveBubble(x: Int, y: Int) {
@@ -224,6 +233,8 @@ class CiaoService : AccessibilityService() {
         private var startY = 0
         private var held = false
         private var dragging = false
+        /** This touch stopped a gliding bubble: letting go sends it on, it isn't a tap. */
+        private var caught = false
         private var velocity: VelocityTracker? = null
         private val slop = ViewConfiguration.get(this@CiaoService).scaledTouchSlop
         private val hold = Runnable {
@@ -236,6 +247,7 @@ class CiaoService : AccessibilityService() {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     // Caught mid-glide: it stays under the finger.
+                    caught = motion.running
                     motion.cancel()
                     touching = true
                     downX = e.rawX
@@ -247,7 +259,7 @@ class CiaoService : AccessibilityService() {
                     velocity?.recycle()
                     velocity = VelocityTracker.obtain().also { track(it, e) }
                     press(v, PRESS_SCALE)
-                    if (idle) main.postDelayed(hold, HOLD_MS)
+                    if (idle && !caught) main.postDelayed(hold, HOLD_MS)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     velocity?.let { track(it, e) }
@@ -275,12 +287,16 @@ class CiaoService : AccessibilityService() {
                             val vy = tracker?.yVelocity ?: 0f
                             fling(vx, vy)
                         }
+                        // Stopped mid-glide, not a tap: the refresh below sends it on to its spot.
+                        caught -> {}
                         e.actionMasked == MotionEvent.ACTION_CANCEL -> if (held) stop()
                         held -> stop()
                         idle -> start(pushToTalk = false)
                         dictation?.phase == Phase.RECORDING -> stop()
                     }
                     held = false
+                    // Placing it was held back while the finger was down (a keyboard change, a catch).
+                    main.post(refresh)
                     tracker?.recycle()
                 }
             }
@@ -310,7 +326,7 @@ class CiaoService : AccessibilityService() {
             prefs.bubbleLift = (imeTop - restY - size).coerceAtLeast(0)
             val restX = if (prefs.bubbleLeft) 0 else resources.displayMetrics.widthPixels - size
             // Half the throw's speed carries into the glide: enough to feel it, not enough to fly off the screen.
-            motion.animate(bubbleParams.x.toFloat(), bubbleParams.y.toFloat(), restX.toFloat(), restY.toFloat(), vx / 2, vy / 2)
+            glide(restX, restY, vx / 2, vy / 2)
         }
     }
 

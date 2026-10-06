@@ -1,5 +1,6 @@
 package dev.iliyasone.ciao
 
+import android.animation.ValueAnimator
 import android.view.Choreographer
 import kotlin.math.abs
 import kotlin.math.exp
@@ -21,8 +22,10 @@ class Spring(
         private set
     private var vx = 0f
     private var vy = 0f
-    private var toX = 0f
-    private var toY = 0f
+    var toX = 0f
+        private set
+    var toY = 0f
+        private set
     private var lastFrameNanos = 0L
 
     var running = false
@@ -30,6 +33,17 @@ class Spring(
 
     /** Starts from ([fromX], [fromY]) moving at ([velX], [velY]) px/s, or retargets a running spring. */
     fun animate(fromX: Float, fromY: Float, targetX: Float, targetY: Float, velX: Float = 0f, velY: Float = 0f) {
+        // "Remove animations" in the system settings: just go there.
+        if (!ValueAnimator.areAnimatorsEnabled()) {
+            cancel()
+            x = targetX
+            y = targetY
+            toX = targetX
+            toY = targetY
+            onFrame(x, y)
+            onEnd()
+            return
+        }
         if (!running) {
             x = fromX
             y = fromY
