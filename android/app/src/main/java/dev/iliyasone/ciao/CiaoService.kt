@@ -238,6 +238,8 @@ class CiaoService : AccessibilityService() {
         private var velocity: VelocityTracker? = null
         private val slop = ViewConfiguration.get(this@CiaoService).scaledTouchSlop
         private val hold = Runnable {
+            // The keyboard closed under the finger (hiding the bubble): no release will come.
+            if (!touching) return@Runnable
             held = true
             start(pushToTalk = true)
         }
@@ -287,8 +289,8 @@ class CiaoService : AccessibilityService() {
                             val vy = tracker?.yVelocity ?: 0f
                             fling(vx, vy)
                         }
-                        // Stopped mid-glide, not a tap: the refresh below sends it on to its spot.
-                        caught -> {}
+                        // Stopped mid-glide, not a tap: let it carry on, still catchable.
+                        caught -> glide(motion.toX.roundToInt(), motion.toY.roundToInt())
                         e.actionMasked == MotionEvent.ACTION_CANCEL -> if (held) stop()
                         held -> stop()
                         idle -> start(pushToTalk = false)
