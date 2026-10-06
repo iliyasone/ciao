@@ -24,10 +24,22 @@
     <string name="try_hint">Tap here and dictate…</string>
 
     <string name="section_recognition">Recognition</string>
+    <string name="sync_title">Sync with Google</string>
+    <string name="sync_text">Sign in to use the same terms and context on all your devices. They\'re kept in a hidden Ciao folder in your Google Drive; Ciao can\'t see any other file there.</string>
+    <string name="sync_sign_in">Sign in with Google</string>
+    <string name="sync_sign_out">Sign out</string>
+    <string name="sync_signing_in">Signing in…</string>
+    <string name="sync_syncing">%1$s · syncing…</string>
+    <string name="sync_synced">%1$s · synced at %2$s</string>
+    <string name="sync_sign_in_failed">Couldn\'t sign in: %1$s</string>
+    <string name="sync_failed">Couldn\'t sync: %1$s</string>
+    <string name="sync_signed_out">Google no longer gives Ciao access. Sign in again</string>
+    <string name="sync_newer_format">The sync file was written by a newer Ciao. Update the app</string>
+    <string name="sync_no_drive">no access to Drive. Sign in again and tick the box about configuration data in your Google Drive</string>
     <string name="context_title">Context</string>
     <string name="context_text">What you usually talk about. Helps the recognizer with names and terms.</string>
     <string name="terms_title">Terms</string>
-    <string name="terms_text">Words that must be spelled exactly, separated by commas.</string>
+    <string name="terms_text">Words that must be spelled exactly, one per line.</string>
     <string name="format_text">Paragraphs and lists</string>
     <string name="stop_phrase">Say “ciao ciao” to finish</string>
     <string name="show_cost">Show the cost of a dictation</string>

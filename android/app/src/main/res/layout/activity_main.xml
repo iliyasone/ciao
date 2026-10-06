@@ -144,6 +144,23 @@
 
             <TextView
                 style="@style/CardTitle"
+                android:text="@string/sync_title" />
+
+            <TextView
+                android:id="@+id/syncStatus"
+                style="@style/CardText"
+                android:text="@string/sync_text" />
+
+            <Button
+                android:id="@+id/syncButton"
+                style="@style/Action"
+                android:text="@string/sync_sign_in" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Card">
+
+            <TextView
+                style="@style/CardTitle"
                 android:text="@string/context_title" />
 
             <TextView

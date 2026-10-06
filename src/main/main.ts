@@ -2,10 +2,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, systemPreferences, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, session, shell, systemPreferences, Tray } from "electron";
 import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { setLang, t } from "../core/i18n";
+import { arrangeTerms } from "../core/sync";
 import { acceleratorParts } from "../core/triggers";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
@@ -13,6 +14,7 @@ import { HistoryStore, WavWriter } from "./history";
 import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadSettings, saveSettings } from "./settings";
+import { GoogleSync } from "./sync";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
@@ -128,6 +130,7 @@ let pool: SessionPool;
 let input: InputHelper;
 let overlay: OverlayWindow;
 let dictation: DictationController;
+let sync: GoogleSync;
 const wake = new WakeWord();
 const telemetry = new Telemetry(() => Telemetry.allowed() && settings?.telemetry !== false);
 let historyWin: BrowserWindow | null = null;
@@ -171,6 +174,8 @@ function openHistory(tab?: "settings"): void {
   });
   void historyWin.loadFile(path.join(RENDERER, "history.html"), { hash: tab ?? "" });
   historyWin.on("closed", () => (historyWin = null));
+  // Terms edited on another device show up when you come back to the window.
+  historyWin.on("focus", () => sync.syncSoon(0));
 }
 
 function applySettings(next: Settings): void {
@@ -179,6 +184,7 @@ function applySettings(next: Settings): void {
   setLang(next.language);
   nativeTheme.themeSource = next.theme;
   saveSettings(next);
+  sync?.noteLocal(next.keywords, next.prompt);
   setAutostart(next.openAtLogin);
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
@@ -341,6 +347,10 @@ function registerIpc(): void {
     pool.refill();
   });
 
+  ipcMain.handle("sync:get", () => sync.get());
+  ipcMain.handle("sync:sign-in", () => sync.signIn());
+  ipcMain.handle("sync:sign-out", () => sync.signOut());
+
   ipcMain.handle("update:get", () => updater.get());
   ipcMain.handle("update:check", () => updater.check());
   ipcMain.handle("update:install", () => updater.install());
@@ -430,6 +440,17 @@ void app.whenReady().then(() => {
     void systemPreferences.askForMediaAccess("microphone").then((ok) => console.log("microphone access:", ok));
     if (!systemPreferences.isTrustedAccessibilityClient(false)) systemPreferences.isTrustedAccessibilityClient(true);
   }
+
+  sync = new GoogleSync(
+    app.getPath("userData"),
+    settings,
+    (keywords, prompt) => {
+      applySettings({ ...settings, keywords: arrangeTerms(settings.keywords, keywords), prompt });
+      historyWin?.webContents.send("settings:synced", settings);
+    },
+    (status) => historyWin?.webContents.send("sync:status", status),
+  );
+  powerMonitor.on("resume", () => sync.syncSoon(5_000)); // the network needs a moment after sleep
 
   registerIpc();
   const trayPng = path.join(ASSETS, "tray.png");

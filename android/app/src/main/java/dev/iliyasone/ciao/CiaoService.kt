@@ -83,6 +83,7 @@ class CiaoService : AccessibilityService() {
 
     override fun onServiceConnected() {
         prefs = Prefs(this)
+        GoogleSync.load(this)
         pool = SessionPool(this, prefs)
         wm = getSystemService(WindowManager::class.java)
         // Recordings left behind by a crash or a kill mid-dictation.
@@ -152,6 +153,8 @@ class CiaoService : AccessibilityService() {
     private fun showBubble() {
         main.removeCallbacks(closePool)
         pool.refill()
+        // Terms edited on another device, in time for the dictation about to start.
+        GoogleSync.syncIfStale(this)
         val size = dp(BubbleView.SIZE_DP)
         val lift = prefs.bubbleLift.takeIf { it >= 0 } ?: dp(DEFAULT_LIFT_DP)
         val x = if (prefs.bubbleLeft) 0 else resources.displayMetrics.widthPixels - size

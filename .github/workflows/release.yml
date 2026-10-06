@@ -49,6 +49,8 @@ jobs:
       - run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CIAO_GOOGLE_CLIENT_ID: ${{ secrets.CIAO_GOOGLE_CLIENT_ID }}
+          CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
 
   mac:
     needs: draft
@@ -65,6 +67,8 @@ jobs:
       - run: npm run release:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CIAO_GOOGLE_CLIENT_ID: ${{ secrets.CIAO_GOOGLE_CLIENT_ID }}
+          CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
 
   linux:
     needs: draft
@@ -81,6 +85,8 @@ jobs:
       - run: npm run release:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CIAO_GOOGLE_CLIENT_ID: ${{ secrets.CIAO_GOOGLE_CLIENT_ID }}
+          CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
 
   android:
     needs: draft

@@ -205,6 +205,26 @@ const ru = {
     },
   },
 
+  sync: {
+    title: "Синхронизация",
+    account: "Аккаунт Google",
+    signedOutHint:
+      "Войди, чтобы термины и контекст были одни на всех твоих устройствах, включая телефон. Они хранятся в скрытой папке Ciao на твоём Google Диске; другие файлы на Диске Ciao не видит.",
+    syncedAt: (email: string, time: string) => `${email} · синхронизировано в ${time}`,
+    syncing: (email: string) => `${email} · синхронизирую…`,
+    signingIn: "Продолжи в браузере…",
+    signIn: "Войти через Google",
+    signOut: "Выйти",
+    cancel: "Отмена",
+    signInFailed: (message: string) => `Не удалось войти: ${message}`,
+    failed: (message: string) => `Не удалось синхронизировать: ${message}`,
+    signedOut: "Google больше не даёт Ciao доступ — войди снова",
+    newerFormat: "Файл синхронизации записан более новой версией Ciao — обнови приложение",
+    timedOut: "вход не завершился за 5 минут",
+    noDrive: "нет доступа к Диску. Войди ещё раз и отметь на странице Google галочку про данные конфигурации на Google Диске",
+    browserDone: "Можно вернуться в Ciao и закрыть эту вкладку.",
+  },
+
   /** Key and mouse-button names (see core/triggers.ts); keys missing here are shown as they are. On a Mac,
    * Alt and Win in trigger names are Option and Command (see native/mac-input). */
   keyNames: {
@@ -434,6 +454,26 @@ const en: Strings = {
       granted: "Granted",
       open: "Open settings",
     },
+  },
+
+  sync: {
+    title: "Sync",
+    account: "Google account",
+    signedOutHint:
+      "Sign in to use the same terms and context on all your devices, the phone included. They're kept in a hidden Ciao folder in your Google Drive; Ciao can't see any other file there.",
+    syncedAt: (email, time) => `${email} · synced at ${time}`,
+    syncing: (email) => `${email} · syncing…`,
+    signingIn: "Continue in the browser…",
+    signIn: "Sign in with Google",
+    signOut: "Sign out",
+    cancel: "Cancel",
+    signInFailed: (message) => `Couldn't sign in: ${message}`,
+    failed: (message) => `Couldn't sync: ${message}`,
+    signedOut: "Google no longer gives Ciao access — sign in again",
+    newerFormat: "The sync file was written by a newer Ciao — update the app",
+    timedOut: "the sign-in didn't finish within 5 minutes",
+    noDrive: "no access to Drive. Sign in again and tick the box about configuration data in your Google Drive on Google's page",
+    browserDone: "You can go back to Ciao and close this tab.",
   },
 
   keyNames: {

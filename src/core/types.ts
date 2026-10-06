@@ -118,3 +118,18 @@ export type UpdateState =
   /** Downloaded; the app quits, the installer runs silently and starts the new version. */
   | { phase: "installing"; current: string; version: string }
   | { phase: "error"; current: string; message: string; version?: string };
+
+/** Syncing terms and the prompt through Google Drive (src/main/sync.ts). */
+export interface SyncStatus {
+  /** False in a build without Google's OAuth client: the Sync card is hidden. */
+  available: boolean;
+  /** The signed-in Google account; null when signed out. */
+  email: string | null;
+  /** Waiting for the browser sign-in to finish. */
+  signingIn: boolean;
+  syncing: boolean;
+  /** Epoch ms of the last sync that went through. */
+  syncedAt?: number;
+  /** Why the last sign-in or sync failed. */
+  error?: string;
+}

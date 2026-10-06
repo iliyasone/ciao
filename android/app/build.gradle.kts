@@ -68,5 +68,9 @@ base {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Google sign-in for syncing terms (GoogleSync.kt).
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     testImplementation("junit:junit:4.13.2")
+    // The real org.json for unit tests (Android's is a stub there).
+    testImplementation("org.json:json:20240303")
 }

@@ -25,6 +25,10 @@ jobs:
       - run: npm run build:native
       - run: npm run build:kws
       - run: npm run dist:win:installer
+        # Google sign-in for sync, so a PR build can be tried with it (src/main/sync.ts).
+        env:
+          CIAO_GOOGLE_CLIENT_ID: ${{ secrets.CIAO_GOOGLE_CLIENT_ID }}
+          CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
       - run: test -f release/win-unpacked/resources/kws/model/tokens.txt
         shell: bash
       - uses: actions/upload-artifact@v4
@@ -45,6 +49,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:kws:linux
       - run: npm run dist:linux
+        # Google sign-in for sync, so a PR build can be tried with it (src/main/sync.ts).
+        env:
+          CIAO_GOOGLE_CLIENT_ID: ${{ secrets.CIAO_GOOGLE_CLIENT_ID }}
+          CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
       # On a Wayland desktop (headless weston with XWayland) the app must restart itself on X11:
       # an X11 GPU process given Wayland windows crashes. The wake word and the input helper ship.
       - name: The app starts on X11 under Wayland
@@ -103,6 +111,8 @@ jobs:
       - run: npm run dist:mac
         env:
           CSC_FOR_PULL_REQUEST: "true"
+          CIAO_GOOGLE_CLIENT_ID: ${{ secrets.CIAO_GOOGLE_CLIENT_ID }}
+          CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
       - name: The app is signed and starts
         run: |
           for app in release/mac*/Ciao.app; do codesign --verify --deep --strict --verbose=2 "$app"; done
