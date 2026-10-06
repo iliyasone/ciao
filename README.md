@@ -103,8 +103,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     the terms (*Settings → Recognition*), so the Languages and Context fields are
     hidden with it, and so is the delay level.
   - A Gemini live connection lasts about 10 minutes from when it opens, and Ciao
-    opens it up to 2.5 minutes ahead, so a dictation longer than about 7.5
-    minutes may be transcribed from the saved audio when you stop instead.
+    opens it up to 2 minutes ahead, so a dictation longer than about 8 minutes
+    may be transcribed from the saved audio when you stop instead.
 
 ## Requirements
 

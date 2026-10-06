@@ -44,6 +44,7 @@ export class GeminiLiveSession implements LiveSession {
   private completed = false;
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /** Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer". */
   constructor(factory: SocketFactory) {
     this.socket = factory(GEMINI_LIVE_URL);
     this.socket.onopen = () => {
