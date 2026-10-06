@@ -31,14 +31,8 @@ class MainActivity : Activity() {
             prefs.apiKey = it
             updateStatus()
         }
-        bindText(R.id.prompt, prefs.prompt) {
-            prefs.prompt = it
-            GoogleSync.noteLocal(this)
-        }
-        bindText(R.id.keywords, prefs.keywords.joinToString("\n")) { s ->
-            prefs.keywords = s.split("\n")
-            GoogleSync.noteLocal(this)
-        }
+        bindText(R.id.prompt, prefs.prompt) { s -> GoogleSync.edit(this) { it.prompt = s } }
+        bindText(R.id.keywords, prefs.keywords.joinToString("\n")) { s -> GoogleSync.edit(this) { it.keywords = s.split("\n") } }
         bindSwitch(R.id.formatText, prefs.formatText) { prefs.formatText = it }
         bindSwitch(R.id.stopPhrase, prefs.stopPhrase) { prefs.stopPhrase = it }
         bindSwitch(R.id.showCost, prefs.showCost) { prefs.showCost = it }
@@ -62,11 +56,9 @@ class MainActivity : Activity() {
         super.onResume()
         updateStatus()
         GoogleSync.listener = { showSync(it) }
-        // Terms merged from another device replace what the fields show.
-        GoogleSync.applied = {
-            findViewById<EditText>(R.id.prompt).setText(prefs.prompt)
-            findViewById<EditText>(R.id.keywords).setText(prefs.keywords.joinToString("\n"))
-        }
+        // Terms merged from another device (perhaps while this screen was away) replace what the fields show.
+        showSynced()
+        GoogleSync.applied = { showSynced() }
         showSync(GoogleSync.status)
         GoogleSync.syncNow(this)
     }
@@ -81,6 +73,14 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == GoogleSync.REQUEST_CODE) GoogleSync.onActivityResult(this, resultCode, data)
+    }
+
+    /** Only when they differ: setting a field's text moves its cursor to the start. */
+    private fun showSynced() {
+        val prompt = findViewById<EditText>(R.id.prompt)
+        if (prompt.text.toString() != prefs.prompt) prompt.setText(prefs.prompt)
+        val keywords = findViewById<EditText>(R.id.keywords)
+        if (Sync.normalizeTerms(keywords.text.split("\n")) != Sync.normalizeTerms(prefs.keywords)) keywords.setText(prefs.keywords.joinToString("\n"))
     }
 
     private fun showSync(s: GoogleSync.Status) {

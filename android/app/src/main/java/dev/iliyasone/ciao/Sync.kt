@@ -8,7 +8,10 @@ import org.json.JSONObject
 // each term, so an added term survives a save elsewhere and a removed one doesn't come back. The
 // prompt is one value: the later edit wins.
 
-/** [at]: epoch ms of the last add or remove; 0 for what a device had before it started syncing. */
+/**
+ * [at]: epoch ms of the last add or remove. What a device had before it started syncing: 0 for the
+ * user's own choices, -1 for an untouched default ([Sync.initialState]), which any real choice beats.
+ */
 data class TermChange(val term: String, val at: Long, val removed: Boolean = false)
 
 data class Stamped(val value: String, val at: Long)
@@ -20,9 +23,22 @@ object Sync {
     /** Trimmed, without empty lines and repeats. */
     fun normalizeTerms(list: List<String>): List<String> = list.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
-    /** What a device had before it synced: older than any edit made since. */
-    fun initialState(keywords: List<String>, prompt: String) =
-        SyncState(normalizeTerms(keywords).map { TermChange(it, 0) }, Stamped(prompt, 0))
+    /**
+     * What a device had before it synced: older than any edit made since. [defaultKeywords] and
+     * [defaultPrompt] are this platform's defaults: kept as they are, they lose to anything another
+     * device chose; a default term the user deleted stays deleted. Defaults differ by platform, so
+     * a default term missing here is not a deletion.
+     */
+    fun initialState(keywords: List<String>, prompt: String, defaultKeywords: List<String>, defaultPrompt: String): SyncState {
+        val terms = normalizeTerms(keywords)
+        val own = terms.toSet()
+        val isDefault = defaultKeywords.toSet()
+        return SyncState(
+            terms.map { TermChange(it, if (it in isDefault) -1 else 0) } +
+                normalizeTerms(defaultKeywords).filter { it !in own }.map { TermChange(it, 0, removed = true) },
+            Stamped(prompt, if (prompt == defaultPrompt) -1 else 0),
+        )
+    }
 
     /** The terms to use: the ones not removed, in order. */
     fun termsOf(state: SyncState): List<String> = state.terms.filter { !it.removed }.map { it.term }

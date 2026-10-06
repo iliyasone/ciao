@@ -23,30 +23,38 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   const [wakeAvailable, setWakeAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** What a pending save sends: the latest settings, including terms merged by a sync meanwhile. */
+  const latest = useRef<Settings | null>(null);
   const tr = useStrings().settings;
 
   useEffect(() => {
-    void ciao.settings.get().then(setS);
+    void ciao.settings.get().then((v) => {
+      latest.current = v;
+      setS(v);
+    });
     void ciao.settings.hasApiKey().then(setHasKey);
     void ciao.settings.wakeAvailable().then(setWakeAvailable);
     // Terms and context merged from another device replace what's shown here.
-    return ciao.settings.onSynced((synced) => setS((prev) => prev && { ...prev, keywords: synced.keywords, prompt: synced.prompt }));
+    return ciao.settings.onSynced((synced) => {
+      if (!latest.current) return;
+      latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt };
+      setS(latest.current);
+    });
   }, []);
 
   const update = (patch: Partial<Settings>, debounce = false) => {
-    setS((prev) => {
-      const next = { ...prev!, ...patch };
-      clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(
-        async () => {
-          await ciao.settings.set(next);
-          setSaved(true);
-          setTimeout(() => setSaved(false), 1200);
-        },
-        debounce ? 500 : 0,
-      );
-      return next;
-    });
+    if (!latest.current) return;
+    latest.current = { ...latest.current, ...patch };
+    setS(latest.current);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(
+      async () => {
+        await ciao.settings.set(latest.current!);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1200);
+      },
+      debounce ? 500 : 0,
+    );
   };
 
   if (!s) return null;

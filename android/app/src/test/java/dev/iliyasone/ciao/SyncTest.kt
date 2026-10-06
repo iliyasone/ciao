@@ -11,7 +11,7 @@ import org.junit.Test
 class SyncTest {
     private fun state(json: String) = Sync.parse(json)!!
 
-    private val edited = Sync.recordEdit(Sync.initialState(listOf("A", "B", " A "), "p"), listOf("B", "C", " C ", ""), "p", 100)!!
+    private val edited = Sync.recordEdit(Sync.initialState(listOf("A", "B", " A "), "p", listOf(), ""), listOf("B", "C", " C ", ""), "p", 100)!!
     private val remote = SyncState(
         listOf(TermChange("D", 10), TermChange("A", 50), TermChange("B", 200, removed = true)),
         Stamped("q", 150),
@@ -21,7 +21,7 @@ class SyncTest {
     fun recordEdit() {
         assertEquals(
             state("""{"version":1,"terms":[{"term":"A","at":0},{"term":"B","at":0}],"prompt":{"value":"p","at":0}}"""),
-            Sync.initialState(listOf("A", "B", " A "), "p"),
+            Sync.initialState(listOf("A", "B", " A "), "p", listOf(), ""),
         )
         assertEquals(
             state("""{"version":1,"terms":[{"term":"A","at":100,"removed":true},{"term":"B","at":0},{"term":"C","at":100}],"prompt":{"value":"p","at":0}}"""),
@@ -40,6 +40,23 @@ class SyncTest {
         assertEquals(listOf("C", "D"), Sync.termsOf(merged))
         assertTrue(Sync.sameState(merged, Sync.mergeStates(remote, edited)))
         assertFalse(Sync.sameState(edited, remote))
+    }
+
+    @Test
+    fun defaults() {
+        assertEquals(
+            state("""{"version":1,"terms":[{"term":"Mine","at":0},{"term":"D1","at":-1},{"term":"D2","at":0,"removed":true}],"prompt":{"value":"default prompt","at":-1}}"""),
+            Sync.initialState(listOf("Mine", "D1", ""), "default prompt", listOf("D1", "D2"), "default prompt"),
+        )
+        // A fresh install meets a device with a custom prompt and a deleted default: both win.
+        val fresh = Sync.initialState(listOf("D1", "D2", "D3"), "default prompt", listOf("D1", "D2", "D3"), "default prompt")
+        val custom = Sync.initialState(listOf("Mine", "D1"), "Custom", listOf("D1", "D2"), "default prompt")
+        val merged = Sync.mergeStates(fresh, custom)
+        assertEquals(
+            state("""{"version":1,"terms":[{"term":"D1","at":-1},{"term":"D2","at":0,"removed":true},{"term":"D3","at":-1},{"term":"Mine","at":0}],"prompt":{"value":"Custom","at":0}}"""),
+            merged,
+        )
+        assertEquals(listOf("D1", "D3", "Mine"), Sync.termsOf(merged))
     }
 
     @Test

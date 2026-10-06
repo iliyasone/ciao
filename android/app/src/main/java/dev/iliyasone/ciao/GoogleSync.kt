@@ -1,5 +1,6 @@
 package dev.iliyasone.ciao
 
+import android.accounts.Account
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -36,9 +37,11 @@ object GoogleSync {
     private const val STALE_MS = 10 * 60_000L
     const val REQUEST_CODE = 7301
 
-    private val request = AuthorizationRequest.builder()
-        .setRequestedScopes(listOf(Scope(DRIVE_SCOPE), Scope("https://www.googleapis.com/auth/userinfo.email")))
-        .build()
+    private val scopes = listOf(Scope(DRIVE_SCOPE), Scope("https://www.googleapis.com/auth/userinfo.email"))
+    /** At sign-in: Google asks which account. */
+    private val request = AuthorizationRequest.builder().setRequestedScopes(scopes).build()
+    /** Afterwards: that account's token, so a phone with several accounts doesn't ask again. */
+    private fun requestFor(email: String) = AuthorizationRequest.builder().setRequestedScopes(scopes).setAccount(Account(email, "com.google")).build()
     private val http = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -56,6 +59,7 @@ object GoogleSync {
     /** Guards the stored history: an edit recorded while a sync is merging must not be lost. */
     private val lock = Any()
 
+    @Synchronized
     private fun set(context: Context, email: String? = status.email, busy: Boolean = status.busy, syncedAt: Long = status.syncedAt, error: String? = status.error) {
         val prefs = Prefs(context)
         prefs.googleEmail = email ?: ""
@@ -68,7 +72,9 @@ object GoogleSync {
     fun load(context: Context) {
         val prefs = Prefs(context)
         synchronized(lock) {
-            if (prefs.syncState.isEmpty()) prefs.syncState = Sync.serialize(Sync.initialState(prefs.keywords, prefs.prompt))
+            if (prefs.syncState.isEmpty()) {
+                prefs.syncState = Sync.serialize(Sync.initialState(prefs.keywords, prefs.prompt, Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT))
+            }
         }
         status = Status(prefs.googleEmail.ifEmpty { null }, status.busy, prefs.syncedAt, status.error)
     }
@@ -128,16 +134,29 @@ object GoogleSync {
         set(context.applicationContext, email = null, busy = false, syncedAt = 0, error = null)
     }
 
-    /** The user changed terms or the prompt in [Prefs]: record it, and send it shortly. */
-    fun noteLocal(context: Context) {
+    /**
+     * The user edits terms or the prompt: [change] writes them to [Prefs], under the lock a sync
+     * merges under, so neither overwrites the other. The edit is recorded once typing pauses (not
+     * "K", "Ku", "Kub"… as removed terms), or before a sync merges, then sent.
+     */
+    fun edit(context: Context, change: (Prefs) -> Unit) {
         val app = context.applicationContext
         val prefs = Prefs(app)
-        synchronized(lock) {
-            val next = Sync.recordEdit(state(prefs), prefs.keywords, prefs.prompt, System.currentTimeMillis()) ?: return
-            prefs.syncState = Sync.serialize(next)
-        }
+        synchronized(lock) { change(prefs) }
         main.removeCallbacksAndMessages(pending)
-        main.postAtTime({ syncNow(app) }, pending, android.os.SystemClock.uptimeMillis() + EDIT_DELAY_MS)
+        main.postAtTime({
+            worker.execute {
+                val changed = synchronized(lock) { recordEdit(prefs) }
+                if (changed) syncNow(app)
+            }
+        }, pending, android.os.SystemClock.uptimeMillis() + EDIT_DELAY_MS)
+    }
+
+    /** Under [lock]: what the settings hold now, compared with the history. */
+    private fun recordEdit(prefs: Prefs): Boolean {
+        val next = Sync.recordEdit(state(prefs), prefs.keywords, prefs.prompt, System.currentTimeMillis()) ?: return false
+        prefs.syncState = Sync.serialize(next)
+        return true
     }
 
     /** From the dictation service: sync when the keyboard shows up, at most every few minutes. */
@@ -156,22 +175,29 @@ object GoogleSync {
 
     /** What this device knows; on first use, what the settings hold now (older than any edit to come). */
     private fun state(prefs: Prefs): SyncState =
-        prefs.syncState.takeIf { it.isNotEmpty() }?.let { Sync.parse(it) } ?: Sync.initialState(prefs.keywords, prefs.prompt)
+        prefs.syncState.takeIf { it.isNotEmpty() }?.let { Sync.parse(it) }
+            ?: Sync.initialState(prefs.keywords, prefs.prompt, Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
 
     /** On the worker thread. */
     private fun syncOnce(app: Context) {
         val prefs = Prefs(app)
-        if (prefs.googleEmail.isEmpty()) return
+        val email = prefs.googleEmail
+        if (email.isEmpty()) return
         set(app, busy = true)
         try {
-            var token = token(app)
+            var token = token(app, email)
+            // Signed out (perhaps into another account) since this sync started: its data isn't for that account.
+            fun alive() {
+                if (prefs.googleEmail != email) throw Stale()
+            }
             fun drive(build: Request.Builder): String {
+                alive()
                 return try {
                     call(build.header("Authorization", "Bearer $token").build())
                 } catch (e: Unauthorized) {
                     // Expired early, or revoked: a fresh token tells which.
                     GoogleAuthUtil.clearToken(app, token)
-                    token = token(app)
+                    token = token(app, email)
                     call(build.header("Authorization", "Bearer $token").build())
                 }
             }
@@ -187,6 +213,8 @@ object GoogleSync {
                 remote = remote?.let { Sync.mergeStates(it, parsed) } ?: parsed
             }
             val merged = synchronized(lock) {
+                alive()
+                recordEdit(prefs) // typed since, not recorded yet
                 val local = state(prefs)
                 val merged = remote?.let { Sync.mergeStates(local, it) } ?: local
                 if (!Sync.sameState(merged, local)) {
@@ -213,6 +241,8 @@ object GoogleSync {
                 for (id in ids.drop(1)) drive(Request.Builder().url("$DRIVE/$id").delete())
             }
             set(app, busy = false, syncedAt = System.currentTimeMillis(), error = null)
+        } catch (e: Stale) {
+            // signOut has reset the status
         } catch (e: SignedOut) {
             android.util.Log.w("Ciao", "google sync: access gone, signing out")
             set(app, email = null, busy = false, syncedAt = 0, error = app.getString(R.string.sync_signed_out))
@@ -224,10 +254,11 @@ object GoogleSync {
 
     private class Unauthorized : Exception()
     private class SignedOut : Exception()
+    private class Stale : Exception()
 
     /** A token without asking: Play services refreshes it; if the user must consent again, that's a sign-out. */
-    private fun token(app: Context): String {
-        val result = Tasks.await(Identity.getAuthorizationClient(app).authorize(request), 30, TimeUnit.SECONDS)
+    private fun token(app: Context, email: String): String {
+        val result = Tasks.await(Identity.getAuthorizationClient(app).authorize(requestFor(email)), 30, TimeUnit.SECONDS)
         if (result.hasResolution() || result.grantedScopes.none { it.toString() == DRIVE_SCOPE }) throw SignedOut()
         return result.accessToken ?: throw SignedOut()
     }

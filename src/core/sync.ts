@@ -8,7 +8,10 @@
 
 export interface TermChange {
   term: string;
-  /** Epoch ms of the last add or remove; 0 for what a device had before it started syncing. */
+  /**
+   * Epoch ms of the last add or remove. What a device had before it started syncing: 0 for the
+   * user's own choices, -1 for an untouched default (initialState), which any real choice beats.
+   */
   at: number;
   removed?: boolean;
 }
@@ -33,9 +36,25 @@ export function normalizeTerms(list: string[]): string[] {
   return out;
 }
 
-/** What a device had before it synced: older than any edit made since. */
-export function initialState(keywords: string[], prompt: string): SyncState {
-  return { terms: normalizeTerms(keywords).map((term) => ({ term, at: 0 })), prompt: { value: prompt, at: 0 } };
+/**
+ * What a device had before it synced: older than any edit made since. `defaults` are this
+ * platform's defaults: kept as they are, they lose to anything another device chose (a fresh
+ * install must not reset a custom prompt); a default term the user deleted stays deleted. Defaults
+ * differ by platform, so a default term missing here is not a deletion.
+ */
+export function initialState(keywords: string[], prompt: string, defaults: { keywords: string[]; prompt: string }): SyncState {
+  const terms = normalizeTerms(keywords);
+  const own = new Set(terms);
+  const isDefault = new Set(defaults.keywords);
+  return {
+    terms: [
+      ...terms.map((term) => ({ term, at: isDefault.has(term) ? -1 : 0 })),
+      ...normalizeTerms(defaults.keywords)
+        .filter((term) => !own.has(term))
+        .map((term) => ({ term, at: 0, removed: true })),
+    ],
+    prompt: { value: prompt, at: prompt === defaults.prompt ? -1 : 0 },
+  };
 }
 
 /** The terms to use: the ones not removed, in order. */

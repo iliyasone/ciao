@@ -6,6 +6,7 @@ import { net, safeStorage, shell } from "electron";
 import { t } from "../core/i18n";
 import { initialState, mergeStates, parseState, recordEdit, sameState, serializeState, termsOf, type SyncState } from "../core/sync";
 import type { SyncStatus } from "../core/types";
+import { DEFAULT_SETTINGS } from "./settings";
 
 // Terms and the prompt, synced through one file in the hidden app folder of the user's Google
 // Drive (scope drive.appdata: Ciao sees only its own files there). No server of ours is involved.
@@ -46,6 +47,12 @@ export class GoogleSync {
   private again = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private cancelSignIn: (() => void) | null = null;
+  /** Bumped by signOut: a sign-in or sync still running for the old session stops at its next step. */
+  private session = 0;
+  private syncSession = 0;
+  /** The settings' terms and prompt not yet compared with the history: edits are recorded after a pause in typing. */
+  private pending: { keywords: string[]; prompt: string } | null = null;
+  private editTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Built without the OAuth client (a fork, a build without the secrets): no sync, no card. */
   static available(): boolean {
@@ -73,10 +80,11 @@ export class GoogleSync {
     } catch {
       // Never synced: what's in the settings now predates any edit to come.
     }
-    this.state = saved ?? initialState(current.keywords, current.prompt);
+    this.state = saved ?? initialState(current.keywords, current.prompt, DEFAULT_SETTINGS);
     if (!saved) this.saveState();
     // Settings changed while Ciao wasn't running (config.json edited by hand) count as an edit now.
-    this.noteLocal(current.keywords, current.prompt);
+    this.pending = current;
+    this.flushEdit();
     if (!GoogleSync.available()) {
       this.account = null;
       this.status.email = null;
@@ -90,13 +98,28 @@ export class GoogleSync {
     return this.status;
   }
 
-  /** The settings now hold these terms and prompt: record what the user changed, and send it. */
+  /**
+   * The settings now hold these terms and prompt. What the user changed is recorded once typing
+   * pauses (not "K", "Ku", "Kub"… as removed terms), or before a sync merges, then sent.
+   */
   noteLocal(keywords: string[], prompt: string): void {
-    const next = recordEdit(this.state, keywords, prompt, Date.now());
-    if (!next) return;
+    this.pending = { keywords, prompt };
+    clearTimeout(this.editTimer);
+    this.editTimer = setTimeout(() => {
+      if (this.flushEdit()) this.syncSoon(0);
+    }, EDIT_DELAY_MS);
+  }
+
+  /** Records the pending edit, if it changes anything. */
+  private flushEdit(): boolean {
+    clearTimeout(this.editTimer);
+    const pending = this.pending;
+    this.pending = null;
+    const next = pending && recordEdit(this.state, pending.keywords, pending.prompt, Date.now());
+    if (!next) return false;
     this.state = next;
     this.saveState();
-    this.syncSoon(EDIT_DELAY_MS);
+    return true;
   }
 
   /** Syncs after `delayMs` (a burst of edits goes out once); nothing when signed out. */
@@ -109,14 +132,20 @@ export class GoogleSync {
   /** Opens Google's consent page in the browser; signOut() cancels a sign-in still waiting there. */
   async signIn(): Promise<void> {
     if (this.status.signingIn) return;
+    const session = ++this.session;
+    const alive = () => {
+      if (session !== this.session) throw new Cancelled();
+    };
     this.set({ signingIn: true, error: undefined });
     try {
       const tokens = await this.authorize();
+      alive();
       if (!tokens.refresh_token) throw new Error("Google returned no refresh token");
       // Google's page lists Drive access as a box to tick, unticked at first.
       if (!tokens.scope.split(" ").includes(DRIVE_SCOPE)) throw new Error(t().sync.noDrive);
       this.access = { token: tokens.access_token, expires: Date.now() + tokens.expires_in * 1000 };
       const email = await this.email();
+      alive();
       const encrypted = safeStorage.isEncryptionAvailable();
       this.account = {
         email,
@@ -127,6 +156,7 @@ export class GoogleSync {
       console.log("google sync: signed in");
       this.set({ email, signingIn: false });
     } catch (e) {
+      if (session !== this.session) return; // cancelled: signOut has reset the status
       console.warn("google sign-in:", e);
       this.set({ signingIn: false, error: e instanceof Cancelled ? undefined : t().sync.signInFailed(message(e)) });
       return;
@@ -139,6 +169,7 @@ export class GoogleSync {
    * account, so revoking would sign out every other device too.
    */
   signOut(): void {
+    this.session++;
     this.cancelSignIn?.();
     this.account = null;
     this.access = null;
@@ -164,7 +195,9 @@ export class GoogleSync {
   }
 
   private async syncOnce(): Promise<void> {
+    this.flushEdit();
     if (!this.account) return;
+    this.syncSession = this.session;
     this.set({ syncing: true });
     try {
       const files = await this.drive<{ files: { id: string }[] }>(
@@ -178,6 +211,7 @@ export class GoogleSync {
         if (!parsed) throw new Error(t().sync.newerFormat);
         remote = remote ? mergeStates(remote, parsed) : parsed;
       }
+      this.flushEdit(); // typed while downloading
       const merged = remote ? mergeStates(this.state, remote) : this.state;
       if (!sameState(merged, this.state)) {
         this.state = merged;
@@ -201,10 +235,7 @@ export class GoogleSync {
       }
       this.set({ syncing: false, syncedAt: Date.now(), error: undefined });
     } catch (e) {
-      if (!this.account) {
-        this.set({ syncing: false }); // signed out meanwhile
-        return;
-      }
+      if (e instanceof Cancelled || this.syncSession !== this.session) return; // signed out meanwhile
       if (e instanceof SignedOut) {
         console.warn("google sync: access revoked, signing out");
         this.signOut();
@@ -219,7 +250,10 @@ export class GoogleSync {
   private async drive<T>(url: string, init: RequestInit = {}, as: "json" | "text" | "none" = "json"): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       const token = await this.token();
+      // Signed out (perhaps into another account) since this sync started: its data must not go there.
+      if (this.syncSession !== this.session) throw new Cancelled();
       const res = await net.fetch(url, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` } });
+      if (this.syncSession !== this.session) throw new Cancelled();
       if (res.status === 401 && attempt === 0) {
         this.access = null; // expired early, or revoked: a fresh token tells which
         continue;
