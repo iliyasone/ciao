@@ -288,8 +288,10 @@ the text is typed into the field. It works with any keyboard; Ciao doesn't repla
 yours.
 
 - **Hold** the icon to talk while you hold it; let go to finish.
-- **Drag** it to move it. It snaps to the nearest side and stays at that height
-  above the keyboard.
+- **Drag** it to move it, or throw it. It glides to the nearer side and stays at
+  that height above the keyboard.
+- The icon appears once the keyboard has finished opening, so a tap aimed at the
+  keyboard doesn't land on it; it never covers the keys.
 - **✕** on the card cancels; **✓** finishes.
 - If the field won't take the text, it is copied to the clipboard instead.
 - If the live connection drops, recording continues and the audio is sent to
@@ -476,8 +478,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   re-records `assets/demo-*.gif`.
 
 - `android/` — the Android app (Kotlin, no other dependencies than OkHttp):
-  - `CiaoService.kt` — the accessibility service: the icon over the keyboard,
-    the dictation pipeline, typing into the field;
+  - `CiaoService.kt` — the accessibility service: the icon over the keyboard
+    (`Spring.kt` moves it), the dictation pipeline, typing into the field;
   - `CardView.kt` — the live card;
   - `Realtime.kt`, `FileTranscriber.kt` — the same OpenAI calls as
     `src/core/realtime.ts` and `src/main/transcribe.ts`;
