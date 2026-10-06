@@ -24,19 +24,10 @@ object TextInserter {
      */
     fun insert(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
         if (!node.refresh() || !node.isEditable) return false
-        // An empty field shows its hint ("Message"), and many apps report the hint as the field's
-        // text without flagging it as one (Telegram, for one): the dictation would land after it.
-        val text = node.text?.toString().orEmpty()
-        val current = if (node.isShowingHintText || text == node.hintText?.toString()) "" else text
-        var start = node.textSelectionStart
-        var end = node.textSelectionEnd
-        if (start < 0 || end < 0 || start > current.length || end > current.length) {
-            start = current.length
-            end = current.length
-        }
-        if (start > end) start = end.also { end = start }
-        val before = current.substring(0, start)
-        val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + text
+        val (current, before, piece, after) = place(
+            node.text?.toString().orEmpty(), node.hintText?.toString(), node.isShowingHintText,
+            node.textSelectionStart, node.textSelectionEnd, text,
+        )
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         // Only plain text can be put back: a copied image or file is a content:// URI whose read
@@ -45,7 +36,7 @@ object TextInserter {
             ?.takeIf { clip -> (0 until clip.itemCount).all { clip.getItemAt(it).run { uri == null && intent == null } } }
         if (current.isNotEmpty() && saved != null && paste(context, node, piece, saved)) return true
 
-        val updated = before + piece + current.substring(end)
+        val updated = before + piece + after
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated) }
         if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
             return paste(context, node, piece, saved)
@@ -59,6 +50,28 @@ object TextInserter {
             },
         )
         return true
+    }
+
+    /** The field's text without its hint, what goes before and after the cursor, and [text] to put between them. */
+    data class Placement(val current: String, val before: String, val piece: String, val after: String)
+
+    /**
+     * Where [text] goes in a field showing [shown] with the selection [selStart]..[selEnd]. An empty
+     * field shows its hint ("Message"), and many apps report the hint as the field's text without
+     * flagging it as one (Telegram, for one): the dictation would land after it.
+     */
+    fun place(shown: String, hint: String?, showingHint: Boolean, selStart: Int, selEnd: Int, text: String): Placement {
+        val current = if (showingHint || shown == hint) "" else shown
+        var start = selStart
+        var end = selEnd
+        if (start < 0 || end < 0 || start > current.length || end > current.length) {
+            start = current.length
+            end = current.length
+        }
+        if (start > end) start = end.also { end = start }
+        val before = current.substring(0, start)
+        val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + text
+        return Placement(current, before, piece, current.substring(end))
     }
 
     /** Pastes [text], then puts back [saved] (what was on the clipboard), if Android let us read it. */
