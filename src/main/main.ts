@@ -350,6 +350,8 @@ function registerIpc(): void {
   ipcMain.handle("settings:set-key", (_e, provider: Settings["provider"], key: string) => {
     if (!Object.hasOwn(PROVIDERS, provider)) return;
     fs.writeFileSync(keyPath(provider), key.trim());
+    // The spare was opened with the old key (Gemini checks it only once a dictation sends its setup).
+    pool.close();
     pool.refill();
   });
 
