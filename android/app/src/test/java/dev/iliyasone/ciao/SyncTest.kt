@@ -122,4 +122,16 @@ class SyncTest {
         assertNull(Sync.parse("""{"version":1,"terms":[],"prompt":{"value":"","at":0},"keys":{"openai":{"value":1,"at":0}}}"""))
         assertEquals(Sync.mergeStates(off, b), Sync.parse(Sync.serialize(Sync.mergeStates(off, b))))
     }
+
+    @Test
+    fun adopt() {
+        // A history from before keys synced: the key this device had is as old as initialState's.
+        val old = state("""{"version":1,"terms":[],"prompt":{"value":"p","at":5}}""")
+        val adopted = Sync.adoptKeys(old, mapOf("openai" to "sk-a", "gemini" to ""))
+        assertEquals(
+            state("""{"version":1,"terms":[],"prompt":{"value":"p","at":5},"keys":{"openai":{"value":"sk-a","at":0}},"syncKeys":{"value":true,"at":-1}}"""),
+            adopted,
+        )
+        assertTrue(Sync.adoptKeys(adopted, mapOf("openai" to "sk-new")) === adopted)
+    }
 }

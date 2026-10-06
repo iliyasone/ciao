@@ -85,6 +85,16 @@ export function initialState(local: Local, defaults: { keywords: string[]; promp
   };
 }
 
+/**
+ * Keys this device had before the history knew of keys (a history from an older Ciao): as old as
+ * initialState's, not an edit made now that would replace another device's key.
+ */
+export function adoptKeys(state: SyncState, keys: Record<string, string>): SyncState {
+  const known = Object.entries(keys).filter(([provider, key]) => key && !state.keys[provider]);
+  if (!known.length) return state;
+  return { ...state, keys: { ...state.keys, ...Object.fromEntries(known.map(([provider, key]) => [provider, { value: key, at: 0 }])) } };
+}
+
 /** The terms to use: the ones not removed, in order. */
 export function termsOf(state: SyncState): string[] {
   return state.terms.filter((t) => !t.removed).map((t) => t.term);

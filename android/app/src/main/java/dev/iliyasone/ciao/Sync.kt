@@ -58,6 +58,16 @@ object Sync {
         )
     }
 
+    /**
+     * Keys this device had before the history knew of keys (a history from an older Ciao): as old
+     * as [initialState]'s, not an edit made now that would replace another device's key.
+     */
+    fun adoptKeys(state: SyncState, keys: Map<String, String>): SyncState {
+        val known = keys.filter { (provider, key) -> key.isNotEmpty() && provider !in state.keys }
+        if (known.isEmpty()) return state
+        return state.copy(keys = state.keys + known.mapValues { Stamped(it.value, 0) })
+    }
+
     /** The terms to use: the ones not removed, in order. */
     fun termsOf(state: SyncState): List<String> = state.terms.filter { !it.removed }.map { it.term }
 

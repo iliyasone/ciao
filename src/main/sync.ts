@@ -4,7 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { net, safeStorage, shell } from "electron";
 import { t } from "../core/i18n";
-import { initialState, mergeStates, parseState, recordEdit, sameState, serializeState, shared, type Local, type SyncState } from "../core/sync";
+import { adoptKeys, initialState, mergeStates, parseState, recordEdit, sameState, serializeState, shared, type Local, type SyncState } from "../core/sync";
 import type { SyncStatus } from "../core/types";
 import { DEFAULT_SETTINGS } from "./settings";
 
@@ -80,8 +80,8 @@ export class GoogleSync {
     } catch {
       // Never synced: what's in the settings now predates any edit to come.
     }
-    this.state = saved ?? initialState(current, DEFAULT_SETTINGS);
-    if (!saved) this.saveState();
+    this.state = saved ? adoptKeys(saved, current.keys) : initialState(current, DEFAULT_SETTINGS);
+    if (this.state !== saved) this.saveState();
     // Settings changed while Ciao wasn't running (config.json edited by hand) count as an edit now.
     this.pending = current;
     this.flushEdit();
@@ -222,7 +222,9 @@ export class GoogleSync {
       const out = shared(merged);
       if (!remote || !sameState(out, remote) || extra.length) {
         const body = serializeState(out);
-        if (first) {
+        // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys in them) for a while.
+        const replace = !!remote && Object.keys(remote.keys).length > 0 && Object.keys(out.keys).length === 0;
+        if (first && !replace) {
           await this.drive(`${UPLOAD}/${first.id}?uploadType=media`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
         } else {
           const boundary = crypto.randomUUID();
@@ -232,7 +234,7 @@ export class GoogleSync {
             `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
           await this.drive(`${UPLOAD}?uploadType=multipart`, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body: multipart });
         }
-        for (const { id } of extra) await this.drive(`${DRIVE}/${id}`, { method: "DELETE" }, "none");
+        for (const { id } of replace ? files.files : extra) await this.drive(`${DRIVE}/${id}`, { method: "DELETE" }, "none");
       }
       this.set({ syncing: false, syncedAt: Date.now(), error: undefined });
     } catch (e) {
@@ -350,8 +352,10 @@ export class GoogleSync {
     }
   }
 
+  /** Only for this user: it holds the API keys. */
   private saveState(): void {
-    fs.writeFileSync(this.stateFile, serializeState(this.state));
+    fs.writeFileSync(this.stateFile, serializeState(this.state), { mode: 0o600 });
+    fs.chmodSync(this.stateFile, 0o600); // made before keys were in it
   }
 
   private set(patch: Partial<SyncStatus>): void {

@@ -77,9 +77,9 @@ object GoogleSync {
     fun load(context: Context) {
         val prefs = Prefs(context)
         synchronized(lock) {
-            if (prefs.syncState.isEmpty()) {
-                prefs.syncState = Sync.serialize(Sync.initialState(prefs.local(), Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT))
-            }
+            val saved = prefs.syncState.takeIf { it.isNotEmpty() }?.let { Sync.parse(it) }
+            val state = saved?.let { Sync.adoptKeys(it, prefs.local().keys) } ?: Sync.initialState(prefs.local(), Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
+            if (state != saved) prefs.syncState = Sync.serialize(state)
         }
         set(context) { copy(email = prefs.googleEmail.ifEmpty { null }, syncedAt = prefs.syncedAt) }
     }
@@ -237,7 +237,9 @@ object GoogleSync {
             if (remote == null || !Sync.sameState(out, remote) || ids.size > 1) {
                 val json = "application/json".toMediaType()
                 val body = Sync.serialize(out).toRequestBody(json)
-                if (ids.isNotEmpty()) {
+                // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys in them) for a while.
+                val replace = remote != null && remote.keys.isNotEmpty() && out.keys.isEmpty()
+                if (ids.isNotEmpty() && !replace) {
                     drive(Request.Builder().url("$UPLOAD/${ids[0]}?uploadType=media").patch(body))
                 } else {
                     val meta = JSONObject().put("name", FILE_NAME).put("parents", org.json.JSONArray().put("appDataFolder")).toString()
@@ -247,7 +249,7 @@ object GoogleSync {
                         .build()
                     drive(Request.Builder().url("$UPLOAD?uploadType=multipart").post(multipart))
                 }
-                for (id in ids.drop(1)) drive(Request.Builder().url("$DRIVE/$id").delete())
+                for (id in if (replace) ids else ids.drop(1)) drive(Request.Builder().url("$DRIVE/$id").delete())
             }
             setFor(app, email) { copy(busy = false, syncedAt = System.currentTimeMillis(), error = null) }
         } catch (e: Stale) {

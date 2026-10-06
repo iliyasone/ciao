@@ -81,14 +81,27 @@ export function loadApiKey(provider: Provider): string | null {
 /** The key saved in Settings ("" if none), what Google sync sends: not one from the environment. */
 export function loadKeyFile(provider: Provider): string {
   try {
-    return fs.readFileSync(keyPath(provider), "utf8").trim();
+    return cleanKey(fs.readFileSync(keyPath(provider), "utf8"));
   } catch {
     return "";
   }
 }
 
-/** Saves the key ("" removes it). */
+/** Saves the key ("" removes it), readable only by this user. */
 export function saveKeyFile(provider: Provider, key: string): void {
-  if (key.trim()) fs.writeFileSync(keyPath(provider), key.trim(), { mode: 0o600 });
-  else fs.rmSync(keyPath(provider), { force: true });
+  const file = keyPath(provider);
+  if (cleanKey(key)) {
+    fs.writeFileSync(file, cleanKey(key), { mode: 0o600 });
+    fs.chmodSync(file, 0o600); // one saved by an older Ciao
+  } else {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+/**
+ * Only printable ASCII, as on Android (Prefs.kt): a zero-width space or line break from a copy
+ * makes the key invalid, and both ends of sync must see the same key or they'd keep re-saving it.
+ */
+function cleanKey(key: string): string {
+  return key.replace(/[^!-~]/g, "");
 }
