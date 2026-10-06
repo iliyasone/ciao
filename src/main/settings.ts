@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wakeWord: false,
   formatText: true,
   telemetry: true,
+  syncKeys: true,
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");
@@ -74,11 +75,33 @@ export function keyPath(provider: Provider): string {
 
 /** The provider's key: OPENAI_API_KEY / GEMINI_API_KEY, or openai-key.txt / gemini-key.txt next to the settings. */
 export function loadApiKey(provider: Provider): string | null {
-  const env = process.env[PROVIDERS[provider].keyEnv]?.trim();
-  if (env) return env;
+  return process.env[PROVIDERS[provider].keyEnv]?.trim() || loadKeyFile(provider) || null;
+}
+
+/** The key saved in Settings ("" if none), what Google sync sends: not one from the environment. */
+export function loadKeyFile(provider: Provider): string {
   try {
-    return fs.readFileSync(keyPath(provider), "utf8").trim() || null;
+    return cleanKey(fs.readFileSync(keyPath(provider), "utf8"));
   } catch {
-    return null;
+    return "";
   }
+}
+
+/** Saves the key ("" removes it), readable only by this user. */
+export function saveKeyFile(provider: Provider, key: string): void {
+  const file = keyPath(provider);
+  if (cleanKey(key)) {
+    fs.writeFileSync(file, cleanKey(key), { mode: 0o600 });
+    fs.chmodSync(file, 0o600); // one saved by an older Ciao
+  } else {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+/**
+ * Only printable ASCII, as on Android (Prefs.kt): a zero-width space or line break from a copy
+ * makes the key invalid, and both ends of sync must see the same key or they'd keep re-saving it.
+ */
+function cleanKey(key: string): string {
+  return key.replace(/[^!-~]/g, "");
 }

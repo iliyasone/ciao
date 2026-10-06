@@ -22,7 +22,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Terms and the prompt, synced through one file in the hidden app folder of the user's Google Drive
+ * Terms, the prompt and the API keys, synced through one file in the hidden app folder of the user's Google Drive
  * (scope drive.appdata), the same file the desktop app uses (src/main/sync.ts). Google Play
  * services signs in and hands out tokens; the Google Cloud project knows this app by its package
  * name and signing key.
@@ -77,9 +77,9 @@ object GoogleSync {
     fun load(context: Context) {
         val prefs = Prefs(context)
         synchronized(lock) {
-            if (prefs.syncState.isEmpty()) {
-                prefs.syncState = Sync.serialize(Sync.initialState(prefs.keywords, prefs.prompt, Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT))
-            }
+            val saved = prefs.syncState.takeIf { it.isNotEmpty() }?.let { Sync.parse(it) }
+            val state = saved?.let { Sync.adoptKeys(it, prefs.local().keys) } ?: Sync.initialState(prefs.local(), Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
+            if (state != saved) prefs.syncState = Sync.serialize(state)
         }
         set(context) { copy(email = prefs.googleEmail.ifEmpty { null }, syncedAt = prefs.syncedAt) }
     }
@@ -140,7 +140,7 @@ object GoogleSync {
     }
 
     /**
-     * The user edits terms or the prompt: [change] writes them to [Prefs], under the lock a sync
+     * The user edits terms, the prompt, a key or the switch: [change] writes them to [Prefs], under the lock a sync
      * merges under, so neither overwrites the other. The edit is recorded once typing pauses (not
      * "K", "Ku", "Kub"… as removed terms), or before a sync merges, then sent.
      */
@@ -159,7 +159,7 @@ object GoogleSync {
 
     /** Under [lock]: what the settings hold now, compared with the history. */
     private fun recordEdit(prefs: Prefs): Boolean {
-        val next = Sync.recordEdit(state(prefs), prefs.keywords, prefs.prompt, System.currentTimeMillis()) ?: return false
+        val next = Sync.recordEdit(state(prefs), prefs.local(), System.currentTimeMillis()) ?: return false
         prefs.syncState = Sync.serialize(next)
         return true
     }
@@ -181,7 +181,7 @@ object GoogleSync {
     /** What this device knows; on first use, what the settings hold now (older than any edit to come). */
     private fun state(prefs: Prefs): SyncState =
         prefs.syncState.takeIf { it.isNotEmpty() }?.let { Sync.parse(it) }
-            ?: Sync.initialState(prefs.keywords, prefs.prompt, Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
+            ?: Sync.initialState(prefs.local(), Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
 
     /** On the worker thread. */
     private fun syncOnce(app: Context) {
@@ -225,15 +225,21 @@ object GoogleSync {
                 if (!Sync.sameState(merged, local)) {
                     prefs.keywords = Sync.arrangeTerms(prefs.keywords, Sync.termsOf(merged))
                     prefs.prompt = merged.prompt.value
+                    prefs.syncKeys = merged.syncKeys.value
+                    merged.keys["openai"]?.let { prefs.apiKey = it.value }
+                    merged.keys["gemini"]?.let { prefs.geminiKey = it.value }
                     main.post { applied?.invoke() }
                 }
                 prefs.syncState = Sync.serialize(merged)
                 merged
             }
-            if (remote == null || !Sync.sameState(merged, remote) || ids.size > 1) {
+            val out = Sync.shared(merged)
+            if (remote == null || !Sync.sameState(out, remote) || ids.size > 1) {
                 val json = "application/json".toMediaType()
-                val body = Sync.serialize(merged).toRequestBody(json)
-                if (ids.isNotEmpty()) {
+                val body = Sync.serialize(out).toRequestBody(json)
+                // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys in them) for a while.
+                val replace = remote != null && remote.keys.isNotEmpty() && out.keys.isEmpty()
+                if (ids.isNotEmpty() && !replace) {
                     drive(Request.Builder().url("$UPLOAD/${ids[0]}?uploadType=media").patch(body))
                 } else {
                     val meta = JSONObject().put("name", FILE_NAME).put("parents", org.json.JSONArray().put("appDataFolder")).toString()
@@ -243,7 +249,7 @@ object GoogleSync {
                         .build()
                     drive(Request.Builder().url("$UPLOAD?uploadType=multipart").post(multipart))
                 }
-                for (id in ids.drop(1)) drive(Request.Builder().url("$DRIVE/$id").delete())
+                for (id in if (replace) ids else ids.drop(1)) drive(Request.Builder().url("$DRIVE/$id").delete())
             }
             setFor(app, email) { copy(busy = false, syncedAt = System.currentTimeMillis(), error = null) }
         } catch (e: Stale) {

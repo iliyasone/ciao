@@ -23,8 +23,10 @@
 
     <string name="section_recognition">Распознавание</string>
     <string name="sync_title">Синхронизация с Google</string>
-    <string name="sync_text">Войдите, чтобы термины и контекст были одни на всех ваших устройствах. Они хранятся в скрытой папке Ciao на вашем Google Диске; другие файлы на Диске Ciao не видит.</string>
+    <string name="sync_text">Войдите, чтобы термины, контекст и API-ключ были одни на всех ваших устройствах. Они хранятся в скрытой папке Ciao на вашем Google Диске; другие файлы на Диске Ciao не видит.</string>
     <string name="sync_sign_in">Войти через Google</string>
+    <string name="sync_keys">Синхронизировать API-ключи</string>
+    <string name="sync_keys_hint">Так удобнее: на новом устройстве достаточно войти, ключ вставлять не нужно. Ключи лежат в скрытой папке Ciao на вашем Google Диске, так что их прочитает любой, кто сможет войти в ваш аккаунт Google. Выключите, и каждый ключ останется только на своём устройстве: Ciao уберёт их с Диска.</string>
     <string name="sync_sign_out">Выйти</string>
     <string name="sync_signing_in">Вход…</string>
     <string name="sync_syncing">%1$s · синхронизация…</string>

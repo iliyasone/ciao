@@ -52,6 +52,8 @@ const api = {
     /** Terms or the prompt changed through sync, not in this window. */
     onSynced: (cb: (s: Settings) => void) => on("settings:synced", cb),
     hasApiKey: (provider: Provider): Promise<boolean> => ipcRenderer.invoke("settings:has-key", provider),
+    /** A key was saved, here or on another device (through sync). */
+    onKeys: (cb: () => void) => on("settings:keys", cb),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
     setApiKey: (provider: Provider, key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", provider, key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */

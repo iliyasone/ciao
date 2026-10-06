@@ -38,7 +38,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     // Terms and context merged from another device replace what's shown here.
     return ciao.settings.onSynced((synced) => {
       if (!latest.current) return;
-      latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt };
+      latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt, syncKeys: synced.syncKeys };
       setS(latest.current);
     });
   }, []);
@@ -67,7 +67,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         <ApiKeyCard provider={s.provider} />
         <PermissionsCard />
-        <SyncCard />
+        <SyncCard syncKeys={s.syncKeys} onSyncKeys={(syncKeys) => update({ syncKeys })} />
 
         <Card title={tr.recognition.title}>
           <Row label={tr.recognition.provider} hint={tr.recognition.providerHint(models(s).live, models(s).file)}>
@@ -182,9 +182,12 @@ function ApiKeyCard({ provider }: { provider: Provider }) {
   useEffect(() => {
     let current = true;
     setValue("");
-    void ciao.settings.hasApiKey(provider).then((has) => current && setHasKey(has));
+    const check = () => void ciao.settings.hasApiKey(provider).then((has) => current && setHasKey(has));
+    check();
+    const off = ciao.settings.onKeys(check); // one may have come from another device
     return () => {
       current = false;
+      off();
     };
   }, [provider]);
   return (
@@ -217,7 +220,7 @@ function ApiKeyCard({ provider }: { provider: Provider }) {
 }
 
 /** Google sign-in for syncing terms and context between devices (src/main/sync.ts). */
-function SyncCard() {
+function SyncCard({ syncKeys, onSyncKeys }: { syncKeys: boolean; onSyncKeys: (v: boolean) => void }) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const strings = useStrings();
   const tr = strings.sync;
@@ -254,6 +257,7 @@ function SyncCard() {
           )}
         </div>
       </Row>
+      <Toggle label={tr.keys} hint={tr.keysHint} value={syncKeys} onChange={onSyncKeys} />
     </Card>
   );
 }
