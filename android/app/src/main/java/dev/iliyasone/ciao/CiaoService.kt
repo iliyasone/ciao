@@ -52,7 +52,7 @@ class CiaoService : AccessibilityService() {
     private var imeTopSince = 0L
     private val imeSettled get() = imeTopSeen == -1 || SystemClock.uptimeMillis() >= imeTopSince + IME_SETTLE_MS
     private val motion = Spring(onFrame = { x, y -> moveBubble(x.roundToInt(), y.roundToInt().coerceAtMost(glideFloor)) }, onEnd = { if (bubble?.alpha == 1f && imeSettled) setBubbleTouchable(true) })
-    /** The lowest the current glide may go: one coming down stops at its spot instead of bouncing over the keys. */
+    /** The lowest the current glide may go: never below its start or its spot, so it doesn't bounce over the keys. */
     private var glideFloor = Int.MAX_VALUE
     private var dictation: Dictation? = null
 
@@ -189,7 +189,7 @@ class CiaoService : AccessibilityService() {
     }
 
     private fun glide(x: Int, y: Int, vx: Float = 0f, vy: Float = 0f) {
-        glideFloor = if (bubbleParams.y <= y) y else Int.MAX_VALUE
+        glideFloor = maxOf(bubbleParams.y, y)
         motion.animate(bubbleParams.x.toFloat(), bubbleParams.y.toFloat(), x.toFloat(), y.toFloat(), vx, vy)
     }
 
