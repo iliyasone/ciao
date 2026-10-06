@@ -8,10 +8,29 @@ import type { HistoryEntry } from "../core/types";
  * Every dictation lives in its own folder: history/<id>/{audio.wav, entry.json}.
  * Audio is appended to disk as it is captured, so nothing said is lost even if the
  * app, the network or the API fails mid-sentence.
+ *
+ * The entries are read from disk once and then kept in memory, kept current by save() and
+ * delete(): reading thousands of small files again on every look at the history took seconds on
+ * Windows. The cache holds copies, so a caller changing an entry it hasn't saved changes nothing.
  */
 export class HistoryStore {
+  private cache: Map<string, HistoryEntry> | null = null;
+
   constructor(readonly dir: string) {
     fs.mkdirSync(dir, { recursive: true });
+  }
+
+  private entries(): Map<string, HistoryEntry> {
+    if (this.cache) return this.cache;
+    const cache = new Map<string, HistoryEntry>();
+    for (const id of fs.readdirSync(this.dir)) {
+      try {
+        cache.set(id, JSON.parse(fs.readFileSync(path.join(this.dir, id, "entry.json"), "utf8")));
+      } catch {
+        // Not an entry (the legacy-import marker) or unreadable.
+      }
+    }
+    return (this.cache = cache);
   }
 
   audioPath(id: string): string {
@@ -32,27 +51,23 @@ export class HistoryStore {
     const tmp = `${target}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(entry, null, 2));
     fs.renameSync(tmp, target); // atomic: a crash never leaves a half-written entry
+    this.entries().set(entry.id, structuredClone(entry));
   }
 
   get(id: string): HistoryEntry | null {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(this.dir, id, "entry.json"), "utf8"));
-    } catch {
-      return null;
-    }
+    const e = this.entries().get(id);
+    return e ? structuredClone(e) : null;
   }
 
+  /** Newest first. */
   list(): HistoryEntry[] {
-    const out: HistoryEntry[] = [];
-    for (const id of fs.readdirSync(this.dir)) {
-      const e = this.get(id);
-      if (e) out.push(e);
-    }
-    return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // ISO timestamps sort as plain strings, much faster than localeCompare over thousands.
+    return [...this.entries().values()].map((e) => structuredClone(e)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
   }
 
   delete(id: string): void {
     fs.rmSync(path.join(this.dir, id), { recursive: true, force: true });
+    this.entries().delete(id);
   }
 
   /** Entries left mid-flight by a crash or restart: fix the WAV header and mark them for a retry. */
