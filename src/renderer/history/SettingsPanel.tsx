@@ -1,8 +1,8 @@
-import { ArrowDownToLine, Check, KeyRound, Loader2, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Sun, X } from "lucide-react";
+import { ArrowDownToLine, Check, Cloud, KeyRound, Loader2, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
 import type { Strings } from "../../core/i18n";
-import { DELAYS, type Lang, type Settings, type Theme, type UpdateState } from "../../core/types";
+import { DELAYS, type Lang, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
 import { useStrings } from "../lang";
 
 const THEMES: { value: Theme; icon: typeof Sun }[] = [
@@ -29,6 +29,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     void ciao.settings.get().then(setS);
     void ciao.settings.hasApiKey().then(setHasKey);
     void ciao.settings.wakeAvailable().then(setWakeAvailable);
+    // Terms and context merged from another device replace what's shown here.
+    return ciao.settings.onSynced((synced) => setS((prev) => prev && { ...prev, keywords: synced.keywords, prompt: synced.prompt }));
   }, []);
 
   const update = (patch: Partial<Settings>, debounce = false) => {
@@ -56,6 +58,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         <ApiKeyCard hasKey={hasKey} onSaved={() => setHasKey(true)} />
         <PermissionsCard />
+        <SyncCard />
 
         <Card title={tr.recognition.title}>
           <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>
@@ -179,6 +182,48 @@ function ApiKeyCard({ hasKey, onSaved }: { hasKey: boolean; onSaved: () => void 
           >
             {tr.save}
           </button>
+        </div>
+      </Row>
+    </Card>
+  );
+}
+
+/** Google sign-in for syncing terms and context between devices (src/main/sync.ts). */
+function SyncCard() {
+  const [status, setStatus] = useState<SyncStatus | null>(null);
+  const strings = useStrings();
+  const tr = strings.sync;
+  useEffect(() => {
+    void ciao.sync.get().then(setStatus);
+    return ciao.sync.onStatus(setStatus);
+  }, []);
+  if (!status?.available) return null;
+  const time = (ms: number) => new Date(ms).toLocaleTimeString(strings.locale, { hour: "2-digit", minute: "2-digit" });
+  const hint =
+    status.error ??
+    (status.signingIn
+      ? tr.signingIn
+      : !status.email
+        ? tr.signedOutHint
+        : status.syncing || !status.syncedAt
+          ? tr.syncing(status.email)
+          : tr.syncedAt(status.email, time(status.syncedAt)));
+  const button = "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors";
+  return (
+    <Card title={tr.title}>
+      <Row label={tr.account} hint={hint}>
+        <div className="flex shrink-0 items-center gap-2">
+          {(status.syncing || status.signingIn) && <Loader2 className="size-4 animate-spin text-faint" />}
+          {status.email || status.signingIn ? (
+            <button onClick={() => void ciao.sync.signOut()} className={`${button} bg-tint/10 text-fg hover:bg-tint/15`}>
+              {status.signingIn ? tr.cancel : tr.signOut}
+            </button>
+          ) : (
+            <button onClick={() => void ciao.sync.signIn()} className={`${button} bg-accent text-white hover:bg-accent/90`}>
+              <Cloud className="size-3.5" />
+              {tr.signIn}
+            </button>
+          )}
         </div>
       </Row>
     </Card>

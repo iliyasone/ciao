@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HistoryEntry, OverlayState, RetryMode, Settings, UpdateState } from "../core/types";
+import type { HistoryEntry, OverlayState, RetryMode, Settings, SyncStatus, UpdateState } from "../core/types";
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
@@ -48,6 +48,8 @@ const api = {
     get: (): Promise<Settings> => ipcRenderer.invoke("settings:get"),
     set: (s: Settings): Promise<Settings> => ipcRenderer.invoke("settings:set", s),
     onChanged: (cb: (s: Settings) => void) => on("settings:changed", cb),
+    /** Terms or the prompt changed through sync, not in this window. */
+    onSynced: (cb: (s: Settings) => void) => on("settings:synced", cb),
     hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
     setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
@@ -57,6 +59,14 @@ const api = {
     accessibility: (): Promise<boolean | null> => ipcRenderer.invoke("settings:accessibility"),
     onAccessibility: (cb: (granted: boolean) => void) => on("settings:accessibility", cb),
     openAccessibility: (): Promise<void> => ipcRenderer.invoke("settings:open-accessibility"),
+  },
+  sync: {
+    get: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:get"),
+    onStatus: (cb: (s: SyncStatus) => void) => on("sync:status", cb),
+    /** Opens Google's sign-in in the browser; resolves once signed in (or not). */
+    signIn: (): Promise<void> => ipcRenderer.invoke("sync:sign-in"),
+    /** Forgets the account on this device; also cancels a sign-in still waiting in the browser. */
+    signOut: (): Promise<void> => ipcRenderer.invoke("sync:sign-out"),
   },
   update: {
     get: (): Promise<UpdateState> => ipcRenderer.invoke("update:get"),

@@ -78,6 +78,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Context** (Settings tab). Describe what you usually talk about and list the
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
+- **Sync through Google** (*Settings → Sync → Sign in with Google*, on every
+  platform and on Android). The terms and the context become the same on every
+  device you sign in on. See [Sync](#sync).
 - **English or Russian interface** (*Settings → Appearance → Language*). The
   default is Russian if the system is in Russian and English otherwise (also for
   an existing install, the first time it starts with this setting); a change
@@ -311,8 +314,44 @@ yours.
      settings*, and try again.
 5. Try it in the field at the bottom of the Ciao screen.
 
+Terms are one per line, as on the desktop, and *Sign in with Google* syncs them
+and the context with your other devices ([Sync](#sync)). Signing in needs Google
+Play services.
+
 The Android app has no history, wake word or usage counts yet, and it doesn't
 update itself: install a newer APK over the old one.
+
+## Sync
+
+Sign in with Google (*Settings → Sync* on the desktop, *Sync with Google* on
+Android) and your terms and context are the same on every device signed in with
+that account. There is no Ciao server: they're kept in one file,
+`ciao-sync.json`, in the hidden app folder of your own Google Drive. Ciao asks
+only for that folder (`drive.appdata`, which can't see any other file in your
+Drive) and your email address, to show which account is signed in. Google's page
+lists Drive access as a box to tick, unticked at first: tick it, or Ciao says it
+has no access.
+
+- What syncs: the terms and the context. Not the API key or anything else.
+- When: right after you change them, when you come back to the settings window
+  (the app on Android), every 5 minutes on the desktop, and on Android when the
+  keyboard shows up, at most every 10 minutes.
+- Merging: each device remembers when every term was added or removed. A term
+  added on one device survives a save on another, and a removed one doesn't come
+  back. For the context, the later edit wins. Each device keeps that history in
+  `sync-state.json` (desktop) or its preferences (Android).
+- Signing out stops syncing on that device and keeps the terms there; the other
+  devices stay signed in. To take Ciao's access away everywhere, remove it from
+  [your Google account's third-party connections](https://myaccount.google.com/connections);
+  to delete the file too, remove Ciao's data in
+  [Google Drive → Settings → Manage apps](https://drive.google.com/drive/settings).
+
+Privacy policy: [sayciao.vercel.app/privacy.html](https://sayciao.vercel.app/privacy.html).
+The Google Cloud project is `ciao-510802`. The desktop app gets its OAuth client
+at build time from `CIAO_GOOGLE_CLIENT_ID` and `CIAO_GOOGLE_CLIENT_SECRET`
+(GitHub secrets in CI); built without them, it has no *Sync* card. The Android
+app needs nothing: Google knows it by its package name and signing key, so a
+build signed with another key can't sign in.
 
 ## Where things are stored
 
@@ -327,6 +366,9 @@ on macOS and `~/.config/Ciao` on Linux:
   history window opens it.
 - `ciao.log` — the app log.
 - `telemetry-id` — the random install id for [anonymous usage counts](#telemetry).
+- `google-account.json` — the Google account for [sync](#sync): its email and
+  refresh token, encrypted with the system keychain where there is one.
+- `sync-state.json` — every term change this device knows, for merging.
 
 Recordings and transcripts stay on your machine. Audio leaves it only to be
 transcribed by OpenAI.
@@ -457,7 +499,9 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `transcribe.ts` — live and file transcription;
   - `paste.ts` — clipboard-preserving paste;
   - `input.ts` — talks to the keyboard and paste helper of the system;
-  - `updater.ts` — updates from GitHub Releases.
+  - `updater.ts` — updates from GitHub Releases;
+  - `sync.ts` — Google sign-in and syncing through Drive; the merging is in
+    `src/core/sync.ts`.
 - `src/renderer/` — React 19 + Tailwind 4:
   - `overlay/` — the live card and microphone capture;
   - `history/` — the history and settings window.
@@ -470,12 +514,14 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   the keys, the frontmost app and ⌘V.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.
-- `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app): one
-  static HTML file, deployed with `vercel deploy --prod` from `site/`. Its card
+- `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app), and
+  `privacy.html`, the privacy policy Google's sign-in screen links to: static
+  HTML, deployed with `vercel deploy --prod` from `site/`. Its card
   demo is also the GIF at the top of this README: `node site/record-demo.mjs`
   re-records `assets/demo-*.gif`.
 
-- `android/` — the Android app (Kotlin, no other dependencies than OkHttp):
+- `android/` — the Android app (Kotlin; its dependencies are OkHttp and Google
+  Play services' sign-in):
   - `CiaoService.kt` — the accessibility service: the icon over the keyboard,
     the dictation pipeline, typing into the field;
   - `CardView.kt` — the live card;
@@ -483,7 +529,9 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     `src/core/realtime.ts` and `src/main/transcribe.ts`;
   - `LiveLayout.kt`, `VoiceCommands.kt` — ports of `src/core/liveLayout.ts` and
     `src/core/voiceCommands.ts`. Their unit test holds the TypeScript outputs, so
-    change both together.
+    change both together;
+  - `Sync.kt` — the port of `src/core/sync.ts`, with the same kind of test;
+    `GoogleSync.kt` — sign-in and the Drive calls of `src/main/sync.ts`.
 
 `npm run typecheck` checks the desktop app. For Android you need JDK 17 and the
 Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds

@@ -21,9 +21,25 @@ class Prefs(context: Context) {
         get() = sp.getString("prompt", DEFAULT_PROMPT)!!
         set(v) = sp.edit().putString("prompt", v).apply()
 
+    /** One per line, like on the desktop: a synced term may contain a comma. */
     var keywords: List<String>
-        get() = (sp.getString("keywords", null)?.split(",") ?: DEFAULT_KEYWORDS).map { it.trim() }.filter { it.isNotEmpty() }
-        set(v) = sp.edit().putString("keywords", v.joinToString(", ")).apply()
+        get() = (sp.getString("terms", null)?.split("\n") ?: sp.getString("keywords", null)?.split(",") ?: DEFAULT_KEYWORDS)
+            .map { it.trim() }.filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("terms", v.joinToString("\n")).remove("keywords").apply()
+
+    /** Google account terms and the prompt sync through (GoogleSync); empty when signed out. */
+    var googleEmail: String
+        get() = sp.getString("googleEmail", "")!!
+        set(v) = sp.edit().putString("googleEmail", v).apply()
+
+    var syncedAt: Long
+        get() = sp.getLong("syncedAt", 0)
+        set(v) = sp.edit().putLong("syncedAt", v).apply()
+
+    /** Every term change this device knows, as in the synced file (Sync.serialize); empty before the first edit. */
+    var syncState: String
+        get() = sp.getString("syncState", "")!!
+        set(v) = sp.edit().putString("syncState", v).apply()
 
     var formatText: Boolean
         get() = sp.getBoolean("formatText", true)

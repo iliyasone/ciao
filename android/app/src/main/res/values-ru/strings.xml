@@ -22,10 +22,22 @@
     <string name="try_hint">Нажмите сюда и диктуйте…</string>
 
     <string name="section_recognition">Распознавание</string>
+    <string name="sync_title">Синхронизация с Google</string>
+    <string name="sync_text">Войдите, чтобы термины и контекст были одни на всех ваших устройствах. Они хранятся в скрытой папке Ciao на вашем Google Диске; другие файлы на Диске Ciao не видит.</string>
+    <string name="sync_sign_in">Войти через Google</string>
+    <string name="sync_sign_out">Выйти</string>
+    <string name="sync_signing_in">Вход…</string>
+    <string name="sync_syncing">%1$s · синхронизация…</string>
+    <string name="sync_synced">%1$s · синхронизировано в %2$s</string>
+    <string name="sync_sign_in_failed">Не удалось войти: %1$s</string>
+    <string name="sync_failed">Не удалось синхронизировать: %1$s</string>
+    <string name="sync_signed_out">Google больше не даёт Ciao доступ. Войдите снова</string>
+    <string name="sync_newer_format">Файл синхронизации записан более новой версией Ciao. Обновите приложение</string>
+    <string name="sync_no_drive">нет доступа к Диску. Войдите снова и отметьте на странице Google галочку про данные конфигурации на Google Диске</string>
     <string name="context_title">Контекст</string>
     <string name="context_text">О чём вы обычно говорите. Помогает с названиями и терминами.</string>
     <string name="terms_title">Термины</string>
-    <string name="terms_text">Слова, которые нужно писать точно, через запятую.</string>
+    <string name="terms_text">Слова, которые нужно писать точно, по одному в строке.</string>
     <string name="format_text">Абзацы и списки</string>
     <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
     <string name="show_cost">Показывать стоимость диктовки</string>
