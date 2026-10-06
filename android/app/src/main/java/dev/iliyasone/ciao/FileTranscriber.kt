@@ -26,8 +26,8 @@ object FileTranscriber {
     private const val BYTES_PER_MS = Recorder.SAMPLE_RATE * 2 / 1000
 
     /**
-     * Blocking; call off the main thread. [provider], [key] and [smart] are the dictation's own, as
-     * when it started; the terms and context are the current ones.
+     * Blocking; call off the main thread. [provider] and [smart] are the dictation's own, as when it
+     * started; [key] is that provider's current key (a retry after fixing a bad key must use the new one).
      */
     fun transcribe(context: Context, prefs: Prefs, pcm: ByteArray, provider: Provider, key: String, smart: Boolean): String {
         if (provider == Provider.GEMINI) return transcribeGemini(context, prefs, pcm, key, smart)

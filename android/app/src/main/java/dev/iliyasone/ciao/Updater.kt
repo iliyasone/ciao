@@ -47,6 +47,13 @@ object Updater {
     @Volatile private var release: Release? = null
     /** The installer's confirmation screen, waiting for the settings screen to come back to show it. */
     private var confirm: Intent? = null
+    /** The last confirmation screen shown: shown again if the user left it without answering. */
+    private var lastAsk: Intent? = null
+    /**
+     * The settings screen was hidden (Home, another app), not just covered by the confirmation
+     * dialog: only then is a confirmation left unanswered, rather than one whose Cancel is on its way.
+     */
+    private var leftScreen = false
     /** Install as soon as the release is found again: the process was restarted while the user allowed installs. */
     @Volatile private var installWhenFound = false
     /** The installer session waiting for the user's confirmation. */
@@ -75,13 +82,21 @@ object Updater {
     /** The settings screen came up: show a pending confirmation, finish what a permission held up, check if it's time. */
     fun resume(activity: Activity) {
         foreground = activity
+        val wasAway = leftScreen
+        leftScreen = false
         val pending = confirm
         confirm = null
         if (pending != null) runCatching { activity.startActivity(pending) }
-        else if (state.phase == Phase.INSTALLING && sessionId >= 0 && activity.packageManager.packageInstaller.getSessionInfo(sessionId) == null) {
-            // Some installers close without reporting back: don't leave the buttons disabled.
-            sessionId = -1
-            set(State(Phase.AVAILABLE, release?.version))
+        else if (state.phase == Phase.INSTALLING && sessionId >= 0) {
+            if (activity.packageManager.packageInstaller.getSessionInfo(sessionId) == null) {
+                // Some installers close without reporting back: don't leave the buttons disabled.
+                sessionId = -1
+                lastAsk = null
+                set(State(Phase.AVAILABLE, release?.version))
+            } else {
+                // Still waiting for an answer (the user went Home from the confirmation): ask again.
+                if (wasAway) lastAsk?.let { runCatching { activity.startActivity(it) } }
+            }
         }
         val prefs = Prefs(activity)
         // Kept in prefs: Android may restart Ciao when the user changes "Install unknown apps".
@@ -100,6 +115,10 @@ object Updater {
 
     fun pause(activity: Activity) {
         if (foreground === activity) foreground = null
+    }
+
+    fun stop() {
+        leftScreen = true
     }
 
     /**
@@ -260,6 +279,7 @@ object Updater {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
                 val ask = (intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                lastAsk = ask
                 // Android shows another app's screen only over our own, not from the background.
                 val screen = foreground
                 if (screen != null) runCatching { screen.startActivity(ask) }.onFailure { confirm = ask }
@@ -268,14 +288,17 @@ object Updater {
             // Usually never seen: Android stops this app to replace it.
             PackageInstaller.STATUS_SUCCESS -> {
                 sessionId = -1
+                lastAsk = null
                 set(State(Phase.IDLE))
             }
             PackageInstaller.STATUS_FAILURE_ABORTED -> {
                 sessionId = -1
+                lastAsk = null
                 set(State(Phase.AVAILABLE, version))
             }
             else -> {
                 sessionId = -1
+                lastAsk = null
                 val reason = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: context.getString(R.string.update_install_failed)
                 set(State(Phase.ERROR, version, message = context.getString(R.string.update_failed, reason)))
             }

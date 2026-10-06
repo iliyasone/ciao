@@ -39,8 +39,10 @@ class Prefs(context: Context) {
         get() = Provider.entries.firstOrNull { it.id == sp.getString("provider", null) } ?: Provider.OPENAI
         set(v) = sp.edit().putString("provider", v.id).apply()
 
+    fun keyOf(p: Provider): String = if (p == Provider.GEMINI) geminiKey else apiKey
+
     /** The key of the service in use. */
-    val currentKey: String get() = if (provider == Provider.GEMINI) geminiKey else apiKey
+    val currentKey: String get() = keyOf(provider)
 
     /** Gemini's smart mode: drops fillers and false starts, applies spoken corrections. */
     var smart: Boolean

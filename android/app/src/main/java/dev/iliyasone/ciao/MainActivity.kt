@@ -113,8 +113,7 @@ class MainActivity : Activity() {
                 found -> null
                 s.phase == Updater.Phase.CHECKING -> getString(R.string.update_checking)
                 s.phase == Updater.Phase.LATEST -> s.message ?: getString(R.string.update_latest)
-                s.phase == Updater.Phase.ERROR -> s.message
-                else -> null
+                else -> s.message
             }
             text = line
             visibility = if (line != null) TextView.VISIBLE else TextView.GONE
@@ -142,6 +141,11 @@ class MainActivity : Activity() {
         GoogleSync.applied = null
         Updater.listener = null
         Updater.pause(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Updater.stop()
     }
 
     @Deprecated("Activity result API; this app has no AndroidX")
