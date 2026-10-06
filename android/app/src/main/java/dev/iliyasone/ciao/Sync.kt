@@ -123,7 +123,7 @@ object Sync {
             val term = t.opt("term") as? String ?: return null
             val at = t.opt("at") as? Number ?: return null
             if (term.isBlank()) return null
-            TermChange(term, at.toLong(), t.optBoolean("removed"))
+            TermChange(term, at.toLong(), t.opt("removed") == true)
         }
         val p = raw.getJSONObject("prompt")
         val value = p.opt("value") as? String ?: return null

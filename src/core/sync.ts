@@ -144,7 +144,7 @@ export function parseState(text: string): SyncState | null {
     const terms: TermChange[] = [];
     for (const t of raw.terms as Partial<TermChange>[]) {
       if (typeof t?.term !== "string" || typeof t.at !== "number" || !t.term.trim()) return null;
-      terms.push(t.removed ? { term: t.term, at: t.at, removed: true } : { term: t.term, at: t.at });
+      terms.push(t.removed === true ? { term: t.term, at: t.at, removed: true } : { term: t.term, at: t.at });
     }
     return { terms, prompt: { value: raw.prompt.value, at: raw.prompt.at } };
   } catch {
