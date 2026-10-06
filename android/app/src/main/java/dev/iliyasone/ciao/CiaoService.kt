@@ -179,7 +179,7 @@ class CiaoService : AccessibilityService() {
         // Moving our own window raises another windows-changed event; don't loop on it, and leave a
         // glide that is already headed there (a throw, which stays catchable) alone.
         if (motion.running && motion.toX == x.toFloat() && motion.toY == y.toFloat()) return
-        if (x != bubbleParams.x || y != bubbleParams.y) {
+        if (motion.running || x != bubbleParams.x || y != bubbleParams.y) {
             // The keyboard changed under it: glide over, letting taps through to the keyboard meanwhile.
             setBubbleTouchable(false)
             glide(x, y)
