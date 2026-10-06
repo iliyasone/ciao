@@ -102,7 +102,7 @@ object FileTranscriber {
                 val error = first.optJSONObject("error")?.optString("message")?.takeIf { m -> m.isNotEmpty() }
                 if (!it.isSuccessful) throw IOException(error ?: context.getString(R.string.error_status, GeminiSession.NAME, it.code))
                 val status = first.optString("status")
-                if (status != "completed") throw IOException(error ?: context.getString(R.string.error_status_text, GeminiSession.NAME, status))
+                if (status != "completed") throw IOException(error ?: context.getString(R.string.error_status_text, GeminiSession.NAME, status.ifEmpty { it.code.toString() }))
                 val text = StringBuilder()
                 val steps = first.optJSONArray("steps") ?: JSONArray()
                 for (i in 0 until steps.length()) {

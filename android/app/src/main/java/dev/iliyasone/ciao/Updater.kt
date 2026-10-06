@@ -189,6 +189,8 @@ object Updater {
             return
         }
         val app = activity.applicationContext
+        // Until the new session exists, resume() must not take a failed earlier one for it.
+        sessionId = -1
         set(State(Phase.DOWNLOADING, r.version, 0))
         worker.execute {
             try {
@@ -244,6 +246,8 @@ object Updater {
     /** Android checks that the APK is signed with the same key as this app, then asks the user to confirm. */
     private fun commit(context: Context, apk: File) {
         val installer = context.packageManager.packageInstaller
+        // One left unanswered by an earlier run of the app.
+        for (old in installer.mySessions) runCatching { installer.abandonSession(old.sessionId) }
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(context.packageName)
         params.setSize(apk.length())
@@ -260,6 +264,7 @@ object Updater {
                 session.commit(intent.intentSender)
             }
         } catch (e: Exception) {
+            main.post { if (sessionId == id) sessionId = -1 }
             runCatching { installer.abandonSession(id) }
             throw IOException(e.message ?: e.javaClass.simpleName, e)
         }
