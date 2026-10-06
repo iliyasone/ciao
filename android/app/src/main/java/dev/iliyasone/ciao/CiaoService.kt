@@ -50,7 +50,8 @@ class CiaoService : AccessibilityService() {
     /** The keyboard top as last seen, and since when: the bubble waits for it to stop moving. */
     private var imeTopSeen = -1
     private var imeTopSince = 0L
-    private val motion = Spring(onFrame = { x, y -> moveBubble(x.roundToInt(), y.roundToInt().coerceAtMost(glideFloor)) }, onEnd = { if (bubble?.alpha == 1f) setBubbleTouchable(true) })
+    private val imeSettled get() = imeTopSeen == -1 || SystemClock.uptimeMillis() >= imeTopSince + IME_SETTLE_MS
+    private val motion = Spring(onFrame = { x, y -> moveBubble(x.roundToInt(), y.roundToInt().coerceAtMost(glideFloor)) }, onEnd = { if (bubble?.alpha == 1f && imeSettled) setBubbleTouchable(true) })
     /** The lowest the current glide may go: one coming down stops at its spot instead of bouncing over the keys. */
     private var glideFloor = Int.MAX_VALUE
     private var dictation: Dictation? = null
@@ -163,7 +164,7 @@ class CiaoService : AccessibilityService() {
             bubbleParams.x = x
             bubbleParams.y = y
             val v = BubbleView(this)
-            v.setOnTouchListener(BubbleTouch())
+            v.setOnTouchListener(BubbleTouch().also { bubbleTouch = it })
             v.contentDescription = getString(R.string.bubble_description)
             v.alpha = 0f
             v.scaleX = APPEAR_SCALE
@@ -171,7 +172,7 @@ class CiaoService : AccessibilityService() {
             wm.addView(v, bubbleParams)
             bubble = v
             v.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(APPEAR_MS).setInterpolator(DecelerateInterpolator())
-                .withEndAction { if (bubble === v && !motion.running) setBubbleTouchable(true) }
+                .withEndAction { if (bubble === v && !motion.running && imeSettled) setBubbleTouchable(true) }
             return
         }
         if (touching) return
@@ -182,7 +183,7 @@ class CiaoService : AccessibilityService() {
             // The keyboard changed under it: glide over, letting taps through to the keyboard meanwhile.
             setBubbleTouchable(false)
             glide(x, y)
-        } else if (!motion.running && view.alpha == 1f) {
+        } else if (!motion.running && view.alpha == 1f && imeSettled) {
             setBubbleTouchable(true)
         }
     }
@@ -217,6 +218,8 @@ class CiaoService : AccessibilityService() {
         bubble = null
         // A touch cut short by the keyboard closing never gets its ACTION_UP.
         touching = false
+        bubbleTouch?.abandon()
+        bubbleTouch = null
         // Keep the warm connection a little, in case the keyboard comes right back.
         main.removeCallbacks(closePool)
         if (::pool.isInitialized) main.postDelayed(closePool, 120_000)
@@ -224,6 +227,7 @@ class CiaoService : AccessibilityService() {
 
     /** A finger is on the bubble: nothing else moves it meanwhile. */
     private var touching = false
+    private var bubbleTouch: BubbleTouch? = null
 
     /** Tap: start / finish. Hold: talk while held. Drag: move it; let go and it glides to the nearer edge. */
     private inner class BubbleTouch : android.view.View.OnTouchListener {
@@ -238,8 +242,6 @@ class CiaoService : AccessibilityService() {
         private var velocity: VelocityTracker? = null
         private val slop = ViewConfiguration.get(this@CiaoService).scaledTouchSlop
         private val hold = Runnable {
-            // The keyboard closed under the finger (hiding the bubble): no release will come.
-            if (!touching) return@Runnable
             held = true
             start(pushToTalk = true)
         }
@@ -303,6 +305,13 @@ class CiaoService : AccessibilityService() {
                 }
             }
             return true
+        }
+
+        /** The bubble went away mid-touch: no release will come. */
+        fun abandon() {
+            main.removeCallbacks(hold)
+            velocity?.recycle()
+            velocity = null
         }
 
         /** The window moves with the finger, so track screen coordinates rather than the view's. */

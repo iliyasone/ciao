@@ -290,8 +290,9 @@ yours.
 - **Hold** the icon to talk while you hold it; let go to finish.
 - **Drag** it to move it, or throw it. It glides to the nearer side and stays at
   that height above the keyboard.
-- The icon appears once the keyboard has finished opening, so a tap aimed at the
-  keyboard doesn't land on it; it never covers the keys.
+- The icon appears once the keyboard has finished opening, and it rests above the
+  keys, not on them. While the keyboard is still moving, taps go through the icon,
+  so a tap aimed at a key never starts a dictation.
 - **✕** on the card cancels; **✓** finishes.
 - If the field won't take the text, it is copied to the clipboard instead.
 - If the live connection drops, recording continues and the audio is sent to
