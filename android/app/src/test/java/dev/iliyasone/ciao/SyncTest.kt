@@ -77,6 +77,8 @@ class SyncTest {
     fun parse() {
         assertNull(Sync.parse("""{"version":2,"terms":[],"prompt":{"value":"","at":0}}"""))
         assertNull(Sync.parse("nope"))
+        assertNull(Sync.parse("""{"version":"1","terms":[],"prompt":{"value":"","at":0}}"""))
+        assertNull(Sync.parse("""{"version":1,"terms":[{"term":"A","at":"5"}],"prompt":{"value":"","at":0}}"""))
         assertNull(Sync.parse("""{"version":1,"terms":[{"term":" ","at":1}],"prompt":{"value":"","at":0}}"""))
         val merged = Sync.mergeStates(edited, remote)
         assertEquals(merged, Sync.parse(Sync.serialize(merged)))

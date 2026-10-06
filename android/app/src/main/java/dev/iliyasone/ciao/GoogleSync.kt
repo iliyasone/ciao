@@ -54,7 +54,7 @@ object GoogleSync {
     var listener: ((Status) -> Unit)? = null
     /** Called on the main thread after merged terms and prompt were written to [Prefs]. */
     var applied: (() -> Unit)? = null
-    private var lastAttempt = 0L
+    @Volatile private var lastAttempt = 0L
     private val pending = Any()
     /** Guards the stored history: an edit recorded while a sync is merging must not be lost. */
     private val lock = Any()
@@ -81,7 +81,7 @@ object GoogleSync {
                 prefs.syncState = Sync.serialize(Sync.initialState(prefs.keywords, prefs.prompt, Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT))
             }
         }
-        status = Status(prefs.googleEmail.ifEmpty { null }, status.busy, prefs.syncedAt, status.error)
+        set(context) { copy(email = prefs.googleEmail.ifEmpty { null }, syncedAt = prefs.syncedAt) }
     }
 
     /** Shows Google's consent screen; the answer comes back through [onActivityResult]. */

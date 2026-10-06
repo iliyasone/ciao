@@ -110,18 +110,24 @@ object Sync {
         .put("prompt", JSONObject().put("value", state.prompt.value).put("at", state.prompt.at))
         .toString()
 
-    /** The synced file read back; null if it isn't one (a newer format, or damaged). */
+    /**
+     * The synced file read back; null if it isn't one (a newer format, or damaged). As strict about
+     * types as the desktop, so both refuse the same files.
+     */
     fun parse(text: String): SyncState? = runCatching {
         val raw = JSONObject(text)
-        if (raw.optInt("version") != 1) return null
+        if ((raw.opt("version") as? Number)?.toDouble() != 1.0) return null
         val list = raw.getJSONArray("terms")
         val terms = (0 until list.length()).map { i ->
             val t = list.getJSONObject(i)
-            val term = t.getString("term")
+            val term = t.opt("term") as? String ?: return null
+            val at = t.opt("at") as? Number ?: return null
             if (term.isBlank()) return null
-            TermChange(term, t.getLong("at"), t.optBoolean("removed"))
+            TermChange(term, at.toLong(), t.optBoolean("removed"))
         }
         val p = raw.getJSONObject("prompt")
-        SyncState(terms, Stamped(p.getString("value"), p.getLong("at")))
+        val value = p.opt("value") as? String ?: return null
+        val at = p.opt("at") as? Number ?: return null
+        SyncState(terms, Stamped(value, at.toLong()))
     }.getOrNull()
 }
