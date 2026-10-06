@@ -92,8 +92,6 @@ function History() {
     return (entries ?? []).filter((e) => !q || e.transcripts.some((t) => t.text.toLowerCase().includes(q)));
   }, [entries, query]);
 
-  useEffect(() => setLimit(PAGE), [query]);
-
   // Draw the next page while the end of the list is still a screen or two away.
   const more = filtered.length > limit;
   useEffect(() => {
@@ -117,7 +115,7 @@ function History() {
     return [...map];
   }, [filtered, limit, tr]);
 
-  const today = (entries ?? []).filter((e) => new Date(e.createdAt).toDateString() === new Date().toDateString());
+  const today = useMemo(() => (entries ?? []).filter((e) => new Date(e.createdAt).toDateString() === new Date().toDateString()), [entries]);
   const total = entries ?? [];
 
   if (!entries) return null;
@@ -135,7 +133,10 @@ function History() {
             <Search className="size-3.5 text-faint" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setLimit(PAGE);
+              }}
               placeholder={tr.history.search}
               className="selectable w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-ghost"
             />

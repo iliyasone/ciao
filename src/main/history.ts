@@ -11,7 +11,8 @@ import type { HistoryEntry } from "../core/types";
  *
  * The entries are read from disk once and then kept in memory, kept current by save() and
  * delete(): reading thousands of small files again on every look at the history took seconds on
- * Windows. The cache holds copies, so a caller changing an entry it hasn't saved changes nothing.
+ * Windows. list() still lists the folder (cheap) to notice entries deleted or added by hand.
+ * The cache holds copies, so a caller changing an entry it hasn't saved changes nothing.
  */
 export class HistoryStore {
   private cache: Map<string, HistoryEntry> | null = null;
@@ -20,10 +21,13 @@ export class HistoryStore {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  private entries(): Map<string, HistoryEntry> {
-    if (this.cache) return this.cache;
-    const cache = new Map<string, HistoryEntry>();
-    for (const id of fs.readdirSync(this.dir)) {
+  private entries(rescan = false): Map<string, HistoryEntry> {
+    if (this.cache && !rescan) return this.cache;
+    const cache = this.cache ?? new Map<string, HistoryEntry>();
+    const ids = new Set(fs.readdirSync(this.dir));
+    for (const id of cache.keys()) if (!ids.has(id)) cache.delete(id);
+    for (const id of ids) {
+      if (cache.has(id)) continue;
       try {
         cache.set(id, JSON.parse(fs.readFileSync(path.join(this.dir, id, "entry.json"), "utf8")));
       } catch {
@@ -62,7 +66,7 @@ export class HistoryStore {
   /** Newest first. */
   list(): HistoryEntry[] {
     // ISO timestamps sort as plain strings, much faster than localeCompare over thousands.
-    return [...this.entries().values()].map((e) => structuredClone(e)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+    return [...this.entries(true).values()].map((e) => structuredClone(e)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
   }
 
   delete(id: string): void {
