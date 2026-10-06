@@ -47,13 +47,10 @@ object Updater {
     @Volatile private var release: Release? = null
     /** The installer's confirmation screen, waiting for the settings screen to come back to show it. */
     private var confirm: Intent? = null
-    /** The last confirmation screen shown: shown again if the user left it without answering. */
+    /** The last confirmation screen: the user may have left it without answering (Home, a tap outside). */
     private var lastAsk: Intent? = null
-    /**
-     * The settings screen was hidden (Home, another app), not just covered by the confirmation
-     * dialog: only then is a confirmation left unanswered, rather than one whose Cancel is on its way.
-     */
-    private var leftScreen = false
+    /** Installing and waiting for the user: the button opens the confirmation again. */
+    val canConfirm: Boolean get() = state.phase == Phase.INSTALLING && lastAsk != null
     /** Install as soon as the release is found again: the process was restarted while the user allowed installs. */
     @Volatile private var installWhenFound = false
     /** The installer session waiting for the user's confirmation. */
@@ -82,21 +79,14 @@ object Updater {
     /** The settings screen came up: show a pending confirmation, finish what a permission held up, check if it's time. */
     fun resume(activity: Activity) {
         foreground = activity
-        val wasAway = leftScreen
-        leftScreen = false
         val pending = confirm
         confirm = null
         if (pending != null) runCatching { activity.startActivity(pending) }
-        else if (state.phase == Phase.INSTALLING && sessionId >= 0) {
-            if (activity.packageManager.packageInstaller.getSessionInfo(sessionId) == null) {
-                // Some installers close without reporting back: don't leave the buttons disabled.
-                sessionId = -1
-                lastAsk = null
-                set(State(Phase.AVAILABLE, release?.version))
-            } else {
-                // Still waiting for an answer (the user went Home from the confirmation): ask again.
-                if (wasAway) lastAsk?.let { runCatching { activity.startActivity(it) } }
-            }
+        else if (state.phase == Phase.INSTALLING && sessionId >= 0 && activity.packageManager.packageInstaller.getSessionInfo(sessionId) == null) {
+            // Some installers close without reporting back: don't leave the buttons disabled.
+            sessionId = -1
+            lastAsk = null
+            set(State(Phase.AVAILABLE, release?.version))
         }
         val prefs = Prefs(activity)
         // Kept in prefs: Android may restart Ciao when the user changes "Install unknown apps".
@@ -117,8 +107,9 @@ object Updater {
         if (foreground === activity) foreground = null
     }
 
-    fun stop() {
-        leftScreen = true
+    /** The confirmation was left unanswered: show it again. */
+    fun confirmAgain(activity: Activity) {
+        lastAsk?.let { runCatching { activity.startActivity(it) } }
     }
 
     /**
@@ -150,6 +141,8 @@ object Updater {
                         set(State(Phase.LATEST, message = app.getString(R.string.update_building, found.version)))
                     } else {
                         Prefs(app).updateCheckedAt = System.currentTimeMillis()
+                        // The APK of the update now installed.
+                        File(app.cacheDir, "updates").deleteRecursively()
                         set(State(Phase.LATEST))
                     }
                 }
@@ -280,6 +273,7 @@ object Updater {
                 @Suppress("DEPRECATION")
                 val ask = (intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 lastAsk = ask
+                set(state) // the button turns into "Confirm the installation"
                 // Android shows another app's screen only over our own, not from the background.
                 val screen = foreground
                 if (screen != null) runCatching { screen.startActivity(ask) }.onFailure { confirm = ask }

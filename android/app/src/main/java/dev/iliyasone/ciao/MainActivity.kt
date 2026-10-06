@@ -66,7 +66,7 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
         }
         findViewById<Button>(R.id.checkButton).setOnClickListener { Updater.check(this) }
-        findViewById<Button>(R.id.updateButton).setOnClickListener { Updater.install(this) }
+        findViewById<Button>(R.id.updateButton).setOnClickListener { if (Updater.canConfirm) Updater.confirmAgain(this) else Updater.install(this) }
         findViewById<Button>(R.id.whatsNewButton).setOnClickListener {
             Updater.page?.let { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } }
         }
@@ -102,8 +102,8 @@ class MainActivity : Activity() {
                 progress = s.percent
             }
             findViewById<Button>(R.id.updateButton).apply {
-                text = getString(R.string.update_install, version)
-                isEnabled = s.phase == Updater.Phase.AVAILABLE || s.phase == Updater.Phase.ERROR
+                text = if (Updater.canConfirm) getString(R.string.update_confirm) else getString(R.string.update_install, version)
+                isEnabled = s.phase == Updater.Phase.AVAILABLE || s.phase == Updater.Phase.ERROR || Updater.canConfirm
             }
             findViewById<Button>(R.id.whatsNewButton).visibility = if (Updater.page != null) Button.VISIBLE else Button.GONE
         }
@@ -141,11 +141,6 @@ class MainActivity : Activity() {
         GoogleSync.applied = null
         Updater.listener = null
         Updater.pause(this)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        Updater.stop()
     }
 
     @Deprecated("Activity result API; this app has no AndroidX")

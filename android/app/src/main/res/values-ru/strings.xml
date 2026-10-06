@@ -57,6 +57,7 @@
     <string name="update_available">Вышел Ciao %1$s</string>
     <string name="update_available_text">Ciao скачает его с GitHub, а Android установит поверх этой версии. Настройки сохранятся.</string>
     <string name="update_install">Обновить до %1$s</string>
+    <string name="update_confirm">Подтвердить установку</string>
     <string name="update_whats_new">Что нового</string>
     <string name="update_downloading">Скачиваю… %1$d%%</string>
     <string name="update_installing">Подтвердите установку в окне Android</string>

@@ -62,6 +62,7 @@
     <string name="update_available">Ciao %1$s is out</string>
     <string name="update_available_text">Ciao downloads it from GitHub and Android installs it over this version. Your settings stay.</string>
     <string name="update_install">Update to %1$s</string>
+    <string name="update_confirm">Confirm the installation</string>
     <string name="update_whats_new">What\'s new</string>
     <string name="update_downloading">Downloading… %1$d%%</string>
     <string name="update_installing">Confirm the installation in the Android window</string>
