@@ -61,6 +61,7 @@
     <string name="update_downloading">Скачиваю… %1$d%%</string>
     <string name="update_installing">Подтвердите установку в окне Android</string>
     <string name="update_allow">Чтобы обновиться, разрешите Ciao устанавливать приложения: Android спросит один раз, а Ciao ставит только свои обновления</string>
+    <string name="update_building">Ciao %1$s уже вышел, но его APK ещё собирается. Проверьте через несколько минут</string>
     <string name="update_check_failed">Не удалось проверить обновления: %1$s</string>
     <string name="update_failed">Не удалось обновить: %1$s</string>
     <string name="update_install_failed">Android не установил обновление</string>

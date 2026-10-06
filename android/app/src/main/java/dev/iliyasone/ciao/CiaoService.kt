@@ -62,6 +62,7 @@ class CiaoService : AccessibilityService() {
     private inner class Dictation(val target: AccessibilityNodeInfo?, val session: LiveSession, val pushToTalk: Boolean) {
         /** As when it started: the settings may change before it is delivered. */
         val provider = prefs.provider
+        val key = prefs.currentKey
         val smart = prefs.smart
         val startedAt = SystemClock.elapsedRealtime()
         var endedAt = 0L
@@ -506,7 +507,7 @@ class CiaoService : AccessibilityService() {
     private fun transcribeFile(d: Dictation) {
         Thread {
             // runCatching also catches an OutOfMemoryError from reading a very long recording.
-            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes()) }
+            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes(), d.provider, d.key, d.smart) }
             main.post {
                 if (dictation !== d) return@post
                 result.fold(onSuccess = { deliver(d, it) }, onFailure = { fail(d, it.message ?: getString(R.string.error_provider, d.provider.displayName)) })

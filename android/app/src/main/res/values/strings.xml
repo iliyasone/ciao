@@ -66,6 +66,7 @@
     <string name="update_downloading">Downloading… %1$d%%</string>
     <string name="update_installing">Confirm the installation in the Android window</string>
     <string name="update_allow">To update, allow Ciao to install apps: Android asks this once, and Ciao only ever installs its own updates</string>
+    <string name="update_building">Ciao %1$s is out, but its APK is still being built. Check again in a few minutes</string>
     <string name="update_check_failed">Couldn\'t check for updates: %1$s</string>
     <string name="update_failed">Couldn\'t update: %1$s</string>
     <string name="update_install_failed">Android didn\'t install it</string>

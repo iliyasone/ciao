@@ -25,9 +25,12 @@ object FileTranscriber {
     private const val SEARCH_MS = 10_000
     private const val BYTES_PER_MS = Recorder.SAMPLE_RATE * 2 / 1000
 
-    /** Blocking; call off the main thread. */
-    fun transcribe(context: Context, prefs: Prefs, pcm: ByteArray): String {
-        if (prefs.provider == Provider.GEMINI) return transcribeGemini(context, prefs, pcm)
+    /**
+     * Blocking; call off the main thread. [provider], [key] and [smart] are the dictation's own, as
+     * when it started; the terms and context are the current ones.
+     */
+    fun transcribe(context: Context, prefs: Prefs, pcm: ByteArray, provider: Provider, key: String, smart: Boolean): String {
+        if (provider == Provider.GEMINI) return transcribeGemini(context, prefs, pcm, key, smart)
         val texts = mutableListOf<String>()
         val hints = listOf(prefs.prompt.trim(), if (prefs.keywords.isNotEmpty()) "Термины: ${prefs.keywords.joinToString(", ")}." else "")
             .filter { it.isNotEmpty() }.joinToString(" ")
@@ -36,7 +39,7 @@ object FileTranscriber {
             val prompt = if (texts.isEmpty()) hints else "$hints ${texts.last().takeLast(400)}".trim()
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("file", "audio.wav", wav(pcm, start, end).toRequestBody("audio/wav".toMediaType()))
-                .addFormDataPart("model", prefs.fileModel)
+                .addFormDataPart("model", Provider.OPENAI.fileModel)
                 .apply {
                     prefs.languages.firstOrNull()?.let { addFormDataPart("language", it) }
                     if (prompt.isNotEmpty()) addFormDataPart("prompt", prompt)
@@ -44,7 +47,7 @@ object FileTranscriber {
                 .build()
             val request = Request.Builder()
                 .url("https://api.openai.com/v1/audio/transcriptions")
-                .header("Authorization", "Bearer ${prefs.apiKey}")
+                .header("Authorization", "Bearer $key")
                 .post(body)
                 .build()
             val response = try {
@@ -67,9 +70,9 @@ object FileTranscriber {
      * gemini-3.5-transcribe through the Interactions API: the only Gemini endpoint where smart mode
      * works. Never add language codes, see Gemini.kt. Mirrors transcribeFileGemini.
      */
-    private fun transcribeGemini(context: Context, prefs: Prefs, pcm: ByteArray): String {
+    private fun transcribeGemini(context: Context, prefs: Prefs, pcm: ByteArray, key: String, smart: Boolean): String {
         val config = JSONObject()
-        if (prefs.smart) config.put("mode", "smart")
+        if (smart) config.put("mode", "smart")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("custom_vocabulary", JSONArray(terms))
         val texts = mutableListOf<String>()
@@ -77,14 +80,14 @@ object FileTranscriber {
             val audio = JSONObject().put("type", "audio").put("mime_type", "audio/wav")
                 .put("data", Base64.encodeToString(wav(pcm, start, end), Base64.NO_WRAP))
             val body = JSONObject()
-                .put("model", prefs.fileModel)
+                .put("model", Provider.GEMINI.fileModel)
                 // Interactions are kept on Google's side by default; recordings stay on this phone.
                 .put("store", false)
                 .put("input", JSONArray().put(audio))
             if (config.length() > 0) body.put("generation_config", JSONObject().put("transcription_config", config))
             val request = Request.Builder()
                 .url("https://generativelanguage.googleapis.com/v1beta/interactions")
-                .header("x-goog-api-key", prefs.geminiKey)
+                .header("x-goog-api-key", key)
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
                 .build()
             val response = try {

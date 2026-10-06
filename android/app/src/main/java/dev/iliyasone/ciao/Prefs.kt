@@ -72,6 +72,11 @@ class Prefs(context: Context) {
         get() = sp.getLong("updateCheckedAt", 0)
         set(v) = sp.edit().putLong("updateCheckedAt", v).apply()
 
+    /** Sent to "Install unknown apps" to allow an update: carry on with it once back. */
+    var updateAfterPermission: Boolean
+        get() = sp.getBoolean("updateAfterPermission", false)
+        set(v) = sp.edit().putBoolean("updateAfterPermission", v).apply()
+
     var syncedAt: Long
         get() = sp.getLong("syncedAt", 0)
         set(v) = sp.edit().putLong("syncedAt", v).apply()

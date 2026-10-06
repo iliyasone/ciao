@@ -112,7 +112,7 @@ class MainActivity : Activity() {
             val line = when {
                 found -> null
                 s.phase == Updater.Phase.CHECKING -> getString(R.string.update_checking)
-                s.phase == Updater.Phase.LATEST -> getString(R.string.update_latest)
+                s.phase == Updater.Phase.LATEST -> s.message ?: getString(R.string.update_latest)
                 s.phase == Updater.Phase.ERROR -> s.message
                 else -> null
             }
