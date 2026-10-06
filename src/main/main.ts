@@ -6,6 +6,7 @@ import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, n
 import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { setLang, t } from "../core/i18n";
+import { arrangeTerms } from "../core/sync";
 import { acceleratorParts } from "../core/triggers";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
@@ -444,7 +445,7 @@ void app.whenReady().then(() => {
     app.getPath("userData"),
     settings,
     (keywords, prompt) => {
-      applySettings({ ...settings, keywords, prompt });
+      applySettings({ ...settings, keywords: arrangeTerms(settings.keywords, keywords), prompt });
       historyWin?.webContents.send("settings:synced", settings);
     },
     (status) => historyWin?.webContents.send("sync:status", status),

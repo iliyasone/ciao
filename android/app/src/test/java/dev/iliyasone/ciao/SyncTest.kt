@@ -60,6 +60,11 @@ class SyncTest {
     }
 
     @Test
+    fun arrange() {
+        assertEquals(listOf("Z", "B", "A", "New"), Sync.arrangeTerms(listOf("Z", " B", "A", "", "gone"), listOf("A", "B", "New", "Z")))
+    }
+
+    @Test
     fun tie() {
         val a = SyncState(listOf(TermChange("X", 5)), Stamped("a", 1))
         val b = SyncState(listOf(TermChange("X", 5, removed = true)), Stamped("b", 1))

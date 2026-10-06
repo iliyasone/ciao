@@ -44,6 +44,17 @@ object Sync {
     fun termsOf(state: SyncState): List<String> = state.terms.filter { !it.removed }.map { it.term }
 
     /**
+     * The merged terms in the order the user keeps them (a reorder isn't synced): the ones they have
+     * first, as they are, then new ones at the end.
+     */
+    fun arrangeTerms(current: List<String>, merged: List<String>): List<String> {
+        val keep = merged.toSet()
+        val kept = normalizeTerms(current).filter { it in keep }
+        val have = kept.toSet()
+        return kept + merged.filter { it !in have }
+    }
+
+    /**
      * Records the user's edit: terms added or removed since [state], and a changed prompt, stamped
      * [now]. Null when nothing changed (a reorder alone isn't an edit).
      */

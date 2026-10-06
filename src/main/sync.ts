@@ -252,7 +252,7 @@ export class GoogleSync {
       const token = await this.token();
       // Signed out (perhaps into another account) since this sync started: its data must not go there.
       if (this.syncSession !== this.session) throw new Cancelled();
-      const res = await net.fetch(url, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` } });
+      const res = await net.fetch(url, { ...init, signal: timeout(), headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` } });
       if (this.syncSession !== this.session) throw new Cancelled();
       if (res.status === 401 && attempt === 0) {
         this.access = null; // expired early, or revoked: a fresh token tells which
@@ -282,7 +282,7 @@ export class GoogleSync {
   }
 
   private async email(): Promise<string> {
-    const res = await net.fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${this.access!.token}` } });
+    const res = await net.fetch("https://www.googleapis.com/oauth2/v3/userinfo", { signal: timeout(), headers: { Authorization: `Bearer ${this.access!.token}` } });
     if (!res.ok) throw new Error(`Google userinfo ${res.status}`);
     return ((await res.json()) as { email: string }).email;
   }
@@ -293,15 +293,17 @@ export class GoogleSync {
     const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
     const state = crypto.randomBytes(16).toString("base64url");
     const server = http.createServer();
+    let cancel: (() => void) | null = null;
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const redirect = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
     try {
       const code = await new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error(t().sync.timedOut)), SIGN_IN_TIMEOUT_MS);
-        this.cancelSignIn = () => {
-          clearTimeout(timeout);
+        const expire = setTimeout(() => reject(new Error(t().sync.timedOut)), SIGN_IN_TIMEOUT_MS);
+        cancel = () => {
+          clearTimeout(expire);
           reject(new Cancelled());
         };
+        this.cancelSignIn = cancel;
         server.on("request", (req, res) => {
           const url = new URL(req.url ?? "/", redirect);
           if (url.pathname !== "/" || url.searchParams.get("state") !== state) {
@@ -315,7 +317,7 @@ export class GoogleSync {
               `<body style="font:16px system-ui,sans-serif;display:grid;place-items:center;height:90vh;margin:0">` +
               `<p>${t().sync.browserDone}</p>`,
           );
-          clearTimeout(timeout);
+          clearTimeout(expire);
           if (code) resolve(code);
           else reject(url.searchParams.get("error") === "access_denied" ? new Cancelled() : new Error(url.searchParams.get("error") ?? "no code"));
         });
@@ -341,7 +343,7 @@ export class GoogleSync {
       if (!res.ok) throw new Error(`Google token ${res.status}: ${(await res.text()).slice(0, 200)}`);
       return (await res.json()) as { access_token: string; expires_in: number; refresh_token?: string; scope: string };
     } finally {
-      this.cancelSignIn = null;
+      if (this.cancelSignIn === cancel) this.cancelSignIn = null; // not a newer sign-in's
       server.closeAllConnections();
       server.close();
     }
@@ -360,7 +362,12 @@ export class GoogleSync {
 class Cancelled extends Error {}
 
 function form(fields: Record<string, string>): RequestInit {
-  return { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() };
+  return { method: "POST", signal: timeout(), headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() };
+}
+
+/** A stalled request (sleep mid-sync, a captive portal) must not keep every later sync waiting. */
+function timeout(): AbortSignal {
+  return AbortSignal.timeout(30_000);
 }
 
 function message(e: unknown): string {

@@ -46,7 +46,7 @@ object GoogleSync {
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
-    class Status(val email: String?, val busy: Boolean, val syncedAt: Long, val error: String?)
+    data class Status(val email: String?, val busy: Boolean, val syncedAt: Long, val error: String?)
 
     @Volatile var status = Status(null, false, 0, null)
         private set
@@ -59,14 +59,19 @@ object GoogleSync {
     /** Guards the stored history: an edit recorded while a sync is merging must not be lost. */
     private val lock = Any()
 
+    /** [change] sees the current status, so a sync that finishes after a sign-out can't undo it. */
     @Synchronized
-    private fun set(context: Context, email: String? = status.email, busy: Boolean = status.busy, syncedAt: Long = status.syncedAt, error: String? = status.error) {
+    private fun set(context: Context, change: Status.() -> Status) {
+        val next = status.change()
         val prefs = Prefs(context)
-        prefs.googleEmail = email ?: ""
-        prefs.syncedAt = syncedAt
-        status = Status(email, busy, syncedAt, error)
-        main.post { listener?.invoke(status) }
+        prefs.googleEmail = next.email ?: ""
+        prefs.syncedAt = next.syncedAt
+        status = next
+        main.post { listener?.invoke(next) }
     }
+
+    /** For the sync of [account]: changes the status only if that account is still the signed-in one. */
+    private fun setFor(context: Context, account: String, change: Status.() -> Status) = set(context) { if (email == account) change() else this }
 
     /** Before the first edit: what the settings hold now becomes the history to sync from. */
     fun load(context: Context) {
@@ -81,7 +86,7 @@ object GoogleSync {
 
     /** Shows Google's consent screen; the answer comes back through [onActivityResult]. */
     fun signIn(activity: Activity) {
-        set(activity, busy = true, error = null)
+        set(activity) { copy(busy = true, error = null) }
         Identity.getAuthorizationClient(activity).authorize(request)
             .addOnSuccessListener { result ->
                 val intent = result.pendingIntent
@@ -96,7 +101,7 @@ object GoogleSync {
     }
 
     fun onActivityResult(activity: Activity, resultCode: Int, data: Intent?) {
-        if (resultCode != Activity.RESULT_OK) return set(activity, busy = false) // closed Google's screen
+        if (resultCode != Activity.RESULT_OK) return set(activity) { copy(busy = false) } // closed Google's screen
         runCatching { Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data) }
             .onSuccess { authorized(activity, it) }
             .onFailure { failed(activity, it) }
@@ -104,14 +109,14 @@ object GoogleSync {
 
     private fun failed(context: Context, e: Throwable) {
         android.util.Log.w("Ciao", "google sign-in", e)
-        set(context, busy = false, error = context.getString(R.string.sync_sign_in_failed, e.message ?: e.javaClass.simpleName))
+        set(context) { copy(busy = false, error = context.getString(R.string.sync_sign_in_failed, e.message ?: e.javaClass.simpleName)) }
     }
 
     private fun authorized(context: Context, result: AuthorizationResult) {
         val app = context.applicationContext
         // Google's page lists Drive access as a box to tick, unticked at first.
         if (result.grantedScopes.none { it.toString() == DRIVE_SCOPE }) {
-            set(app, busy = false, error = app.getString(R.string.sync_sign_in_failed, app.getString(R.string.sync_no_drive)))
+            set(app) { copy(busy = false, error = app.getString(R.string.sync_sign_in_failed, app.getString(R.string.sync_no_drive))) }
             return
         }
         val token = result.accessToken ?: return failed(app, IllegalStateException("no access token"))
@@ -120,7 +125,7 @@ object GoogleSync {
                 val body = call(Request.Builder().url("https://www.googleapis.com/oauth2/v3/userinfo").header("Authorization", "Bearer $token").build())
                 JSONObject(body).getString("email")
             }.onSuccess { email ->
-                set(app, email = email)
+                set(app) { copy(email = email) }
                 syncOnce(app)
             }.onFailure { failed(app, it) }
         }
@@ -131,7 +136,7 @@ object GoogleSync {
      * account, so revoking would sign out every other device too.
      */
     fun signOut(context: Context) {
-        set(context.applicationContext, email = null, busy = false, syncedAt = 0, error = null)
+        set(context.applicationContext) { Status(null, false, 0, null) }
     }
 
     /**
@@ -183,7 +188,7 @@ object GoogleSync {
         val prefs = Prefs(app)
         val email = prefs.googleEmail
         if (email.isEmpty()) return
-        set(app, busy = true)
+        setFor(app, email) { copy(busy = true) }
         try {
             var token = token(app, email)
             // Signed out (perhaps into another account) since this sync started: its data isn't for that account.
@@ -218,7 +223,7 @@ object GoogleSync {
                 val local = state(prefs)
                 val merged = remote?.let { Sync.mergeStates(local, it) } ?: local
                 if (!Sync.sameState(merged, local)) {
-                    prefs.keywords = Sync.termsOf(merged)
+                    prefs.keywords = Sync.arrangeTerms(prefs.keywords, Sync.termsOf(merged))
                     prefs.prompt = merged.prompt.value
                     main.post { applied?.invoke() }
                 }
@@ -240,15 +245,15 @@ object GoogleSync {
                 }
                 for (id in ids.drop(1)) drive(Request.Builder().url("$DRIVE/$id").delete())
             }
-            set(app, busy = false, syncedAt = System.currentTimeMillis(), error = null)
+            setFor(app, email) { copy(busy = false, syncedAt = System.currentTimeMillis(), error = null) }
         } catch (e: Stale) {
             // signOut has reset the status
         } catch (e: SignedOut) {
             android.util.Log.w("Ciao", "google sync: access gone, signing out")
-            set(app, email = null, busy = false, syncedAt = 0, error = app.getString(R.string.sync_signed_out))
+            setFor(app, email) { Status(null, false, 0, app.getString(R.string.sync_signed_out)) }
         } catch (e: Exception) {
             android.util.Log.w("Ciao", "google sync", e)
-            set(app, busy = false, error = app.getString(R.string.sync_failed, e.message ?: e.javaClass.simpleName))
+            setFor(app, email) { copy(busy = false, error = app.getString(R.string.sync_failed, e.message ?: e.javaClass.simpleName)) }
         }
     }
 

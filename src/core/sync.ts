@@ -63,6 +63,17 @@ export function termsOf(state: SyncState): string[] {
 }
 
 /**
+ * The merged terms in the order the user keeps them (a reorder isn't synced): the ones they have
+ * first, as they are, then new ones at the end.
+ */
+export function arrangeTerms(current: string[], merged: string[]): string[] {
+  const keep = new Set(merged);
+  const kept = normalizeTerms(current).filter((term) => keep.has(term));
+  const have = new Set(kept);
+  return [...kept, ...merged.filter((term) => !have.has(term))];
+}
+
+/**
  * Records the user's edit: terms added or removed since `state`, and a changed prompt, stamped
  * `now`. Returns null when nothing changed (a reorder alone isn't an edit).
  */
