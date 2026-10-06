@@ -14,17 +14,20 @@ import android.os.SystemClock
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.Toast
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 /**
  * Shows the Ciao bubble whenever a keyboard is up over a text field. Tap it to dictate (tap again,
@@ -44,6 +47,13 @@ class CiaoService : AccessibilityService() {
     private var cardHost: FrameLayout? = null
     private var card: CardView? = null
     private var imeTop = 0
+    /** The keyboard top as last seen, and since when: the bubble waits for it to stop moving. */
+    private var imeTopSeen = -1
+    private var imeTopSince = 0L
+    private val imeSettled get() = imeTopSeen == -1 || SystemClock.uptimeMillis() >= imeTopSince + IME_SETTLE_MS
+    private val motion = Spring(onFrame = { x, y -> moveBubble(x.roundToInt(), y.roundToInt().coerceAtMost(glideFloor)) }, onEnd = { if (bubble?.alpha == 1f && imeSettled) setBubbleTouchable(true) })
+    /** The lowest the current glide may go: never below its start or its spot, so it doesn't bounce over the keys. */
+    private var glideFloor = Int.MAX_VALUE
     private var dictation: Dictation? = null
 
     /** FAILED: not transcribed; the recording is kept on the card until you retry or dismiss it. */
@@ -100,7 +110,26 @@ class CiaoService : AccessibilityService() {
         val ime = runCatching { windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } }.getOrNull()
         val field = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
             ?.takeIf { it.isEditable && !it.isPassword }
-        if (ime != null) imeTop = Rect().also { ime.getBoundsInScreen(it) }.top
+        if (ime != null) {
+            val top = Rect().also { ime.getBoundsInScreen(it) }.top
+            val now = SystemClock.uptimeMillis()
+            if (top != imeTopSeen) {
+                imeTopSeen = top
+                imeTopSince = now
+            }
+            // A keyboard sliding in (or changing height) reports where it is mid-way: placed against
+            // that, the bubble would sit over the keys and then jump. Wait until it stops moving.
+            val wait = imeTopSince + IME_SETTLE_MS - now
+            if (wait > 0) {
+                if (!touching) setBubbleTouchable(false)
+                main.removeCallbacks(refresh)
+                main.postDelayed(refresh, wait)
+                return
+            }
+            imeTop = top
+        } else {
+            imeTopSeen = -1
+        }
         if (!idle || (ime != null && field != null)) showBubble() else hideBubble()
     }
 
@@ -124,47 +153,93 @@ class CiaoService : AccessibilityService() {
         main.removeCallbacks(closePool)
         pool.refill()
         val size = dp(BubbleView.SIZE_DP)
-        val view = bubble ?: BubbleView(this).also { v ->
+        val lift = prefs.bubbleLift.takeIf { it >= 0 } ?: dp(DEFAULT_LIFT_DP)
+        val x = if (prefs.bubbleLeft) 0 else resources.displayMetrics.widthPixels - size
+        val y = (imeTop - lift - size).coerceAtLeast(statusBarHeight())
+        val view = bubble
+        if (view == null) {
+            // Fades in where it belongs; until it has, a tap meant for the keyboard or the app goes to them.
             bubbleParams = overlayParams(size, size, Gravity.TOP or Gravity.START)
-            v.setOnTouchListener(BubbleTouch())
+            bubbleParams.flags = bubbleParams.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            bubbleParams.x = x
+            bubbleParams.y = y
+            val v = BubbleView(this)
+            v.setOnTouchListener(BubbleTouch().also { bubbleTouch = it })
             v.contentDescription = getString(R.string.bubble_description)
+            v.alpha = 0f
+            v.scaleX = APPEAR_SCALE
+            v.scaleY = APPEAR_SCALE
             wm.addView(v, bubbleParams)
             bubble = v
+            v.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(APPEAR_MS).setInterpolator(DecelerateInterpolator())
+                .withEndAction { if (bubble === v && !motion.running && imeSettled) setBubbleTouchable(true) }
+            return
         }
-        if (!dragging) {
-            val lift = prefs.bubbleLift.takeIf { it >= 0 } ?: dp(DEFAULT_LIFT_DP)
-            val width = resources.displayMetrics.widthPixels
-            val x = if (prefs.bubbleLeft) 0 else width - size
-            val y = (imeTop - lift - size).coerceAtLeast(statusBarHeight())
-            // Moving our own window raises another windows-changed event; don't loop on it.
-            if (x != bubbleParams.x || y != bubbleParams.y) {
-                bubbleParams.x = x
-                bubbleParams.y = y
-                wm.updateViewLayout(view, bubbleParams)
-            }
+        if (touching) return
+        // Moving our own window raises another windows-changed event; don't loop on it, and leave a
+        // glide that is already headed there (a throw, which stays catchable) alone.
+        if (motion.running && motion.toX == x.toFloat() && motion.toY == y.toFloat()) return
+        if (motion.running || x != bubbleParams.x || y != bubbleParams.y) {
+            // The keyboard changed under it: glide over, letting taps through to the keyboard meanwhile.
+            setBubbleTouchable(false)
+            glide(x, y)
+        } else if (!motion.running && view.alpha == 1f && imeSettled) {
+            setBubbleTouchable(true)
         }
     }
 
+    private fun glide(x: Int, y: Int, vx: Float = 0f, vy: Float = 0f) {
+        glideFloor = maxOf(bubbleParams.y, y)
+        motion.animate(bubbleParams.x.toFloat(), bubbleParams.y.toFloat(), x.toFloat(), y.toFloat(), vx, vy)
+    }
+
+    private fun moveBubble(x: Int, y: Int) {
+        val v = bubble ?: return
+        if (x == bubbleParams.x && y == bubbleParams.y) return
+        bubbleParams.x = x
+        bubbleParams.y = y
+        wm.updateViewLayout(v, bubbleParams)
+    }
+
+    private fun setBubbleTouchable(touchable: Boolean) {
+        val v = bubble ?: return
+        val flag = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        val flags = if (touchable) bubbleParams.flags and flag.inv() else bubbleParams.flags or flag
+        if (flags == bubbleParams.flags) return
+        bubbleParams.flags = flags
+        wm.updateViewLayout(v, bubbleParams)
+    }
+
     private fun hideBubble() {
-        if (bubble == null) return
-        bubble?.let { runCatching { wm.removeView(it) } }
+        val v = bubble ?: return
+        motion.cancel()
+        v.animate().cancel()
+        runCatching { wm.removeView(v) }
         bubble = null
-        // A drag cut short by the keyboard closing never gets its ACTION_UP.
-        dragging = false
+        // A touch cut short by the keyboard closing never gets its ACTION_UP.
+        touching = false
+        bubbleTouch?.abandon()
+        bubbleTouch = null
         // Keep the warm connection a little, in case the keyboard comes right back.
         main.removeCallbacks(closePool)
         if (::pool.isInitialized) main.postDelayed(closePool, 120_000)
     }
 
-    private var dragging = false
+    /** A finger is on the bubble: nothing else moves it meanwhile. */
+    private var touching = false
+    private var bubbleTouch: BubbleTouch? = null
 
-    /** Tap: start / finish. Hold: talk while held. Drag: move it (it snaps to the nearest edge). */
+    /** Tap: start / finish. Hold: talk while held. Drag: move it; let go and it glides to the nearer edge. */
     private inner class BubbleTouch : android.view.View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
         private var startX = 0
         private var startY = 0
         private var held = false
+        private var dragging = false
+        /** This touch stopped a gliding bubble: letting go sends it on, it isn't a tap. */
+        private var caught = false
+        private var velocity: VelocityTracker? = null
         private val slop = ViewConfiguration.get(this@CiaoService).scaledTouchSlop
         private val hold = Runnable {
             held = true
@@ -175,44 +250,94 @@ class CiaoService : AccessibilityService() {
         override fun onTouch(v: android.view.View, e: MotionEvent): Boolean {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    // Caught mid-glide: it stays under the finger.
+                    caught = motion.running
+                    motion.cancel()
+                    touching = true
                     downX = e.rawX
                     downY = e.rawY
                     startX = bubbleParams.x
                     startY = bubbleParams.y
                     held = false
                     dragging = false
-                    if (idle) main.postDelayed(hold, HOLD_MS)
+                    velocity?.recycle()
+                    velocity = VelocityTracker.obtain().also { track(it, e) }
+                    press(v, PRESS_SCALE)
+                    if (idle && !caught) main.postDelayed(hold, HOLD_MS)
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    velocity?.let { track(it, e) }
                     if (!dragging && !held && idle && hypot(e.rawX - downX, e.rawY - downY) > slop) {
                         dragging = true
                         main.removeCallbacks(hold)
+                        // Measure from here, so the bubble doesn't jump by the slop it just waited out.
+                        downX = e.rawX
+                        downY = e.rawY
+                        press(v, DRAG_SCALE)
                     }
-                    if (dragging) {
-                        bubbleParams.x = startX + (e.rawX - downX).toInt()
-                        bubbleParams.y = startY + (e.rawY - downY).toInt()
-                        wm.updateViewLayout(v, bubbleParams)
-                    }
+                    if (dragging) moveBubble(startX + (e.rawX - downX).roundToInt(), startY + (e.rawY - downY).roundToInt())
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     main.removeCallbacks(hold)
+                    touching = false
+                    press(v, 1f)
+                    val tracker = velocity
+                    velocity = null
                     when {
                         dragging -> {
                             dragging = false
-                            val size = dp(BubbleView.SIZE_DP)
-                            prefs.bubbleLeft = bubbleParams.x + size / 2 < resources.displayMetrics.widthPixels / 2
-                            prefs.bubbleLift = (imeTop - bubbleParams.y - size).coerceAtLeast(0)
-                            showBubble()
+                            tracker?.computeCurrentVelocity(1000, MAX_FLING_DP_S * density)
+                            val vx = tracker?.xVelocity ?: 0f
+                            val vy = tracker?.yVelocity ?: 0f
+                            fling(vx, vy)
                         }
+                        // Stopped mid-glide, not a tap: let it carry on, still catchable.
+                        caught -> glide(motion.toX.roundToInt(), motion.toY.roundToInt())
                         e.actionMasked == MotionEvent.ACTION_CANCEL -> if (held) stop()
                         held -> stop()
                         idle -> start(pushToTalk = false)
                         dictation?.phase == Phase.RECORDING -> stop()
                     }
                     held = false
+                    // Placing it was held back while the finger was down (a keyboard change, a catch).
+                    main.post(refresh)
+                    tracker?.recycle()
                 }
             }
             return true
+        }
+
+        /** The bubble went away mid-touch: no release will come. */
+        fun abandon() {
+            main.removeCallbacks(hold)
+            velocity?.recycle()
+            velocity = null
+        }
+
+        /** The window moves with the finger, so track screen coordinates rather than the view's. */
+        private fun track(tracker: VelocityTracker, e: MotionEvent) {
+            val screen = MotionEvent.obtain(e)
+            screen.setLocation(e.rawX, e.rawY)
+            tracker.addMovement(screen)
+            screen.recycle()
+        }
+
+        private fun press(v: android.view.View, scale: Float) {
+            v.animate().scaleX(scale).scaleY(scale).setDuration(PRESS_MS).setInterpolator(DecelerateInterpolator())
+        }
+
+        /** Let go: carry on where the throw points, then settle at that side, above the keyboard. */
+        private fun fling(vx: Float, vy: Float) {
+            val size = dp(BubbleView.SIZE_DP)
+            val x = bubbleParams.x + vx * FLING_PROJECTION_S
+            val y = bubbleParams.y + vy * FLING_PROJECTION_S
+            prefs.bubbleLeft = x + size / 2 < resources.displayMetrics.widthPixels / 2
+            val top = statusBarHeight()
+            val restY = y.roundToInt().coerceIn(top, maxOf(top, imeTop - size))
+            prefs.bubbleLift = (imeTop - restY - size).coerceAtLeast(0)
+            val restX = if (prefs.bubbleLeft) 0 else resources.displayMetrics.widthPixels - size
+            // Half the throw's speed carries into the glide: enough to feel it, not enough to fly off the screen.
+            glide(restX, restY, vx / 2, vy / 2)
         }
     }
 
@@ -450,6 +575,16 @@ class CiaoService : AccessibilityService() {
 
     private companion object {
         const val HOLD_MS = 400L
+        /** How long the keyboard's top must hold still before the bubble is placed against it. */
+        const val IME_SETTLE_MS = 250L
+        const val APPEAR_MS = 160L
+        const val APPEAR_SCALE = 0.6f
+        const val PRESS_MS = 120L
+        const val PRESS_SCALE = 0.9f
+        const val DRAG_SCALE = 1.08f
+        /** A throw carries the bubble this far ahead (in seconds of its speed) before it settles. */
+        const val FLING_PROJECTION_S = 0.12f
+        const val MAX_FLING_DP_S = 1500f
         const val COMPLETION_TIMEOUT_MS = 6000L
         const val DEFAULT_LIFT_DP = 72
         // gpt-live-transcribe list price (src/core/cost.ts).
