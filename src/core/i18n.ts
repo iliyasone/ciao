@@ -215,7 +215,10 @@ const ru = {
     title: "Синхронизация",
     account: "Аккаунт Google",
     signedOutHint:
-      "Войди, чтобы термины и контекст были одни на всех твоих устройствах, включая телефон. Они хранятся в скрытой папке Ciao на твоём Google Диске; другие файлы на Диске Ciao не видит.",
+      "Войди, чтобы термины, контекст и API-ключи были одни на всех твоих устройствах, включая телефон. Они хранятся в скрытой папке Ciao на твоём Google Диске; другие файлы на Диске Ciao не видит.",
+    keys: "Синхронизировать API-ключи",
+    keysHint:
+      "Так удобнее: на новом устройстве достаточно войти, ключ вставлять не нужно. Ключи лежат в скрытой папке Ciao на твоём Google Диске, так что их прочитает любой, кто сможет войти в твой аккаунт Google. Выключи, и каждый ключ останется только на своём устройстве: Ciao уберёт их с Диска.",
     syncedAt: (email: string, time: string) => `${email} · синхронизировано в ${time}`,
     syncing: (email: string) => `${email} · синхронизирую…`,
     signingIn: "Продолжи в браузере…",
@@ -472,7 +475,10 @@ const en: Strings = {
     title: "Sync",
     account: "Google account",
     signedOutHint:
-      "Sign in to use the same terms and context on all your devices, the phone included. They're kept in a hidden Ciao folder in your Google Drive; Ciao can't see any other file there.",
+      "Sign in to use the same terms, context and API keys on all your devices, the phone included. They're kept in a hidden Ciao folder in your Google Drive; Ciao can't see any other file there.",
+    keys: "Sync API keys",
+    keysHint:
+      "Easier: on a new device you just sign in, no key to paste. The keys sit in the hidden Ciao folder in your Google Drive, so anyone who can sign in to your Google account can read them. Turn this off to keep each key on its own device only: Ciao removes them from Drive.",
     syncedAt: (email, time) => `${email} · synced at ${time}`,
     syncing: (email) => `${email} · syncing…`,
     signingIn: "Continue in the browser…",

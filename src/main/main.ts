@@ -3,18 +3,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, session, shell, systemPreferences, Tray } from "electron";
-import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
+import { DELAYS, type HistoryEntry, type Provider, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { models, PROVIDERS } from "../core/providers";
 import { setLang, t } from "../core/i18n";
-import { arrangeTerms } from "../core/sync";
+import { arrangeTerms, termsOf, type Local } from "../core/sync";
 import { acceleratorParts } from "../core/triggers";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
-import { keyPath, loadApiKey, loadSettings, saveSettings } from "./settings";
+import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
@@ -179,13 +179,26 @@ function openHistory(tab?: "settings"): void {
   historyWin.on("focus", () => sync.syncSoon(0));
 }
 
+/** What Google sync compares with its history: the settings it syncs and the saved keys. */
+function local(): Local {
+  const keys = Object.fromEntries((Object.keys(PROVIDERS) as Provider[]).map((p) => [p, loadKeyFile(p)]));
+  return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys };
+}
+
+/** A key was saved here or arrived through sync: the spare session was opened with the old one. */
+function keysChanged(): void {
+  pool.close();
+  pool.refill();
+  historyWin?.webContents.send("settings:keys");
+}
+
 function applySettings(next: Settings): void {
   const prev = settings;
   settings = next;
   setLang(next.language);
   nativeTheme.themeSource = next.theme;
   saveSettings(next);
-  sync?.noteLocal(next.keywords, next.prompt);
+  sync?.noteLocal(local());
   setAutostart(next.openAtLogin);
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
@@ -349,10 +362,9 @@ function registerIpc(): void {
   });
   ipcMain.handle("settings:set-key", (_e, provider: Settings["provider"], key: string) => {
     if (!Object.hasOwn(PROVIDERS, provider)) return;
-    fs.writeFileSync(keyPath(provider), key.trim());
-    // The spare was opened with the old key (Gemini checks it only once a dictation sends its setup).
-    pool.close();
-    pool.refill();
+    saveKeyFile(provider, key);
+    keysChanged();
+    sync.noteLocal(local());
   });
 
   ipcMain.handle("sync:get", () => sync.get());
@@ -451,9 +463,18 @@ void app.whenReady().then(() => {
 
   sync = new GoogleSync(
     app.getPath("userData"),
-    settings,
-    (keywords, prompt) => {
-      applySettings({ ...settings, keywords: arrangeTerms(settings.keywords, keywords), prompt });
+    local(),
+    (state) => {
+      // Keys first: applySettings reads them back as this device's own.
+      let keys = false;
+      for (const provider of Object.keys(PROVIDERS) as Provider[]) {
+        const key = state.keys[provider]?.value;
+        if (key === undefined || key === loadKeyFile(provider)) continue;
+        saveKeyFile(provider, key);
+        keys = true;
+      }
+      if (keys) keysChanged();
+      applySettings({ ...settings, keywords: arrangeTerms(settings.keywords, termsOf(state)), prompt: state.prompt.value, syncKeys: state.syncKeys.value });
       historyWin?.webContents.send("settings:synced", settings);
     },
     (status) => historyWin?.webContents.send("sync:status", status),

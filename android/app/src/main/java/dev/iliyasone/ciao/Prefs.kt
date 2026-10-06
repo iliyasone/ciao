@@ -12,6 +12,19 @@ class Prefs(context: Context) {
         get() = sp.getString("apiKey", "")!!.filter { it in '!'..'~' }
         set(v) = sp.edit().putString("apiKey", v).apply()
 
+    /** Not used here yet (dictation on Android is OpenAI only); kept so sync brings it to the desktop and back. */
+    var geminiKey: String
+        get() = sp.getString("geminiKey", "")!!.filter { it in '!'..'~' }
+        set(v) = sp.edit().putString("geminiKey", v).apply()
+
+    /** With Google sync: the API keys go into the synced file too (Sync.kt). */
+    var syncKeys: Boolean
+        get() = sp.getBoolean("syncKeys", true)
+        set(v) = sp.edit().putBoolean("syncKeys", v).apply()
+
+    /** What GoogleSync compares with its history. */
+    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey), syncKeys)
+
     val liveModel: String get() = "gpt-live-transcribe"
     val fileModel: String get() = "gpt-transcribe"
     val delay: String get() = "low"

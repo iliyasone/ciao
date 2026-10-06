@@ -27,10 +27,11 @@ class MainActivity : Activity() {
         prefs = Prefs(this)
         GoogleSync.load(this)
 
-        bindText(R.id.apiKey, prefs.apiKey) {
-            prefs.apiKey = it
+        bindText(R.id.apiKey, prefs.apiKey) { s ->
+            GoogleSync.edit(this) { it.apiKey = s }
             updateStatus()
         }
+        bindSwitch(R.id.syncKeys, prefs.syncKeys) { on -> GoogleSync.edit(this) { it.syncKeys = on } }
         bindText(R.id.prompt, prefs.prompt) { s -> GoogleSync.edit(this) { it.prompt = s } }
         bindText(R.id.keywords, prefs.keywords.joinToString("\n")) { s -> GoogleSync.edit(this) { it.keywords = s.split("\n") } }
         bindSwitch(R.id.formatText, prefs.formatText) { prefs.formatText = it }
@@ -77,6 +78,10 @@ class MainActivity : Activity() {
 
     /** Only when they differ: setting a field's text moves its cursor to the start. */
     private fun showSynced() {
+        val key = findViewById<EditText>(R.id.apiKey)
+        if (key.text.toString().filter { it in '!'..'~' } != prefs.apiKey) key.setText(prefs.apiKey)
+        findViewById<Switch>(R.id.syncKeys).apply { if (isChecked != prefs.syncKeys) isChecked = prefs.syncKeys }
+        updateStatus()
         val prompt = findViewById<EditText>(R.id.prompt)
         if (prompt.text.toString() != prefs.prompt) prompt.setText(prefs.prompt)
         val keywords = findViewById<EditText>(R.id.keywords)

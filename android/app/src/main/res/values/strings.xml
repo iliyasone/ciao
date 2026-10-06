@@ -25,8 +25,10 @@
 
     <string name="section_recognition">Recognition</string>
     <string name="sync_title">Sync with Google</string>
-    <string name="sync_text">Sign in to use the same terms and context on all your devices. They\'re kept in a hidden Ciao folder in your Google Drive; Ciao can\'t see any other file there.</string>
+    <string name="sync_text">Sign in to use the same terms, context and API key on all your devices. They\'re kept in a hidden Ciao folder in your Google Drive; Ciao can\'t see any other file there.</string>
     <string name="sync_sign_in">Sign in with Google</string>
+    <string name="sync_keys">Sync API keys</string>
+    <string name="sync_keys_hint">Easier: on a new device you just sign in, no key to paste. The keys sit in the hidden Ciao folder in your Google Drive, so anyone who can sign in to your Google account can read them. Turn this off to keep each key on its own device only: Ciao removes them from Drive.</string>
     <string name="sync_sign_out">Sign out</string>
     <string name="sync_signing_in">Signing in…</string>
     <string name="sync_syncing">%1$s · syncing…</string>

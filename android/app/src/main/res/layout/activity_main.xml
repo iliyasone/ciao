@@ -155,6 +155,15 @@
                 android:id="@+id/syncButton"
                 style="@style/Action"
                 android:text="@string/sync_sign_in" />
+
+            <Switch
+                android:id="@+id/syncKeys"
+                style="@style/Toggle"
+                android:text="@string/sync_keys" />
+
+            <TextView
+                style="@style/CardText"
+                android:text="@string/sync_keys_hint" />
         </LinearLayout>
 
         <LinearLayout style="@style/Card">

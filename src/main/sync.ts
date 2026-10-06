@@ -4,11 +4,11 @@ import http from "node:http";
 import path from "node:path";
 import { net, safeStorage, shell } from "electron";
 import { t } from "../core/i18n";
-import { initialState, mergeStates, parseState, recordEdit, sameState, serializeState, termsOf, type SyncState } from "../core/sync";
+import { initialState, mergeStates, parseState, recordEdit, sameState, serializeState, shared, type Local, type SyncState } from "../core/sync";
 import type { SyncStatus } from "../core/types";
 import { DEFAULT_SETTINGS } from "./settings";
 
-// Terms and the prompt, synced through one file in the hidden app folder of the user's Google
+// Terms, the prompt and the API keys, synced through one file in the hidden app folder of the user's Google
 // Drive (scope drive.appdata: Ciao sees only its own files there). No server of ours is involved.
 // Sign-in is Google's flow for installed apps: the system browser, then a redirect to a one-off
 // server on 127.0.0.1, with PKCE. The Android app reads and writes the same file (Sync.kt).
@@ -50,8 +50,8 @@ export class GoogleSync {
   /** Bumped by signOut: a sign-in or sync still running for the old session stops at its next step. */
   private session = 0;
   private syncSession = 0;
-  /** The settings' terms and prompt not yet compared with the history: edits are recorded after a pause in typing. */
-  private pending: { keywords: string[]; prompt: string } | null = null;
+  /** What the settings and keys hold, not yet compared with the history: edits are recorded after a pause in typing. */
+  private pending: Local | null = null;
   private editTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Built without the OAuth client (a fork, a build without the secrets): no sync, no card. */
@@ -61,9 +61,9 @@ export class GoogleSync {
 
   constructor(
     dir: string,
-    current: { keywords: string[]; prompt: string },
-    /** Puts merged terms and prompt into the settings (which then come back through noteLocal). */
-    private readonly apply: (keywords: string[], prompt: string) => void,
+    current: Local,
+    /** Puts the merged state into the settings and key files (which then come back through noteLocal). */
+    private readonly apply: (state: SyncState) => void,
     private readonly changed: (status: SyncStatus) => void,
   ) {
     this.accountFile = path.join(dir, "google-account.json");
@@ -80,7 +80,7 @@ export class GoogleSync {
     } catch {
       // Never synced: what's in the settings now predates any edit to come.
     }
-    this.state = saved ?? initialState(current.keywords, current.prompt, DEFAULT_SETTINGS);
+    this.state = saved ?? initialState(current, DEFAULT_SETTINGS);
     if (!saved) this.saveState();
     // Settings changed while Ciao wasn't running (config.json edited by hand) count as an edit now.
     this.pending = current;
@@ -99,11 +99,11 @@ export class GoogleSync {
   }
 
   /**
-   * The settings now hold these terms and prompt. What the user changed is recorded once typing
+   * The settings and key files now hold this. What the user changed is recorded once typing
    * pauses (not "K", "Ku", "Kub"… as removed terms), or before a sync merges, then sent.
    */
-  noteLocal(keywords: string[], prompt: string): void {
-    this.pending = { keywords, prompt };
+  noteLocal(local: Local): void {
+    this.pending = local;
     clearTimeout(this.editTimer);
     this.editTimer = setTimeout(() => {
       if (this.flushEdit()) this.syncSoon(0);
@@ -115,7 +115,7 @@ export class GoogleSync {
     clearTimeout(this.editTimer);
     const pending = this.pending;
     this.pending = null;
-    const next = pending && recordEdit(this.state, pending.keywords, pending.prompt, Date.now());
+    const next = pending && recordEdit(this.state, pending, Date.now());
     if (!next) return false;
     this.state = next;
     this.saveState();
@@ -216,11 +216,12 @@ export class GoogleSync {
       if (!sameState(merged, this.state)) {
         this.state = merged;
         this.saveState();
-        this.apply(termsOf(merged), merged.prompt.value);
+        this.apply(merged);
       }
       const [first, ...extra] = files.files;
-      if (!remote || !sameState(merged, remote) || extra.length) {
-        const body = serializeState(merged);
+      const out = shared(merged);
+      if (!remote || !sameState(out, remote) || extra.length) {
+        const body = serializeState(out);
         if (first) {
           await this.drive(`${UPLOAD}/${first.id}?uploadType=media`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
         } else {

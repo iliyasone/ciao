@@ -10,8 +10,10 @@ import org.junit.Test
 // desktop merge the synced file the same way.
 class SyncTest {
     private fun state(json: String) = Sync.parse(json)!!
+    private fun local(keywords: List<String>, prompt: String, keys: Map<String, String> = emptyMap(), syncKeys: Boolean = true) =
+        Local(keywords, prompt, keys, syncKeys)
 
-    private val edited = Sync.recordEdit(Sync.initialState(listOf("A", "B", " A "), "p", listOf(), ""), listOf("B", "C", " C ", ""), "p", 100)!!
+    private val edited = Sync.recordEdit(Sync.initialState(local(listOf("A", "B", " A "), "p"), listOf(), ""), local(listOf("B", "C", " C ", ""), "p"), 100)!!
     private val remote = SyncState(
         listOf(TermChange("D", 10), TermChange("A", 50), TermChange("B", 200, removed = true)),
         Stamped("q", 150),
@@ -21,13 +23,13 @@ class SyncTest {
     fun recordEdit() {
         assertEquals(
             state("""{"version":1,"terms":[{"term":"A","at":0},{"term":"B","at":0}],"prompt":{"value":"p","at":0}}"""),
-            Sync.initialState(listOf("A", "B", " A "), "p", listOf(), ""),
+            Sync.initialState(local(listOf("A", "B", " A "), "p"), listOf(), ""),
         )
         assertEquals(
             state("""{"version":1,"terms":[{"term":"A","at":100,"removed":true},{"term":"B","at":0},{"term":"C","at":100}],"prompt":{"value":"p","at":0}}"""),
             edited,
         )
-        assertNull(Sync.recordEdit(edited, listOf("C", "B"), "p", 200))
+        assertNull(Sync.recordEdit(edited, local(listOf("C", "B"), "p"), 200))
     }
 
     @Test
@@ -46,11 +48,11 @@ class SyncTest {
     fun defaults() {
         assertEquals(
             state("""{"version":1,"terms":[{"term":"Mine","at":0},{"term":"D1","at":-1},{"term":"D2","at":0,"removed":true}],"prompt":{"value":"default prompt","at":-1}}"""),
-            Sync.initialState(listOf("Mine", "D1", ""), "default prompt", listOf("D1", "D2"), "default prompt"),
+            Sync.initialState(local(listOf("Mine", "D1", ""), "default prompt"), listOf("D1", "D2"), "default prompt"),
         )
         // A fresh install meets a device with a custom prompt and a deleted default: both win.
-        val fresh = Sync.initialState(listOf("D1", "D2", "D3"), "default prompt", listOf("D1", "D2", "D3"), "default prompt")
-        val custom = Sync.initialState(listOf("Mine", "D1"), "Custom", listOf("D1", "D2"), "default prompt")
+        val fresh = Sync.initialState(local(listOf("D1", "D2", "D3"), "default prompt"), listOf("D1", "D2", "D3"), "default prompt")
+        val custom = Sync.initialState(local(listOf("Mine", "D1"), "Custom"), listOf("D1", "D2"), "default prompt")
         val merged = Sync.mergeStates(fresh, custom)
         assertEquals(
             state("""{"version":1,"terms":[{"term":"D1","at":-1},{"term":"D2","at":0,"removed":true},{"term":"D3","at":-1},{"term":"Mine","at":0}],"prompt":{"value":"Custom","at":0}}"""),
@@ -82,5 +84,42 @@ class SyncTest {
         assertNull(Sync.parse("""{"version":1,"terms":[{"term":" ","at":1}],"prompt":{"value":"","at":0}}"""))
         val merged = Sync.mergeStates(edited, remote)
         assertEquals(merged, Sync.parse(Sync.serialize(merged)))
+    }
+
+    @Test
+    fun keys() {
+        val a = Sync.initialState(local(listOf(), "p", mapOf("openai" to "sk-a")), listOf(), "p")
+        assertEquals(state("""{"version":1,"terms":[],"prompt":{"value":"p","at":-1},"keys":{"openai":{"value":"sk-a","at":0}},"syncKeys":{"value":true,"at":-1}}"""), a)
+        val b = Sync.recordEdit(Sync.initialState(local(listOf(), "p"), listOf(), "p"), local(listOf(), "p", mapOf("openai" to "sk-b", "gemini" to "g")), 100)!!
+        val both = state("""{"version":1,"terms":[],"prompt":{"value":"p","at":-1},"keys":{"openai":{"value":"sk-b","at":100},"gemini":{"value":"g","at":100}},"syncKeys":{"value":true,"at":-1}}""")
+        assertEquals(both, b)
+        assertEquals(both, Sync.mergeStates(a, b))
+        assertNull(Sync.recordEdit(both, local(listOf(), "p", mapOf("openai" to "sk-b", "gemini" to "g")), 300))
+
+        // Switched off on one device: it keeps its key, takes none, and the file gets none.
+        val off = Sync.recordEdit(a, local(listOf(), "p", mapOf("openai" to "sk-a"), syncKeys = false), 200)!!
+        assertEquals(
+            state("""{"version":1,"terms":[],"prompt":{"value":"p","at":-1},"keys":{"openai":{"value":"sk-a","at":0}},"syncKeys":{"value":false,"at":200}}"""),
+            Sync.mergeStates(off, b),
+        )
+        assertEquals(
+            state("""{"version":1,"terms":[],"prompt":{"value":"p","at":-1},"keys":{},"syncKeys":{"value":false,"at":200}}"""),
+            Sync.shared(Sync.mergeStates(off, b)),
+        )
+        assertEquals(
+            state("""{"version":1,"terms":[],"prompt":{"value":"p","at":-1},"keys":{"openai":{"value":"sk-b","at":100},"gemini":{"value":"g","at":100}},"syncKeys":{"value":false,"at":200}}"""),
+            Sync.mergeStates(b, off),
+        )
+
+        // On a tie the switch is off.
+        val on = SyncState(listOf(), Stamped("", 0), emptyMap(), Flag(true, 5))
+        val offTie = on.copy(syncKeys = Flag(false, 5))
+        assertEquals(offTie, Sync.mergeStates(on, offTie))
+        assertEquals(offTie, Sync.mergeStates(offTie, on))
+
+        // A file from before keys were synced.
+        assertEquals(SyncState(listOf(), Stamped("", 0), emptyMap(), Flag(true, -1)), Sync.parse("""{"version":1,"terms":[],"prompt":{"value":"","at":0}}"""))
+        assertNull(Sync.parse("""{"version":1,"terms":[],"prompt":{"value":"","at":0},"keys":{"openai":{"value":1,"at":0}}}"""))
+        assertEquals(Sync.mergeStates(off, b), Sync.parse(Sync.serialize(Sync.mergeStates(off, b))))
     }
 }

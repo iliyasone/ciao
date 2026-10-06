@@ -52,6 +52,8 @@ export interface Settings {
   stopPhrase: boolean;
   /** Send anonymous usage counts (launches, dictations); never text or audio. */
   telemetry: boolean;
+  /** With Google sync: the API keys go into the synced file too, so a new device is ready at once. */
+  syncKeys: boolean;
 }
 
 export type EntryStatus = "recording" | "transcribing" | "done" | "failed" | "cancelled";

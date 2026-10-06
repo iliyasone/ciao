@@ -3,10 +3,12 @@ package dev.iliyasone.ciao
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Terms and the prompt, synced between devices; a port of src/core/sync.ts. Each device keeps every
-// term ever added or removed with the time of its last change; merging keeps the later change of
-// each term, so an added term survives a save elsewhere and a removed one doesn't come back. The
-// prompt is one value: the later edit wins.
+// Terms, the prompt and the API keys, synced between devices; a port of src/core/sync.ts. Each
+// device keeps every term ever added or removed with the time of its last change; merging keeps the
+// later change of each term, so an added term survives a save elsewhere and a removed one doesn't
+// come back. The prompt, each key and the "sync keys" switch are single values: the later edit wins.
+// The switch is synced too: turned off on one device, it stops every device from sending keys, and
+// the file keeps none (each device still has its own).
 
 /**
  * [at]: epoch ms of the last add or remove. What a device had before it started syncing: 0 for the
@@ -16,8 +18,21 @@ data class TermChange(val term: String, val at: Long, val removed: Boolean = fal
 
 data class Stamped(val value: String, val at: Long)
 
-/** [terms] in display order; removed terms stay as tombstones. */
-data class SyncState(val terms: List<TermChange>, val prompt: Stamped)
+data class Flag(val value: Boolean, val at: Long)
+
+/**
+ * [terms] in display order; removed terms stay as tombstones. [keys]: API keys by provider
+ * ("openai", "gemini"), "" for one removed. [syncKeys]: whether keys go into the synced file.
+ */
+data class SyncState(
+    val terms: List<TermChange>,
+    val prompt: Stamped,
+    val keys: Map<String, Stamped> = emptyMap(),
+    val syncKeys: Flag = Flag(true, -1),
+)
+
+/** What a device has now: its settings and its API keys ("" or missing when it has none). */
+data class Local(val keywords: List<String>, val prompt: String, val keys: Map<String, String>, val syncKeys: Boolean)
 
 object Sync {
     /** Trimmed, without empty lines and repeats. */
@@ -29,14 +44,17 @@ object Sync {
      * device chose; a default term the user deleted stays deleted. Defaults differ by platform, so
      * a default term missing here is not a deletion.
      */
-    fun initialState(keywords: List<String>, prompt: String, defaultKeywords: List<String>, defaultPrompt: String): SyncState {
-        val terms = normalizeTerms(keywords)
+    fun initialState(local: Local, defaultKeywords: List<String>, defaultPrompt: String, defaultSyncKeys: Boolean = true): SyncState {
+        val prompt = local.prompt
+        val terms = normalizeTerms(local.keywords)
         val own = terms.toSet()
         val isDefault = defaultKeywords.toSet()
         return SyncState(
             terms.map { TermChange(it, if (it in isDefault) -1 else 0) } +
                 normalizeTerms(defaultKeywords).filter { it !in own }.map { TermChange(it, 0, removed = true) },
             Stamped(prompt, if (prompt == defaultPrompt) -1 else 0),
+            local.keys.filterValues { it.isNotEmpty() }.mapValues { Stamped(it.value, 0) },
+            Flag(local.syncKeys, if (local.syncKeys == defaultSyncKeys) -1 else 0),
         )
     }
 
@@ -55,11 +73,12 @@ object Sync {
     }
 
     /**
-     * Records the user's edit: terms added or removed since [state], and a changed prompt, stamped
-     * [now]. Null when nothing changed (a reorder alone isn't an edit).
+     * Records the user's edit: terms added or removed since [state], a changed prompt, key or
+     * switch, stamped [now]. Null when nothing changed (a reorder alone isn't an edit).
      */
-    fun recordEdit(state: SyncState, keywords: List<String>, prompt: String, now: Long): SyncState? {
-        val next = normalizeTerms(keywords)
+    fun recordEdit(state: SyncState, local: Local, now: Long): SyncState? {
+        val prompt = local.prompt
+        val next = normalizeTerms(local.keywords)
         val wanted = next.toSet()
         var changed = false
         val terms = state.terms.map {
@@ -73,9 +92,22 @@ object Sync {
                 terms.add(TermChange(term, now))
             }
         }
+        val keys = state.keys.toMutableMap()
+        for (provider in state.keys.keys + local.keys.keys) {
+            val key = local.keys[provider] ?: ""
+            if (key == (keys[provider]?.value ?: "")) continue
+            changed = true
+            keys[provider] = Stamped(key, now)
+        }
         val promptChanged = prompt != state.prompt.value
-        if (!changed && !promptChanged) return null
-        return SyncState(terms, if (promptChanged) Stamped(prompt, now) else state.prompt)
+        val switched = local.syncKeys != state.syncKeys.value
+        if (!changed && !promptChanged && !switched) return null
+        return SyncState(
+            terms,
+            if (promptChanged) Stamped(prompt, now) else state.prompt,
+            keys,
+            if (switched) Flag(local.syncKeys, now) else state.syncKeys,
+        )
     }
 
     /** Of two changes to one term: the later; a removal on a tie, so every device ends up the same. */
@@ -84,22 +116,34 @@ object Sync {
         return if (b.removed && !a.removed) b else a
     }
 
-    /** Both histories in one: the later change of each term and of the prompt. Order: [local]'s, then new ones. */
+    /** Of two values: the later; on a tie the greater, so every device ends up the same. */
+    private fun later(a: Stamped, b: Stamped): Stamped = if (a.at != b.at) (if (a.at > b.at) a else b) else if (a.value >= b.value) a else b
+
+    /**
+     * Both histories in one: the later change of each term and value. Order: [local]'s, then new
+     * ones. While keys aren't synced, [local] keeps its own and takes none from [remote].
+     */
     fun mergeStates(local: SyncState, remote: SyncState): SyncState {
         val theirs = LinkedHashMap<String, TermChange>()
         for (t in remote.terms) theirs[t.term] = t
         val terms = local.terms.map { t -> theirs.remove(t.term)?.let { later(t, it) } ?: t }.toMutableList()
         terms.addAll(theirs.values)
-        val a = local.prompt
-        val b = remote.prompt
-        val prompt = if (a.at != b.at) (if (a.at > b.at) a else b) else if (a.value >= b.value) a else b
-        return SyncState(terms, prompt)
+        // On a tie, off: keys leave the file rather than spread.
+        val x = local.syncKeys
+        val y = remote.syncKeys
+        val syncKeys = if (x.at != y.at) (if (x.at > y.at) x else y) else if (x.value) y else x
+        val keys = local.keys.toMutableMap()
+        if (syncKeys.value) for ((provider, key) in remote.keys) keys[provider] = keys[provider]?.let { later(it, key) } ?: key
+        return SyncState(terms, later(local.prompt, remote.prompt), keys, syncKeys)
     }
+
+    /** What goes into the synced file: no keys while the switch is off. */
+    fun shared(state: SyncState): SyncState = if (state.syncKeys.value) state else state.copy(keys = emptyMap())
 
     /** Same content, whatever the order: nothing to upload or apply. */
     fun sameState(a: SyncState, b: SyncState): Boolean =
         a.terms.sortedBy { it.term }.map { Triple(it.term, it.at, it.removed) } == b.terms.sortedBy { it.term }.map { Triple(it.term, it.at, it.removed) } &&
-            a.prompt == b.prompt
+            a.prompt == b.prompt && a.keys == b.keys && a.syncKeys == b.syncKeys
 
     /** The synced file's content. */
     fun serialize(state: SyncState): String = JSONObject()
@@ -108,11 +152,14 @@ object Sync {
             for (t in state.terms) put(JSONObject().put("term", t.term).put("at", t.at).apply { if (t.removed) put("removed", true) })
         })
         .put("prompt", JSONObject().put("value", state.prompt.value).put("at", state.prompt.at))
+        .put("keys", JSONObject().apply { for ((provider, k) in state.keys) put(provider, JSONObject().put("value", k.value).put("at", k.at)) })
+        .put("syncKeys", JSONObject().put("value", state.syncKeys.value).put("at", state.syncKeys.at))
         .toString()
 
     /**
      * The synced file read back; null if it isn't one (a newer format, or damaged). As strict about
-     * types as the desktop, so both refuse the same files.
+     * types as the desktop, so both refuse the same files. A file from before keys were synced has
+     * no `keys` and no `syncKeys`: an untouched default then.
      */
     fun parse(text: String): SyncState? = runCatching {
         val raw = JSONObject(text)
@@ -128,6 +175,19 @@ object Sync {
         val p = raw.getJSONObject("prompt")
         val value = p.opt("value") as? String ?: return null
         val at = p.opt("at") as? Number ?: return null
-        SyncState(terms, Stamped(value, at.toLong()))
+        val keys = LinkedHashMap<String, Stamped>()
+        if (raw.has("keys")) {
+            val k = raw.opt("keys") as? JSONObject ?: return null
+            for (provider in k.keys()) {
+                val entry = k.opt(provider) as? JSONObject ?: return null
+                keys[provider] = Stamped(entry.opt("value") as? String ?: return null, (entry.opt("at") as? Number ?: return null).toLong())
+            }
+        }
+        var syncKeys = Flag(true, -1)
+        if (raw.has("syncKeys")) {
+            val f = raw.opt("syncKeys") as? JSONObject ?: return null
+            syncKeys = Flag(f.opt("value") as? Boolean ?: return null, (f.opt("at") as? Number ?: return null).toLong())
+        }
+        SyncState(terms, Stamped(value, at.toLong()), keys, syncKeys)
     }.getOrNull()
 }

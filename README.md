@@ -79,8 +79,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
 - **Sync through Google** (*Settings → Sync → Sign in with Google*, on every
-  platform and on Android). The terms and the context become the same on every
-  device you sign in on. See [Sync](#sync).
+  platform and on Android). The terms, the context and the API keys become the
+  same on every device you sign in on. See [Sync](#sync).
 - **English or Russian interface** (*Settings → Appearance → Language*). The
   default is Russian if the system is in Russian and English otherwise (also for
   an existing install, the first time it starts with this setting); a change
@@ -344,8 +344,9 @@ yours.
      settings*, and try again.
 5. Try it in the field at the bottom of the Ciao screen.
 
-Terms are one per line, as on the desktop, and *Sign in with Google* syncs them
-and the context with your other devices ([Sync](#sync)). Signing in needs Google
+Terms are one per line, as on the desktop, and *Sign in with Google* syncs them,
+the context and the API key with your other devices ([Sync](#sync)). The Gemini
+key comes along too and is kept for the desktop, though Android doesn't use it yet. Signing in needs Google
 Play services.
 
 The Android app has no history, wake word or usage counts yet, and it doesn't
@@ -354,21 +355,27 @@ update itself: install a newer APK over the old one.
 ## Sync
 
 Sign in with Google (*Settings → Sync* on the desktop, *Sync with Google* on
-Android) and your terms and context are the same on every device signed in with
-that account. There is no Ciao server: they're kept in one file,
+Android) and your terms, context and API keys are the same on every device signed
+in with that account: on a new device, signing in is all the setup. There is no Ciao server: they're kept in one file,
 `ciao-sync.json`, in the hidden app folder of your own Google Drive. Ciao asks
 only for that folder (`drive.appdata`, which can't see any other file in your
 Drive) and your email address, to show which account is signed in. Google's page
 lists Drive access as a box to tick, unticked at first: tick it, or Ciao says it
 has no access.
 
-- What syncs: the terms and the context. Not the API key or anything else.
+- What syncs: the terms, the context and the API keys (OpenAI and Gemini).
+  Nothing else: not the other settings, not the history.
+- *Sync API keys* is on by default. The keys sit in the file as they are, so
+  anyone who can sign in to your Google account can read them. Turned off on any
+  device, it turns off everywhere (the switch syncs too): every device keeps its
+  own keys, and the next sync removes them from Drive. A key from
+  `OPENAI_API_KEY` / `GEMINI_API_KEY` is never synced, only one saved in Settings.
 - When: right after you change them, when you come back to the settings window
   (the app on Android), every 5 minutes on the desktop, and on Android when the
   keyboard shows up, at most every 10 minutes.
 - Merging: each device remembers when every term was added or removed. A term
   added on one device survives a save on another, and a removed one doesn't come
-  back. For the context, the later edit wins. Each device keeps that history in
+  back. For the context, each key and the switch, the later edit wins. Each device keeps that history in
   `sync-state.json` (desktop) or its preferences (Android).
 - Signing out stops syncing on that device and keeps the terms there; the other
   devices stay signed in. To take Ciao's access away everywhere, remove it from
