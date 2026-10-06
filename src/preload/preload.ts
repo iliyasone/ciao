@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HistoryEntry, OverlayState, RetryMode, Settings, SyncStatus, UpdateState } from "../core/types";
+import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, UpdateState } from "../core/types";
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
@@ -14,6 +14,7 @@ const api = {
     onState: (cb: (s: OverlayState) => void) => on("overlay:state", cb),
     /** gapMs: time since the previous delta — a long one means the speaker paused. */
     onDelta: (cb: (seq: number, text: string, gapMs: number) => void) => on("overlay:delta", cb),
+    onRevise: (cb: (seq: number, text: string) => void) => on("overlay:revise", cb),
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
     hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),
@@ -50,9 +51,9 @@ const api = {
     onChanged: (cb: (s: Settings) => void) => on("settings:changed", cb),
     /** Terms or the prompt changed through sync, not in this window. */
     onSynced: (cb: (s: Settings) => void) => on("settings:synced", cb),
-    hasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:has-key"),
+    hasApiKey: (provider: Provider): Promise<boolean> => ipcRenderer.invoke("settings:has-key", provider),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
-    setApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", key),
+    setApiKey: (provider: Provider, key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", provider, key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
     captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),
     /** macOS: whether Ciao has the Accessibility permission; null elsewhere (not needed). */

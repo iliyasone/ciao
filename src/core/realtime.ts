@@ -21,9 +21,28 @@ const OPEN = 1;
 
 export interface RealtimeHandlers {
   onConnected?: () => void;
+  /** More text at the end of what was shown so far. */
   onDelta?: (text: string) => void;
+  /** The text shown so far changed, not only grew (Gemini revises its guess as you speak): show this instead. */
+  onRevise?: (text: string) => void;
   onCompleted?: (text: string) => void;
   onError?: (message: string) => void;
+}
+
+/** A streaming transcription session, whichever provider runs it (this file: OpenAI; gemini.ts: Gemini). */
+export interface LiveSession {
+  readonly createdAt: number;
+  connected: boolean;
+  failure: string | null;
+  handlers: RealtimeHandlers;
+  /** Still worth handing to a new dictation. */
+  readonly usable: boolean;
+  /** Starts the turn; audio may follow at once. */
+  configure(s: Settings): void;
+  append(pcm: Uint8Array): void;
+  /** The speaker is done: the final transcript follows (onCompleted). */
+  commit(): void;
+  close(): void;
 }
 
 /**
@@ -33,7 +52,7 @@ export interface RealtimeHandlers {
  * session idle until speech starts (idle sessions carry no audio and cost nothing).
  * Anything sent before the socket opens is queued and flushed in order.
  */
-export class RealtimeSession {
+export class RealtimeSession implements LiveSession {
   readonly createdAt = Date.now();
   connected = false;
   failure: string | null = null;
@@ -51,7 +70,7 @@ export class RealtimeSession {
       this.handlers.onConnected?.();
     };
     this.socket.onmessage = (ev) => this.handle(String(ev.data));
-    this.socket.onerror = () => this.fail(t().errors.cannotReachOpenAI);
+    this.socket.onerror = () => this.fail(t().errors.cannotReach("OpenAI"));
     this.socket.onclose = (ev) => {
       if (!this.closedByUs) this.fail(t().errors.connectionClosed(ev.reason ?? ""));
     };
@@ -122,7 +141,7 @@ export class RealtimeSession {
         this.handlers.onCompleted?.(msg.transcript ?? "");
         break;
       case "error":
-        this.fail(msg.error?.message ?? t().errors.openAIError);
+        this.fail(msg.error?.message ?? t().errors.providerError("OpenAI"));
         break;
     }
   }

@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, session, shell, systemPreferences, Tray } from "electron";
 import { DELAYS, type HistoryEntry, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
+import { models, PROVIDERS } from "../core/providers";
 import { setLang, t } from "../core/i18n";
 import { arrangeTerms } from "../core/sync";
 import { acceleratorParts } from "../core/triggers";
@@ -13,7 +14,7 @@ import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
-import { loadApiKey, loadSettings, saveSettings } from "./settings";
+import { keyPath, loadApiKey, loadSettings, saveSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
@@ -188,6 +189,7 @@ function applySettings(next: Settings): void {
   setAutostart(next.openAtLogin);
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
+  if (prev.provider !== next.provider) pool.refill();
   // No detector in this build (macOS for now): keep the mic closed rather than listen for nothing.
   const wakeWord = next.wakeWord && WakeWord.available();
   wake.setEnabled(wakeWord);
@@ -234,7 +236,7 @@ function buildTrayMenu(): void {
       { label: s.historyAndSettings, click: () => openHistory() },
       { label: s.pasteLast(acceleratorParts(settings.pasteLastHotkey, t().keyNames).join("+")), click: () => void dictation.pasteLast() },
       { type: "separator" },
-      ...(settings.showDelay
+      ...(settings.showDelay && settings.provider === "openai"
         ? [{
             label: s.delay(settings.delay),
             submenu: DELAYS.map((d) => ({ label: d, type: "radio" as const, checked: settings.delay === d, click: () => applySettings({ ...settings, delay: d }) })),
@@ -247,13 +249,16 @@ function buildTrayMenu(): void {
   );
 }
 
+/** The key for the provider in use. */
+const currentKey = () => loadApiKey(settings.provider);
+
 async function retry(id: string, mode: RetryMode): Promise<HistoryEntry> {
-  const key = loadApiKey();
+  const key = currentKey();
   const entry = store.get(id);
   if (!key) throw new Error(t().errors.noApiKey);
   if (!entry) throw new Error(t().errors.entryNotFound);
   const pcm = WavWriter.readPcm(store.audioPath(id));
-  const model = mode === "file" ? settings.fileModel : settings.liveModel;
+  const model = mode === "file" ? models(settings).file : models(settings).live;
   const text = (mode === "file" ? await transcribeFile(key, pcm, settings) : await transcribeLive(key, pcm, settings)).trim();
   // Re-read: the entry may have changed while we waited.
   const fresh = store.get(id) ?? entry;
@@ -261,7 +266,7 @@ async function retry(id: string, mode: RetryMode): Promise<HistoryEntry> {
     id: `t${fresh.transcripts.length + 1}`,
     source: mode === "file" ? "retry-file" : "retry-live",
     model,
-    delay: mode === "live" ? "high" : undefined,
+    delay: mode === "live" && settings.provider === "openai" ? "high" : undefined,
     text,
     createdAt: new Date().toISOString(),
     costUsd: costUsd(model, fresh.durationMs),
@@ -295,7 +300,7 @@ async function showRecovered(entries: HistoryEntry[]): Promise<void> {
   const base = { seq, handsFree: false, startedAt: started, endedAt: started + recent.durationMs, showCost: false, costPerMinuteUsd: 0, offline: false };
   let text: string | null = null;
   try {
-    const key = loadApiKey();
+    const key = currentKey();
     if (key) text = (await retry(recent.id, "file")).transcripts.at(-1)?.text ?? null;
   } catch (e) {
     console.warn("recovering", recent.id, e);
@@ -333,7 +338,7 @@ function registerIpc(): void {
     applySettings({ ...settings, ...next });
     return settings;
   });
-  ipcMain.handle("settings:has-key", () => loadApiKey() !== null);
+  ipcMain.handle("settings:has-key", (_e, provider: Settings["provider"]) => loadApiKey(provider) !== null);
   ipcMain.handle("settings:wake-available", () => WakeWord.available());
   ipcMain.handle("settings:capture-trigger", () => input.capture());
   ipcMain.handle("settings:accessibility", () => (MAC ? accessibility : null));
@@ -342,8 +347,9 @@ function registerIpc(): void {
     systemPreferences.isTrustedAccessibilityClient(true);
     return shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
   });
-  ipcMain.handle("settings:set-key", (_e, key: string) => {
-    fs.writeFileSync(path.join(app.getPath("userData"), "openai-key.txt"), key.trim());
+  ipcMain.handle("settings:set-key", (_e, provider: Settings["provider"], key: string) => {
+    if (!(provider in PROVIDERS)) return;
+    fs.writeFileSync(keyPath(provider), key.trim());
     pool.refill();
   });
 
@@ -400,7 +406,7 @@ void app.whenReady().then(() => {
     return net.fetch(pathToFileURL(store.audioPath(id)).toString());
   });
 
-  pool = new SessionPool(loadApiKey);
+  pool = new SessionPool(() => settings.provider, loadApiKey);
   pool.refill();
   setInterval(() => pool.refill(), 30_000);
 
@@ -417,7 +423,7 @@ void app.whenReady().then(() => {
     input,
     overlay,
     settings: () => settings,
-    apiKey: loadApiKey,
+    apiKey: currentKey,
     changed: notifyChanged,
     idle: () => wake.reset(),
     ended: (report) => telemetry.capture("dictation", { ...report }),
@@ -469,8 +475,8 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
-  telemetry.capture("app_started", { has_api_key: loadApiKey() !== null, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.formatText });
+  telemetry.capture("app_started", { has_api_key: currentKey() !== null, provider: settings.provider, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.formatText });
   updater.start();
   void showRecovered(recovered);
-  if (!loadApiKey()) openHistory("settings");
+  if (!currentKey()) openHistory("settings");
 });

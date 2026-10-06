@@ -89,6 +89,21 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   default and follows the system live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
+- **OpenAI or Gemini** (*Settings → Recognition → Service*). OpenAI is the default.
+  With Google's Gemini (`gemini-3.5-transcribe-live` while you speak,
+  `gemini-3.5-transcribe` for the file), live transcription costs about half as much,
+  and **Apply spoken corrections** (on by default) cleans up the final text: it drops
+  "um", false starts and repeats, and keeps only the correction when you change your
+  mind ("в два, нет, в три" → "в три"; "at 1 pm, actually no, 2 pm" → "at 2 pm").
+  While you speak the card shows the words as said, so a correction is applied
+  only when the final text arrives, about 0.3 s after you let go. With corrections
+  on, Gemini often breaks the text into paragraphs itself; then Ciao leaves its
+  layout as it is, otherwise its own rules for lists apply as usual.
+  - Gemini detects the language on its own and takes no free-form context, only
+    the terms (*Settings → Recognition*), so the Languages and Context fields are
+    hidden with it, and so is the delay level.
+  - A Gemini live session lasts at most 10 minutes; a longer dictation is
+    transcribed from the saved audio when you stop.
 
 ## Requirements
 
@@ -96,11 +111,19 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   [macOS](#macos)), Linux x64 (see [Linux](#linux)), or Android 8+ (see
   [Android](#android)). The macOS build is new: it has no wake word yet and
   updates by hand.
-- An OpenAI API key with access to `gpt-live-transcribe` and `gpt-transcribe`.
+- An OpenAI API key with access to `gpt-live-transcribe` and `gpt-transcribe`, or a
+  Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) (a
+  project with billing on; new accounts prepay at least $5).
 
-Pricing is per minute of audio: live transcription is $0.017/min (about $1 per
-hour of talking), re-transcribing a file with `gpt-transcribe` is $0.0045/min.
-Idle time costs nothing.
+Pricing is per minute of audio:
+
+| | live | re-transcribing the file |
+| --- | --- | --- |
+| OpenAI (`gpt-live-transcribe`, `gpt-transcribe`) | $0.017/min, about $1 per hour of talking | $0.0045/min |
+| Gemini (`gemini-3.5-transcribe-live`, `gemini-3.5-transcribe`) | about $0.009/min | about $0.005/min |
+
+Gemini bills per token; the per-minute figures are Google's own estimate for
+speech. Idle time costs nothing.
 
 ## Install
 
@@ -254,9 +277,11 @@ How it differs from Windows:
 
 ### API key
 
-Ciao takes the key from the `OPENAI_API_KEY` environment variable. If that is not
-set, it reads `openai-key.txt` in the [data folder](#where-things-are-stored). Saving a key in Settings writes
-that file.
+Ciao takes the OpenAI key from the `OPENAI_API_KEY` environment variable and the
+Gemini key from `GEMINI_API_KEY`. If that is not set, it reads `openai-key.txt` or
+`gemini-key.txt` in the [data folder](#where-things-are-stored). Saving a key in
+Settings writes that file; the key card shows the service chosen in
+*Settings → Recognition*.
 
 ### Hotkeys
 
@@ -301,6 +326,7 @@ yours.
 - If the live connection drops, recording continues and the audio is sent to
   `gpt-transcribe` when you finish. If that fails too (still offline), the card
   keeps the recording with a *Transcribe again* button until you dismiss it.
+- Android transcribes with OpenAI only for now; Gemini is desktop-only.
 
 ### Install on Android
 
@@ -362,7 +388,7 @@ Everything is under `%APPDATA%\Ciao` on Windows, `~/Library/Application Support/
 on macOS and `~/.config/Ciao` on Linux:
 
 - `config.json` — settings. Most of them are edited in the app.
-- `openai-key.txt` — the API key.
+- `openai-key.txt`, `gemini-key.txt` — the API keys.
 - `history\<id>\` — one folder per dictation, holding `audio.wav` and
   `entry.json` (transcripts, timings, cost, where it was pasted). The `<id>`
   starts with the UTC start time, `YYYYMMDD-HHMMSS`. The **Folder** button in the
@@ -374,15 +400,16 @@ on macOS and `~/.config/Ciao` on Linux:
 - `sync-state.json` — every term change this device knows, for merging.
 
 Recordings and transcripts stay on your machine. Audio leaves it only to be
-transcribed by OpenAI.
+transcribed by OpenAI or Google, whichever you chose.
 
 ## Telemetry
 
 Ciao sends anonymous usage counts to [PostHog](https://posthog.com) (EU cloud), so
 we can see how many people use it. Two events:
 
-- `app_started`: app version, OS version, CPU architecture, and whether an API key
-  is set and the wake word and paragraph layout are on.
+- `app_started`: app version, OS version, CPU architecture, the transcription
+  service (`provider`: `openai` or `gemini`), and whether its API key is set and the
+  wake word and paragraph layout are on.
 - `dictation`, once per dictation kept in the history:
   - how it ended: `outcome` (pasted, clipboard, empty, failed, cancelled) and
     `transcribed_by` (`live`; `file` when the live transcript failed and the saved
@@ -390,6 +417,8 @@ we can see how many people use it. Two events:
   - how it was driven: `trigger` (the key or button that started it, such as
     `RControlKey` or `MButton`, or `wake_word`), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
+  - who transcribed it: `provider` (`openai` or `gemini`) and, with Gemini, `smart`
+    (whether spoken corrections were applied);
   - time and money: `duration_s`, `voice_onset_ms` (not for wake-word starts, whose
     audio begins with speech), `first_text_ms`, `final_after_release_ms` and `cost_usd`;
   - where the text went: `target_app`, the kind of app it was meant for, from a
@@ -472,7 +501,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
           ▼
        main process ──► history/<id>/audio.wav              written first, always
           │
-          └──► OpenAI Realtime, gpt-live-transcribe (WebSocket, opened in advance)
+          └──► OpenAI Realtime, gpt-live-transcribe, or Gemini Live,
+               gemini-3.5-transcribe-live (WebSocket, opened in advance)
                   │ transcript deltas ──► overlay card (live text)
                   │ on key release: commit ──► final transcript
                   ▼
@@ -482,8 +512,11 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - A WebSocket session is kept open in reserve, because opening one takes up to a
   second and speech would otherwise start streaming late. An idle session costs
   nothing.
+- Gemini sends a guess of the whole text so far, revised as you speak, rather than
+  new words only; the card fades in whatever changed. Its voice detection is off,
+  so a pause to think doesn't end the dictation: the key decides.
 - If the final transcript does not arrive, the saved WAV is sent to
-  `gpt-transcribe` instead.
+  `gpt-transcribe` (or `gemini-3.5-transcribe`) instead.
 - `Ciao.Input` is a tiny native helper: .NET on Windows, Swift on macOS. It
   installs a low-level keyboard and mouse hook (an event tap on macOS), so it can
   see Right Ctrl being held and swallow Esc (the focused app never receives it).
@@ -494,7 +527,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 ### Project layout
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
-  Realtime transcription session, PCM/WAV helpers, prices and shared types. It is
+  live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
+  `providers.ts` for which models each uses), PCM/WAV helpers, prices and shared types. It is
   meant to be reused as-is by other shells (a T3 Code integration, mobile).
 - `src/main/` — the Electron main process:
   - `dictation.ts` — the hotkey state machine and the pipeline;
