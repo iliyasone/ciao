@@ -36,13 +36,12 @@ class MainActivity : Activity() {
             if (prefs.provider == Provider.GEMINI) GoogleSync.edit(this) { it.geminiKey = s } else GoogleSync.edit(this) { it.apiKey = s }
             updateStatus()
         }
-        findViewById<RadioGroup>(R.id.provider).apply {
-            check(if (prefs.provider == Provider.GEMINI) R.id.providerGemini else R.id.providerOpenai)
-            setOnCheckedChangeListener { _, id ->
-                prefs.provider = if (id == R.id.providerGemini) Provider.GEMINI else Provider.OPENAI
-                findViewById<EditText>(R.id.apiKey).setText(prefs.currentKey)
-                showProvider()
-            }
+        val providers = findViewById<RadioGroup>(R.id.provider)
+        providers.check(if (prefs.provider == Provider.GEMINI) R.id.providerGemini else R.id.providerOpenai)
+        providers.setOnCheckedChangeListener { _, id ->
+            prefs.provider = if (id == R.id.providerGemini) Provider.GEMINI else Provider.OPENAI
+            findViewById<EditText>(R.id.apiKey).setText(prefs.currentKey)
+            showProvider()
         }
         bindSwitch(R.id.smart, prefs.smart) { prefs.smart = it }
         showProvider()
