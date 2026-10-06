@@ -52,15 +52,15 @@ object TextInserter {
         return true
     }
 
-    /** The field's text without its hint, what goes before and after the cursor, and [text] to put between them. */
+    /** The field's text without its hint, the text before and after the cursor, and what goes between. */
     data class Placement(val current: String, val before: String, val piece: String, val after: String)
 
     /**
-     * Where [text] goes in a field showing [shown] with the selection [selStart]..[selEnd]. An empty
+     * Where [transcript] goes in a field showing [shown] with the selection [selStart]..[selEnd]. An empty
      * field shows its hint ("Message"), and many apps report the hint as the field's text without
      * flagging it as one (Telegram, for one): the dictation would land after it.
      */
-    fun place(shown: String, hint: String?, showingHint: Boolean, selStart: Int, selEnd: Int, text: String): Placement {
+    fun place(shown: String, hint: String?, showingHint: Boolean, selStart: Int, selEnd: Int, transcript: String): Placement {
         val current = if (showingHint || shown == hint) "" else shown
         var start = selStart
         var end = selEnd
@@ -70,7 +70,7 @@ object TextInserter {
         }
         if (start > end) start = end.also { end = start }
         val before = current.substring(0, start)
-        val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + text
+        val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + transcript
         return Placement(current, before, piece, current.substring(end))
     }
 

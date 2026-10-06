@@ -16,6 +16,8 @@ class TextInserterTest {
         assertEquals("Hello world there", inserted("Hello there", null, 5, 5, "world"))
         assertEquals("Hi there", inserted("Hello there", null, 0, 5, "Hi"))
         assertEquals("Hello world", inserted("Hello", null, -1, -1, "world"))
+        assertEquals("Hello world", inserted("Hello ", null, 6, 6, "world"))
+        assertEquals("Hi there", inserted("Hello there", null, 5, 0, "Hi"))
     }
 
     @Test
