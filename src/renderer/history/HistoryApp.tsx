@@ -62,9 +62,15 @@ const duration = (ms: number) => {
 
 const entryCost = (e: HistoryEntry) => e.transcripts.reduce((sum, t) => sum + t.costUsd, 0);
 
+/** Cards drawn at first and added per scroll: drawing a long history at once froze the window. */
+const PAGE = 40;
+
 function History() {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [query, setQuery] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const sentinel = useRef<HTMLDivElement | null>(null);
   const tr = useStrings();
 
   useEffect(() => {
@@ -86,22 +92,36 @@ function History() {
     return (entries ?? []).filter((e) => !q || e.transcripts.some((t) => t.text.toLowerCase().includes(q)));
   }, [entries, query]);
 
+  // Draw the next page while the end of the list is still a screen or two away.
+  const more = filtered.length > limit;
+  useEffect(() => {
+    if (!more || !sentinel.current) return;
+    const observer = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting) setLimit((l) => l + PAGE);
+      },
+      { root: scroller.current, rootMargin: "1500px 0px" },
+    );
+    observer.observe(sentinel.current);
+    return () => observer.disconnect();
+  }, [more, limit]);
+
   const groups = useMemo(() => {
     const map = new Map<string, HistoryEntry[]>();
-    for (const e of filtered) {
+    for (const e of filtered.slice(0, limit)) {
       const k = dayLabel(e.createdAt, tr);
       map.set(k, [...(map.get(k) ?? []), e]);
     }
     return [...map];
-  }, [filtered, tr]);
+  }, [filtered, limit, tr]);
 
-  const today = (entries ?? []).filter((e) => new Date(e.createdAt).toDateString() === new Date().toDateString());
+  const today = useMemo(() => (entries ?? []).filter((e) => new Date(e.createdAt).toDateString() === new Date().toDateString()), [entries]);
   const total = entries ?? [];
 
   if (!entries) return null;
 
   return (
-    <div className="scroll-thin h-full overflow-y-auto">
+    <div ref={scroller} className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-6 pt-5 pb-16">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div className="text-[12.5px] text-faint">
@@ -113,7 +133,10 @@ function History() {
             <Search className="size-3.5 text-faint" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setLimit(PAGE);
+              }}
               placeholder={tr.history.search}
               className="selectable w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-ghost"
             />
@@ -136,6 +159,7 @@ function History() {
             </div>
           </section>
         ))}
+        {more && <div ref={sentinel} className="h-px" />}
       </div>
     </div>
   );
