@@ -60,6 +60,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Robolectric runs the real activities on the JVM (UiTest.kt): no emulator, in CI too.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 base {
@@ -73,4 +77,5 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // The real org.json for unit tests (Android's is a stub there).
     testImplementation("org.json:json:20240303")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

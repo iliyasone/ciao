@@ -6,8 +6,11 @@
     <string name="bubble_description">Диктовать с Ciao</string>
 
     <string name="section_setup">Настройка</string>
-    <string name="key_title">Ключ OpenAI API</string>
-    <string name="key_text">Нужен доступ к gpt-live-transcribe. Живая диктовка стоит $0.017 за минуту речи, простой бесплатен. Ключ хранится только на телефоне.</string>
+    <string name="provider_title">Сервис</string>
+    <string name="provider_text">Кто превращает речь в текст. Вы платите ему напрямую своим API-ключом.</string>
+    <string name="key_title">Ключ %1$s API</string>
+    <string name="key_text_openai">Нужен доступ к gpt-live-transcribe. Живая диктовка стоит $0.017 за минуту речи, простой бесплатен. Ключ хранится только на телефоне.</string>
+    <string name="key_text_gemini">Ключ берётся на aistudio.google.com/apikey. Живая диктовка через gemini-3.5-transcribe-live стоит около $0.009 за минуту речи, простой бесплатен. Ключ хранится только на телефоне.</string>
     <string name="mic_title">Микрофон</string>
     <string name="mic_text">Запись начинается, только когда вы нажимаете кнопку Ciao, и заканчивается, когда вы закончили.</string>
     <string name="mic_allow">Разрешить микрофон</string>
@@ -38,17 +41,40 @@
     <string name="sync_no_drive">нет доступа к Диску. Войдите снова и отметьте на странице Google галочку про данные конфигурации на Google Диске</string>
     <string name="context_title">Контекст</string>
     <string name="context_text">О чём вы обычно говорите. Помогает с названиями и терминами.</string>
+    <string name="gemini_note">Gemini сам определяет язык и не берёт контекст — только термины.</string>
     <string name="terms_title">Термины</string>
     <string name="terms_text">Слова, которые нужно писать точно, по одному в строке.</string>
     <string name="format_text">Абзацы и списки</string>
     <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
     <string name="show_cost">Показывать стоимость диктовки</string>
+    <string name="smart">Понимать поправки</string>
+    <string name="smart_hint">Убирает «э-э», оговорки и повторы, а поправки применяет: «в два, нет, в три» — будет «в три». Только в готовом тексте: пока говорите, видно всё как есть.</string>
     <string name="version">Ciao %1$s для Android</string>
+
+    <string name="update_check">Проверить обновления</string>
+    <string name="update_checking">Проверяю обновления…</string>
+    <string name="update_latest">Это последняя версия</string>
+    <string name="update_available">Вышел Ciao %1$s</string>
+    <string name="update_available_text">Ciao скачает его с GitHub, а Android установит поверх этой версии. Настройки сохранятся.</string>
+    <string name="update_install">Обновить до %1$s</string>
+    <string name="update_confirm">Подтвердить установку</string>
+    <string name="update_whats_new">Что нового</string>
+    <string name="update_downloading">Скачиваю… %1$d%%</string>
+    <string name="update_installing">Подтвердите установку в окне Android</string>
+    <string name="update_allow">Чтобы обновиться, разрешите Ciao устанавливать приложения: Android спросит один раз, а Ciao ставит только свои обновления</string>
+    <string name="update_building">Ciao %1$s уже вышел, но его APK ещё собирается. Проверьте через несколько минут</string>
+    <string name="update_check_failed">Не удалось проверить обновления: %1$s</string>
+    <string name="update_failed">Не удалось обновить: %1$s</string>
+    <string name="update_install_failed">Android не установил обновление</string>
+    <string name="update_incomplete">загрузка оборвалась</string>
+    <string name="update_offline">нет связи</string>
+    <string name="update_no_releases">релизов пока нет</string>
+    <string name="update_github_status">GitHub ответил %1$d</string>
 
     <string name="cancel">Отменить</string>
     <string name="done">Готово</string>
     <string name="retry">Распознать ещё раз</string>
-    <string name="need_key">Сначала добавьте ключ OpenAI в Ciao</string>
+    <string name="need_key">Сначала добавьте ключ %1$s в Ciao</string>
     <string name="need_mic">Сначала разрешите Ciao микрофон</string>
     <string name="mic_error">Не удалось открыть микрофон: %1$s</string>
     <string name="mic_stopped">Микрофон перестал работать: %1$s</string>
@@ -58,9 +84,10 @@
     <string name="nothing_heard">Ничего не услышал</string>
     <string name="failed">Не распознано: %1$s</string>
 
-    <string name="error_cannot_reach">Нет связи с OpenAI</string>
-    <string name="error_bad_key">OpenAI не принял ключ</string>
-    <string name="error_status">Ошибка OpenAI %1$d</string>
+    <string name="error_cannot_reach">Нет связи с %1$s</string>
+    <string name="error_bad_key">%1$s не принял ключ</string>
+    <string name="error_status">Ошибка %1$s %2$d</string>
+    <string name="error_status_text">%1$s ответил %2$s</string>
     <string name="error_closed">Соединение закрыто %1$s</string>
-    <string name="error_openai">Ошибка OpenAI</string>
+    <string name="error_provider">Ошибка %1$s</string>
 </resources>

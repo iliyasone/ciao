@@ -89,7 +89,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   default and follows the system live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
-- **OpenAI or Gemini** (*Settings → Recognition → Service*). OpenAI is the default.
+- **OpenAI or Gemini** (*Settings → Recognition → Service* on the desktop,
+  *Service* on Android). OpenAI is the default.
   With Google's Gemini (`gemini-3.5-transcribe-live` while you speak,
   `gemini-3.5-transcribe` for the file), live transcription costs about half as much,
   and **Apply spoken corrections** (on by default) cleans up the final text: it drops
@@ -325,32 +326,51 @@ yours.
 - **✕** on the card cancels; **✓** finishes.
 - If the field won't take the text, it is copied to the clipboard instead.
 - If the live connection drops, recording continues and the audio is sent to
-  `gpt-transcribe` when you finish. If that fails too (still offline), the card
-  keeps the recording with a *Transcribe again* button until you dismiss it.
-- Android transcribes with OpenAI only for now; Gemini is desktop-only.
+  the file model (`gpt-transcribe`, or `gemini-3.5-transcribe`) when you finish.
+  If that fails too (still offline), the card keeps the recording with a
+  *Transcribe again* button until you dismiss it.
+- **OpenAI or Gemini**: pick the service at the top of the Ciao screen; the key
+  field below it is for that service's key. With Gemini, *Apply spoken
+  corrections* works as on the desktop ([Features](#features)), the context field
+  isn't used, and the language is detected on its own.
 
 ### Install on Android
 
 1. Download `Ciao-<version>.apk` from the
    [latest release](https://github.com/iliyasone/ciao/releases/latest) on the phone
    and open it. Allow installing apps from that source if Android asks.
-2. Open Ciao and paste your OpenAI API key.
+2. Open Ciao, pick OpenAI or Gemini and paste that service's API key.
 3. Allow the microphone.
 4. Tap *Open Accessibility settings* and turn on **Ciao dictation**. Ciao uses the
    accessibility service to see when a keyboard is open and to type into the
-   field; it reads only the focused field and sends nothing but your audio to OpenAI.
+   field; it reads only the focused field and sends nothing but your audio to the
+   service you picked.
    - If the switch is greyed out (Android 13+ does this for apps installed from a
      file), open *App info*, tap **⋮** in the corner, choose *Allow restricted
      settings*, and try again.
 5. Try it in the field at the bottom of the Ciao screen.
 
 Terms are one per line, as on the desktop, and *Sign in with Google* syncs them,
-the context and the API key with your other devices ([Sync](#sync)). The Gemini
-key comes along too and is kept for the desktop, though Android doesn't use it yet. Signing in needs Google
-Play services.
+the context and the API keys (OpenAI and Gemini) with your other devices
+([Sync](#sync)). Signing in needs Google Play services. The service picked stays
+per device, as on the desktop.
 
-The Android app has no history, wake word or usage counts yet, and it doesn't
-update itself: install a newer APK over the old one.
+The Android app has no history, wake word or usage counts yet.
+
+### Updates on Android
+
+The APK from GitHub updates itself from the same
+[releases](https://github.com/iliyasone/ciao/releases) as the desktop app. Each
+time you open the Ciao screen (at most every 4 hours) it checks for a newer
+version; when there is one, a card at the top offers *Update to X* and *What's
+new*. To check by hand, tap *Check for updates* at the bottom of the screen.
+
+*Update* downloads the APK and hands it to Android, which asks you to confirm and
+installs it over the old one; your settings stay. The first time, Android asks you
+to let Ciao install apps (*Install unknown apps*); turn it on and come back, and
+the update continues. Nothing is downloaded until you tap *Update*. Android only
+accepts an update signed with the same key, so a tampered APK is refused.
+Installing a newer APK by hand works too.
 
 ## Sync
 
@@ -570,8 +590,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `CiaoService.kt` — the accessibility service: the icon over the keyboard
     (`Spring.kt` moves it), the dictation pipeline, typing into the field;
   - `CardView.kt` — the live card;
-  - `Realtime.kt`, `FileTranscriber.kt` — the same OpenAI calls as
-    `src/core/realtime.ts` and `src/main/transcribe.ts`;
+  - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
+    Gemini calls as `src/core/realtime.ts`, `src/core/gemini.ts` and
+    `src/main/transcribe.ts`; `Revision.kt` — the port of `src/core/revision.ts`,
+    whose test holds its TypeScript outputs;
+  - `Updater.kt` — updates from GitHub Releases through Android's package
+    installer, like `src/main/updater.ts`;
   - `LiveLayout.kt`, `VoiceCommands.kt` — ports of `src/core/liveLayout.ts` and
     `src/core/voiceCommands.ts`. Their unit test holds the TypeScript outputs, so
     change both together;

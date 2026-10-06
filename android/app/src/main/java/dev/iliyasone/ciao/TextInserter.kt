@@ -24,7 +24,10 @@ object TextInserter {
      */
     fun insert(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
         if (!node.refresh() || !node.isEditable) return false
-        val current = if (node.isShowingHintText) "" else node.text?.toString().orEmpty()
+        // An empty field shows its hint ("Message"), and many apps report the hint as the field's
+        // text without flagging it as one (Telegram, for one): the dictation would land after it.
+        val text = node.text?.toString().orEmpty()
+        val current = if (node.isShowingHintText || text == node.hintText?.toString()) "" else text
         var start = node.textSelectionStart
         var end = node.textSelectionEnd
         if (start < 0 || end < 0 || start > current.length || end > current.length) {

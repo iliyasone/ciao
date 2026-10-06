@@ -49,6 +49,46 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Shown while there is an update to install (Updater.kt). -->
+        <LinearLayout
+            android:id="@+id/updateCard"
+            style="@style/Card"
+            android:layout_marginTop="20dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/updateTitle"
+                style="@style/CardTitle" />
+
+            <TextView
+                android:id="@+id/updateText"
+                style="@style/CardText" />
+
+            <ProgressBar
+                android:id="@+id/updateProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:max="100" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/updateButton"
+                    style="@style/Action" />
+
+                <Button
+                    android:id="@+id/whatsNewButton"
+                    style="@style/Action"
+                    android:layout_marginStart="12dp"
+                    android:text="@string/update_whats_new" />
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView
             style="@style/Section"
             android:text="@string/section_setup" />
@@ -56,18 +96,45 @@
         <LinearLayout style="@style/Card">
 
             <TextView
-                android:id="@+id/keyTitle"
                 style="@style/CardTitle"
-                android:text="@string/key_title" />
+                android:text="@string/provider_title" />
 
             <TextView
                 style="@style/CardText"
-                android:text="@string/key_text" />
+                android:text="@string/provider_text" />
+
+            <RadioGroup
+                android:id="@+id/provider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/providerOpenai"
+                    style="@style/Toggle"
+                    android:text="@string/provider_openai" />
+
+                <RadioButton
+                    android:id="@+id/providerGemini"
+                    style="@style/Toggle"
+                    android:text="@string/provider_gemini" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <LinearLayout style="@style/Card">
+
+            <TextView
+                android:id="@+id/keyTitle"
+                style="@style/CardTitle" />
+
+            <TextView
+                android:id="@+id/keyText"
+                style="@style/CardText" />
 
             <EditText
                 android:id="@+id/apiKey"
                 style="@style/Field"
-                android:hint="@string/key_hint"
                 android:importantForAutofill="no"
                 android:inputType="textPassword"
                 android:singleLine="true" />
@@ -176,6 +243,13 @@
                 style="@style/CardText"
                 android:text="@string/context_text" />
 
+            <TextView
+                android:id="@+id/geminiNote"
+                style="@style/CardText"
+                android:text="@string/gemini_note"
+                android:textColor="@color/faint"
+                android:textSize="13sp" />
+
             <EditText
                 android:id="@+id/prompt"
                 style="@style/Field"
@@ -201,6 +275,18 @@
         <LinearLayout style="@style/Card">
 
             <Switch
+                android:id="@+id/smart"
+                style="@style/Toggle"
+                android:text="@string/smart" />
+
+            <TextView
+                android:id="@+id/smartHint"
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/smart_hint" />
+
+            <Switch
                 android:id="@+id/formatText"
                 style="@style/Toggle"
                 android:text="@string/format_text" />
@@ -223,5 +309,20 @@
             android:gravity="center"
             android:textColor="@color/faint"
             android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/updateStatus"
+            style="@style/CardText"
+            android:gravity="center"
+            android:textColor="@color/faint"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/checkButton"
+            style="@style/Action"
+            android:layout_gravity="center_horizontal"
+            android:paddingStart="12dp"
+            android:text="@string/update_check" />
     </LinearLayout>
 </ScrollView>

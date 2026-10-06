@@ -14,31 +14,54 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-// The OpenAI Realtime transcription protocol, as in src/core/realtime.ts.
+// The OpenAI Realtime transcription protocol, as in src/core/realtime.ts. Gemini's is in Gemini.kt.
 
 val http: OkHttpClient = OkHttpClient.Builder()
     .pingInterval(20, TimeUnit.SECONDS)
     .readTimeout(120, TimeUnit.SECONDS)
     .build()
 
-/**
- * One OpenAI Realtime transcription session. Opening the socket takes 0.3–1 s, so it is opened
- * ahead of time and kept idle until speech starts (idle sessions carry no audio and cost nothing).
- * OkHttp queues anything sent before the socket opens. Callbacks arrive on the main thread.
- */
-class RealtimeSession(private val context: Context, apiKey: String) {
+/** A streaming transcription session, whichever provider runs it. Callbacks arrive on the main thread. */
+interface LiveSession {
     interface Listener {
         fun onDelta(text: String)
+        /** The text shown so far changed, not only grew (Gemini revises its guess as you speak): show this instead. */
+        fun onRevise(text: String)
         fun onCompleted(text: String)
         fun onError(message: String)
     }
 
-    val createdAt = SystemClock.elapsedRealtime()
+    val createdAt: Long
+    val failure: String?
+    /** Still worth handing to a new dictation. */
+    val usable: Boolean
+    var listener: Listener?
 
-    @Volatile var failure: String? = null
+    fun configure(prefs: Prefs)
+    fun append(pcm: ByteArray, length: Int = pcm.size)
+    fun commit()
+    fun close()
+}
+
+/** "Cannot reach OpenAI", "Gemini rejected the API key"…: why a socket to [name] failed. */
+fun socketError(context: Context, name: String, response: Response?): String = when (val status = response?.code) {
+    null -> context.getString(R.string.error_cannot_reach, name)
+    401, 403 -> context.getString(R.string.error_bad_key, name)
+    else -> context.getString(R.string.error_status, name, status)
+}
+
+/**
+ * One OpenAI Realtime transcription session. Opening the socket takes 0.3–1 s, so it is opened
+ * ahead of time and kept idle until speech starts (idle sessions carry no audio and cost nothing).
+ * OkHttp queues anything sent before the socket opens.
+ */
+class RealtimeSession(private val context: Context, apiKey: String) : LiveSession {
+    override val createdAt = SystemClock.elapsedRealtime()
+
+    @Volatile override var failure: String? = null
         private set
 
-    var listener: Listener? = null
+    override var listener: LiveSession.Listener? = null
 
     @Volatile private var closedByUs = false
     private val main = Handler(Looper.getMainLooper())
@@ -48,16 +71,7 @@ class RealtimeSession(private val context: Context, apiKey: String) {
         object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                val status = response?.code
-                fail(
-                    when (status) {
-                        null -> context.getString(R.string.error_cannot_reach)
-                        401 -> context.getString(R.string.error_bad_key)
-                        else -> context.getString(R.string.error_status, status)
-                    },
-                )
-            }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = fail(socketError(context, NAME, response))
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 webSocket.close(1000, null)
@@ -66,11 +80,10 @@ class RealtimeSession(private val context: Context, apiKey: String) {
         },
     )
 
-    /** Still worth handing to a new dictation. */
-    val usable: Boolean get() = failure == null && !closedByUs
+    override val usable: Boolean get() = failure == null && !closedByUs
 
-    fun configure(prefs: Prefs, delay: String = prefs.delay) {
-        val transcription = JSONObject().put("model", prefs.liveModel).put("delay", delay)
+    override fun configure(prefs: Prefs) {
+        val transcription = JSONObject().put("model", prefs.liveModel).put("delay", prefs.delay)
         if (prefs.languages.isNotEmpty()) transcription.put("languages", JSONArray(prefs.languages))
         if (prefs.prompt.isNotBlank()) transcription.put("prompt", prefs.prompt.trim())
         // The API rejects keywords containing <, > or line breaks.
@@ -82,13 +95,13 @@ class RealtimeSession(private val context: Context, apiKey: String) {
         send(JSONObject().put("type", "session.update").put("session", session))
     }
 
-    fun append(pcm: ByteArray, length: Int = pcm.size) {
+    override fun append(pcm: ByteArray, length: Int) {
         send(JSONObject().put("type", "input_audio_buffer.append").put("audio", Base64.encodeToString(pcm, 0, length, Base64.NO_WRAP)))
     }
 
-    fun commit() = send(JSONObject().put("type", "input_audio_buffer.commit"))
+    override fun commit() = send(JSONObject().put("type", "input_audio_buffer.commit"))
 
-    fun close() {
+    override fun close() {
         closedByUs = true
         socket.close(1000, null)
     }
@@ -118,37 +131,48 @@ class RealtimeSession(private val context: Context, apiKey: String) {
                 val transcript = msg.optString("transcript")
                 main.post { listener?.onCompleted(transcript) }
             }
-            "error" -> fail(msg.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() } ?: context.getString(R.string.error_openai))
+            "error" -> fail(msg.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() } ?: context.getString(R.string.error_provider, NAME))
         }
     }
 
     companion object {
         const val URL = "wss://api.openai.com/v1/realtime?intent=transcription"
+        const val NAME = "OpenAI"
     }
 }
 
+/** Opens a live session with whichever service the settings pick. */
+fun openLive(context: Context, prefs: Prefs): LiveSession =
+    if (prefs.provider == Provider.GEMINI) GeminiSession(context, prefs.geminiKey) else RealtimeSession(context, prefs.apiKey)
+
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */
 class SessionPool(private val context: Context, private val prefs: Prefs) {
-    private var spare: RealtimeSession? = null
+    private var spare: LiveSession? = null
+    private var spareProvider: Provider? = null
     private var failedAt = Long.MIN_VALUE / 2
+
+    private fun fresh(s: LiveSession?): Boolean =
+        s != null && s.usable && spareProvider == prefs.provider && SystemClock.elapsedRealtime() - s.createdAt < prefs.provider.maxSpareAgeMs
 
     /** Called on every keyboard event; a failed spare (offline, bad key) is retried at most every 30 s. */
     fun refill() {
         val s = spare
         val now = SystemClock.elapsedRealtime()
-        if (s != null && s.usable && now - s.createdAt < MAX_AGE_MS) return
-        if (s?.failure != null) failedAt = maxOf(failedAt, s.createdAt)
+        if (fresh(s)) return
+        if (s?.failure != null && spareProvider == prefs.provider) failedAt = maxOf(failedAt, s.createdAt)
+        else if (spareProvider != prefs.provider) failedAt = Long.MIN_VALUE / 2
         if (now - failedAt < RETRY_MS) return
         s?.close()
-        spare = prefs.apiKey.takeIf { it.isNotEmpty() }?.let { RealtimeSession(context, it) }
+        spareProvider = prefs.provider
+        spare = prefs.currentKey.takeIf { it.isNotEmpty() }?.let { openLive(context, prefs) }
     }
 
-    fun take(): RealtimeSession {
-        val s = spare?.takeIf { it.usable && SystemClock.elapsedRealtime() - it.createdAt < MAX_AGE_MS }
+    fun take(): LiveSession {
+        val s = spare?.takeIf { fresh(it) }
         if (spare?.failure != null) failedAt = SystemClock.elapsedRealtime()
         if (s == null) spare?.close()
         spare = null
-        val session = s ?: RealtimeSession(context, prefs.apiKey)
+        val session = s ?: openLive(context, prefs)
         refill()
         return session
     }
@@ -159,7 +183,6 @@ class SessionPool(private val context: Context, private val prefs: Prefs) {
     }
 
     private companion object {
-        const val MAX_AGE_MS = 10 * 60_000L
         const val RETRY_MS = 30_000L
     }
 }

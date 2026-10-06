@@ -59,7 +59,10 @@ class CiaoService : AccessibilityService() {
     /** FAILED: not transcribed; the recording is kept on the card until you retry or dismiss it. */
     private enum class Phase { RECORDING, FINISHING, DONE, FAILED }
 
-    private inner class Dictation(val target: AccessibilityNodeInfo?, val session: RealtimeSession, val pushToTalk: Boolean) {
+    private inner class Dictation(val target: AccessibilityNodeInfo?, val session: LiveSession, val pushToTalk: Boolean) {
+        /** As when it started: the settings may change before it is delivered. */
+        val provider = prefs.provider
+        val smart = prefs.smart
         val startedAt = SystemClock.elapsedRealtime()
         var endedAt = 0L
         /** The recording, written as it comes in so a long one doesn't sit in memory; read back only for the file model. */
@@ -383,13 +386,13 @@ class CiaoService : AccessibilityService() {
 
     private fun start(pushToTalk: Boolean) {
         if (!idle) return
-        if (prefs.apiKey.isEmpty()) return openApp(R.string.need_key)
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return openApp(R.string.need_mic)
+        if (prefs.currentKey.isEmpty()) return openApp(getString(R.string.need_key, prefs.provider.displayName))
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return openApp(getString(R.string.need_mic))
 
         val target = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()?.takeIf { it.isEditable && !it.isPassword }
         val session = pool.take()
         val d = Dictation(target, session, pushToTalk)
-        session.listener = object : RealtimeSession.Listener {
+        session.listener = object : LiveSession.Listener {
             override fun onDelta(text: String) {
                 if (dictation !== d) return
                 val now = SystemClock.elapsedRealtime()
@@ -398,10 +401,21 @@ class CiaoService : AccessibilityService() {
                 d.lastDeltaAt = now
                 d.liveText.append(text)
                 card?.delta(text, gap)
-                if (!d.pushToTalk && prefs.stopPhrase && d.phase == Phase.RECORDING && VoiceCommands.endsWithStopPhrase(d.liveText.toString())) {
-                    d.stoppedByPhrase = true
-                    stop()
-                }
+                checkStopPhrase(d)
+            }
+
+            override fun onRevise(text: String) {
+                if (dictation !== d) return
+                val now = SystemClock.elapsedRealtime()
+                val gap = if (d.lastDeltaAt == 0L) 0 else now - d.lastDeltaAt
+                val pauses = Revision.revisePauses(d.liveText.toString(), text, d.pauses, gap).second
+                d.pauses.clear()
+                d.pauses.addAll(pauses)
+                d.lastDeltaAt = now
+                d.liveText.setLength(0)
+                d.liveText.append(text)
+                card?.revise(text, gap)
+                checkStopPhrase(d)
             }
 
             override fun onCompleted(text: String) {
@@ -451,10 +465,17 @@ class CiaoService : AccessibilityService() {
         showBubble()
         bubble?.state = BubbleView.State.RECORDING
         bubble?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-        showCard().begin(prefs.showCost, PRICE_PER_MINUTE_USD, prefs.formatText)
+        showCard().begin(prefs.showCost, d.provider.pricePerMinute, prefs.formatText)
         if (session.failure != null) card?.notice(getString(R.string.offline))
         // Android hands a background app pure digital silence instead of an error when it may not record.
         main.postDelayed({ if (dictation === d && d.phase == Phase.RECORDING && !d.heardAnything) card?.notice(getString(R.string.mic_silent)) }, 2500)
+    }
+
+    private fun checkStopPhrase(d: Dictation) {
+        if (!d.pushToTalk && prefs.stopPhrase && d.phase == Phase.RECORDING && VoiceCommands.endsWithStopPhrase(d.liveText.toString())) {
+            d.stoppedByPhrase = true
+            stop()
+        }
     }
 
     private fun stop() {
@@ -485,10 +506,10 @@ class CiaoService : AccessibilityService() {
     private fun transcribeFile(d: Dictation) {
         Thread {
             // runCatching also catches an OutOfMemoryError from reading a very long recording.
-            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes()) }
+            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes(), d.provider, prefs.keyOf(d.provider), d.smart) }
             main.post {
                 if (dictation !== d) return@post
-                result.fold(onSuccess = { deliver(d, it) }, onFailure = { fail(d, it.message ?: getString(R.string.error_openai)) })
+                result.fold(onSuccess = { deliver(d, it) }, onFailure = { fail(d, it.message ?: getString(R.string.error_provider, d.provider.displayName)) })
             }
         }.start()
     }
@@ -496,7 +517,9 @@ class CiaoService : AccessibilityService() {
     private fun deliver(d: Dictation, raw: String) {
         var text = raw.trim()
         if (d.stoppedByPhrase) text = VoiceCommands.stripStopPhrase(text)
-        if (prefs.formatText && text.isNotEmpty()) {
+        // Gemini's smart mode often lays out paragraphs itself; leave its layout alone when it did.
+        val laidOutByModel = d.provider == Provider.GEMINI && d.smart && text.contains('\n')
+        if (prefs.formatText && text.isNotEmpty() && !laidOutByModel) {
             // Pauses are offsets in the live deltas; the final text has the same words, so shift them over.
             val live = d.liveText.toString()
             val lead = live.length - live.trimStart().length
@@ -571,7 +594,7 @@ class CiaoService : AccessibilityService() {
         d.audioFile.delete()
     }
 
-    private fun openApp(message: Int) {
+    private fun openApp(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -590,7 +613,5 @@ class CiaoService : AccessibilityService() {
         const val MAX_FLING_DP_S = 1500f
         const val COMPLETION_TIMEOUT_MS = 6000L
         const val DEFAULT_LIFT_DP = 72
-        // gpt-live-transcribe list price (src/core/cost.ts).
-        const val PRICE_PER_MINUTE_USD = 0.017
     }
 }
