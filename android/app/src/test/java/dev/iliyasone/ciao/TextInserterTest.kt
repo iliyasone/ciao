@@ -17,4 +17,11 @@ class TextInserterTest {
         assertEquals("Hi there", inserted("Hello there", null, 0, 5, "Hi"))
         assertEquals("Hello world", inserted("Hello", null, -1, -1, "world"))
     }
+
+    @Test
+    fun aHintCountsAsAnEmptyField() {
+        // An empty field gets ACTION_SET_TEXT, not a paste.
+        assertEquals("", TextInserter.place("Message", "Message", false, 7, 7, "x").current)
+        assertEquals("", TextInserter.place("Message", null, true, -1, -1, "x").current)
+    }
 }
