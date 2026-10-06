@@ -11,7 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 /** Puts the transcript into a text field through the accessibility node of that field. */
 object TextInserter {
     /**
-     * Inserts [text] at the cursor of [node] (replacing the selection), with a space before it when
+     * Inserts [transcript] at the cursor of [node] (replacing the selection), with a space before it when
      * it would otherwise stick to the previous word.
      *
      * A field with text in it gets a paste when we can put the clipboard back afterwards:
@@ -22,11 +22,11 @@ object TextInserter {
      * update their accessibility tree later, so reading the text back would look like a miss and
      * insert twice.
      */
-    fun insert(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
+    fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String): Boolean {
         if (!node.refresh() || !node.isEditable) return false
         val (current, before, piece, after) = place(
             node.text?.toString().orEmpty(), node.hintText?.toString(), node.isShowingHintText,
-            node.textSelectionStart, node.textSelectionEnd, text,
+            node.textSelectionStart, node.textSelectionEnd, transcript,
         )
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
