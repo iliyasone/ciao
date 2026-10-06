@@ -12,7 +12,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import okhttp3.Request
-import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.net.UnknownHostException
@@ -26,7 +25,7 @@ import java.util.concurrent.Executors
  * Nothing is downloaded on its own.
  */
 object Updater {
-    private const val LATEST = "https://api.github.com/repos/iliyasone/ciao/releases/latest"
+    private const val REPO = "https://github.com/iliyasone/ciao"
     private const val CHECK_EVERY_MS = 4 * 60 * 60_000L
 
     enum class Phase { IDLE, CHECKING, LATEST, AVAILABLE, DOWNLOADING, INSTALLING, ERROR }
@@ -35,7 +34,7 @@ object Updater {
     data class State(val phase: Phase, val version: String? = null, val percent: Int = 0, val message: String? = null)
 
     /** [apk]: null while the release has no APK yet (it is still being built). */
-    private class Release(val version: String, val apk: String?, val size: Long, val page: String)
+    private class Release(val version: String, val apk: String?, val page: String)
 
     @Volatile var state = State(Phase.IDLE)
         private set
@@ -154,23 +153,28 @@ object Updater {
         }
     }
 
-    /** The latest published release; null if its tag has no version. */
+    /**
+     * The latest published release; null if its tag has no version. Read from github.com, not
+     * api.github.com: the API allows 60 requests an hour per IP without a token, and a phone on
+     * mobile data shares its IP with many others, so it often answers 403. The web page redirects
+     * to the latest tag, and an asset URL answers 302 if the file is there, 404 if not.
+     */
     private fun fetchLatest(context: Context): Release? {
-        val request = Request.Builder().url(LATEST).header("Accept", "application/vnd.github+json").build()
-        http.newCall(request).execute().use { res ->
+        val noRedirects = http.newBuilder().followRedirects(false).build()
+        val tag = noRedirects.newCall(Request.Builder().url("$REPO/releases/latest").head().build()).execute().use { res ->
             if (res.code == 404) throw IOException(context.getString(R.string.update_no_releases))
-            if (!res.isSuccessful) throw IOException(context.getString(R.string.update_github_status, res.code))
-            val json = runCatching { JSONObject(res.body!!.string()) }.getOrNull() ?: throw IOException(context.getString(R.string.update_github_status, res.code))
-            val version = json.optString("tag_name").removePrefix("v").takeIf { it.isNotEmpty() } ?: return null
-            val page = json.optString("html_url")
-            val assets = json.optJSONArray("assets")
-            for (i in 0 until (assets?.length() ?: 0)) {
-                val a = assets!!.optJSONObject(i) ?: continue
-                val url = a.optString("browser_download_url")
-                if (a.optString("name") == "Ciao-$version.apk" && url.startsWith("https://")) return Release(version, url, a.optLong("size"), page)
-            }
-            return Release(version, null, 0, page)
+            if (!res.isRedirect) throw IOException(context.getString(R.string.update_github_status, res.code))
+            // No release at all redirects to the list of releases instead of a tag.
+            val location = res.header("Location") ?: ""
+            location.substringAfter("/releases/tag/", "").takeIf { it.isNotEmpty() }
+                ?: throw IOException(context.getString(R.string.update_no_releases))
         }
+        val version = Uri.decode(tag).removePrefix("v").takeIf { newer(it, "0.0.0") } ?: return null
+        val page = "$REPO/releases/tag/$tag"
+        val apk = "$REPO/releases/download/$tag/Ciao-$version.apk"
+        val code = noRedirects.newCall(Request.Builder().url(apk).head().build()).execute().use { it.code }
+        if (code != 404 && code !in 200..399) throw IOException(context.getString(R.string.update_github_status, code))
+        return Release(version, apk.takeIf { code != 404 }, page)
     }
 
     /** Download the APK found and hand it to the installer; first, if needed, ask to be allowed to install apps. */
@@ -207,7 +211,8 @@ object Updater {
     private fun download(context: Context, r: Release): File {
         val dir = File(context.cacheDir, "updates")
         val apk = File(dir, "Ciao-${r.version}.apk")
-        if (apk.length() == r.size && r.size > 0) return apk
+        // Renamed from .part only once complete.
+        if (apk.exists()) return apk
         // Older downloads, and a half-finished one.
         dir.deleteRecursively()
         dir.mkdirs()
@@ -215,7 +220,7 @@ object Updater {
         http.newCall(Request.Builder().url(r.apk!!).build()).execute().use { res ->
             if (!res.isSuccessful) throw IOException(context.getString(R.string.update_github_status, res.code))
             val body = res.body ?: throw IOException(context.getString(R.string.update_github_status, res.code))
-            val total = body.contentLength().takeIf { it > 0 } ?: r.size
+            val total = body.contentLength()
             body.byteStream().use { input ->
                 part.outputStream().use { out ->
                     val buf = ByteArray(64 * 1024)
@@ -232,12 +237,10 @@ object Updater {
                             set(State(Phase.DOWNLOADING, r.version, percent))
                         }
                     }
+                    // The next attempt clears the .part.
+                    if (total > 0 && done != total) throw IOException(context.getString(R.string.update_incomplete))
                 }
             }
-        }
-        if (r.size > 0 && part.length() != r.size) {
-            part.delete()
-            throw IOException(context.getString(R.string.update_incomplete))
         }
         if (!part.renameTo(apk)) throw IOException(context.getString(R.string.update_incomplete))
         return apk
