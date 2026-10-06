@@ -37,7 +37,11 @@ export class SessionPool {
 
   take(): LiveSession | null {
     const provider = this.provider();
-    const s = this.spare?.provider === provider && this.spare.session.usable ? this.spare.session : null;
+    const spare = this.spare;
+    const s =
+      spare?.provider === provider && spare.session.usable && Date.now() - spare.session.createdAt < SessionPool.MAX_AGE_MS[provider]
+        ? spare.session
+        : null;
     if (!s) this.spare?.session.close();
     this.spare = null;
     const key = this.apiKey(provider);
@@ -159,6 +163,8 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
       headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: models(settings).file,
+        // Interactions are kept on Google's side by default; recordings stay on this machine.
+        store: false,
         input: [{ type: "audio", mime_type: "audio/wav", data: Buffer.from(wav(part)).toString("base64") }],
         ...(Object.keys(config).length && { generation_config: { transcription_config: config } }),
       }),

@@ -156,19 +156,20 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         {updateState && <UpdateCard state={updateState} />}
 
-        <Card title={tr.developer.title}>
+        {/* The delay level is all it holds, and only OpenAI has one. */}
+        {s.provider === "openai" && <Card title={tr.developer.title}>
           <Toggle
             label={tr.developer.showDelay}
             hint={tr.developer.showDelayHint}
             value={s.showDelay}
             onChange={(v) => update({ showDelay: v })}
           />
-          {s.showDelay && s.provider === "openai" && (
+          {s.showDelay && (
             <Row label={tr.developer.delay} hint={tr.developer.delayHint}>
               <Segmented value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />
             </Row>
           )}
-        </Card>
+        </Card>}
       </div>
     </div>
   );

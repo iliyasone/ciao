@@ -102,8 +102,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Gemini detects the language on its own and takes no free-form context, only
     the terms (*Settings → Recognition*), so the Languages and Context fields are
     hidden with it, and so is the delay level.
-  - A Gemini live session lasts at most 10 minutes; a longer dictation is
-    transcribed from the saved audio when you stop.
+  - A Gemini live connection lasts about 10 minutes from when it opens, and Ciao
+    opens it up to 2.5 minutes ahead, so a dictation longer than about 7.5
+    minutes may be transcribed from the saved audio when you stop instead.
 
 ## Requirements
 

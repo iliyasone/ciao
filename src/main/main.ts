@@ -348,7 +348,7 @@ function registerIpc(): void {
     return shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
   });
   ipcMain.handle("settings:set-key", (_e, provider: Settings["provider"], key: string) => {
-    if (!(provider in PROVIDERS)) return;
+    if (!Object.hasOwn(PROVIDERS, provider)) return;
     fs.writeFileSync(keyPath(provider), key.trim());
     pool.refill();
   });

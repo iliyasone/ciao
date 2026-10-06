@@ -130,6 +130,7 @@ export class GeminiLiveSession implements LiveSession {
     let msg: {
       error?: { message?: string };
       goAway?: unknown;
+      voiceActivity?: { type?: string };
       serverContent?: {
         interimInputTranscription?: { text?: string };
         inputTranscription?: { text?: string };
@@ -144,6 +145,11 @@ export class GeminiLiveSession implements LiveSession {
     }
     if (msg.error) return this.fail(msg.error.message ?? t().errors.providerError("Gemini"));
     if (msg.goAway && !this.committed) return this.fail(t().errors.connectionClosed("goAway"));
+    // Nothing was said: after the turn ends no final comes at all (measured), only this. With
+    // speech, the final arrives before it.
+    if (msg.voiceActivity?.type === "ACTIVITY_END" && this.committed && !this.finals.length && !this.shown) {
+      this.settleTimer = setTimeout(() => this.complete(), 500);
+    }
     const content = msg.serverContent;
     if (!content) return;
     // A frame may carry both; the final wins.
@@ -160,6 +166,6 @@ export class GeminiLiveSession implements LiveSession {
       this.interim = content.interimInputTranscription.text;
       this.show();
     }
-    if ((content.generationComplete || content.turnComplete) && this.committed && this.finals.length) this.complete();
+    if ((content.generationComplete || content.turnComplete) && this.committed) this.complete();
   }
 }

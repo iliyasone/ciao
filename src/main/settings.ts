@@ -53,6 +53,7 @@ export function loadSettings(): Settings {
     return { ...DEFAULT_SETTINGS, language: systemLanguage() };
   }
   if (raw.language !== "ru" && raw.language !== "en") raw.language = systemLanguage();
+  if (!raw.provider || !Object.hasOwn(PROVIDERS, raw.provider)) raw.provider = DEFAULT_SETTINGS.provider;
   // Older configs had a single `hotkey` plus a `middleClick` switch.
   if (!raw.triggers && (raw.hotkey || raw.middleClick !== undefined)) {
     raw.triggers = [raw.hotkey ?? "RControlKey", ...(raw.middleClick === false ? [] : ["MButton"])];
