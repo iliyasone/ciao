@@ -2,6 +2,16 @@ package dev.iliyasone.ciao
 
 import android.content.Context
 
+/**
+ * Who transcribes; as PROVIDERS in src/core/providers.ts. [id] is what the desktop calls it (the
+ * synced keys use it too). [maxSpareAgeMs]: how long a connected spare socket stays worth using.
+ */
+enum class Provider(val id: String, val displayName: String, val liveModel: String, val fileModel: String, val pricePerMinute: Double, val maxSpareAgeMs: Long) {
+    OPENAI("openai", "OpenAI", "gpt-live-transcribe", "gpt-transcribe", 0.017, 10 * 60_000L),
+    // Google drops a socket that has waited ~5 min without a setup, and a live session lasts at most 10 min.
+    GEMINI("gemini", "Gemini", "gemini-3.5-transcribe-live", "gemini-3.5-transcribe", 0.009, 2 * 60_000L),
+}
+
 /** Settings, with the same defaults as the desktop app (src/main/settings.ts). */
 class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("ciao", Context.MODE_PRIVATE)
@@ -12,7 +22,6 @@ class Prefs(context: Context) {
         get() = sp.getString("apiKey", "")!!.filter { it in '!'..'~' }
         set(v) = sp.edit().putString("apiKey", v).apply()
 
-    /** Not used here yet (dictation on Android is OpenAI only); kept so sync brings it to the desktop and back. */
     var geminiKey: String
         get() = sp.getString("geminiKey", "")!!.filter { it in '!'..'~' }
         set(v) = sp.edit().putString("geminiKey", v).apply()
@@ -25,8 +34,21 @@ class Prefs(context: Context) {
     /** What GoogleSync compares with its history. */
     fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey), syncKeys)
 
-    val liveModel: String get() = "gpt-live-transcribe"
-    val fileModel: String get() = "gpt-transcribe"
+    /** Not synced, as on the desktop: each device picks its own. */
+    var provider: Provider
+        get() = Provider.entries.firstOrNull { it.id == sp.getString("provider", null) } ?: Provider.OPENAI
+        set(v) = sp.edit().putString("provider", v.id).apply()
+
+    /** The key of the service in use. */
+    val currentKey: String get() = if (provider == Provider.GEMINI) geminiKey else apiKey
+
+    /** Gemini's smart mode: drops fillers and false starts, applies spoken corrections. */
+    var smart: Boolean
+        get() = sp.getBoolean("smart", true)
+        set(v) = sp.edit().putBoolean("smart", v).apply()
+
+    val liveModel: String get() = provider.liveModel
+    val fileModel: String get() = provider.fileModel
     val delay: String get() = "low"
     val languages: List<String> get() = listOf("ru", "en")
 
@@ -44,6 +66,11 @@ class Prefs(context: Context) {
     var googleEmail: String
         get() = sp.getString("googleEmail", "")!!
         set(v) = sp.edit().putString("googleEmail", v).apply()
+
+    /** When Updater last asked GitHub for a newer version. */
+    var updateCheckedAt: Long
+        get() = sp.getLong("updateCheckedAt", 0)
+        set(v) = sp.edit().putLong("updateCheckedAt", v).apply()
 
     var syncedAt: Long
         get() = sp.getLong("syncedAt", 0)

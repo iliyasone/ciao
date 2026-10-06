@@ -163,6 +163,36 @@ class CardView(
         tick.run()
     }
 
+    /**
+     * The whole text so far, changed somewhere (Gemini revising its guess): keep what stayed the same
+     * as it is, and fade in the rest as new. As the "revise" action in src/renderer/overlay/Overlay.tsx.
+     */
+    fun revise(text: String, gapMs: Long) {
+        val next = text.trimStart()
+        val full = settled + fresh.joinToString("") { it.text }
+        val (same, moved) = Revision.revisePauses(full, next, pauses, gapMs)
+        pauses.clear()
+        pauses.addAll(moved)
+        val kept = mutableListOf<Token>()
+        if (same >= settled.length) {
+            var at = settled.length
+            for (t in fresh) {
+                if (at + t.text.length <= same) kept.add(t)
+                else if (same > at) kept.add(Token(t.text.substring(0, same - at), t.at))
+                if (at + t.text.length >= same) break
+                at += t.text.length
+            }
+        } else {
+            settled = settled.substring(0, same)
+        }
+        fresh.clear()
+        fresh.addAll(kept)
+        val rest = next.substring(same)
+        if (rest.isNotEmpty()) fresh.add(Token(rest, SystemClock.elapsedRealtime()))
+        removeCallbacks(tick)
+        tick.run()
+    }
+
     fun final(text: String) {
         final = text
         render()
