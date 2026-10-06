@@ -1,6 +1,8 @@
 package dev.iliyasone.ciao
 
+import android.content.ClipData
 import android.content.ClipboardManager
+import android.os.Looper
 import android.view.accessibility.AccessibilityNodeInfo
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -9,6 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -36,11 +39,14 @@ class TextInserterTest {
         assertEquals("", TextInserter.place("Message", null, true, -1, -1, "x").current)
     }
 
+    private var caret = -1
+
     /** What insert() hands the app: the text it sets, or the clipboard at the moment it pastes. */
     private fun insert(shown: String, hint: String?, start: Int, end: Int, transcript: String): String? {
         val context = RuntimeEnvironment.getApplication()
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         var result: String? = null
+        caret = -1
         val node = AccessibilityNodeInfo.obtain().apply {
             isEditable = true
             text = shown
@@ -52,6 +58,7 @@ class TextInserterTest {
                 AccessibilityNodeInfo.ACTION_SET_TEXT ->
                     result = args.getCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE).toString()
                 AccessibilityNodeInfo.ACTION_PASTE -> result = "paste:" + clipboard.primaryClip!!.getItemAt(0).text
+                AccessibilityNodeInfo.ACTION_SET_SELECTION -> caret = args.getInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT)
             }
             true
         }
@@ -65,5 +72,16 @@ class TextInserterTest {
         assertEquals("Привет", insert("Message", "Message", 7, 7, "Привет"))
         // Nothing on the clipboard to put back, so the whole text is set rather than pasted.
         assertEquals("Hello world", insert("Hello", "Message", 5, 5, "world"))
+        assertEquals("Hello world there", insert("Hello there", null, 5, 5, "world"))
+        assertEquals(11, caret)
+    }
+
+    @Test
+    fun pastesAndPutsTheClipboardBack() {
+        val clipboard = RuntimeEnvironment.getApplication().getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText("user", "copied"))
+        assertEquals("paste: world", insert("Hello", "Message", 5, 5, "world"))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+        assertEquals("copied", clipboard.primaryClip!!.getItemAt(0).text.toString())
     }
 }
