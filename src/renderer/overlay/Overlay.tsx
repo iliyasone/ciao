@@ -2,6 +2,7 @@ import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCc
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
+import { revisePauses } from "../../core/revision";
 import type { OverlayState } from "../../core/types";
 import { useStrings } from "../lang";
 import { meter, setWake, startCapture, stopCapture } from "./capture";
@@ -30,7 +31,7 @@ interface TextState {
 
 type TextAction =
   | { type: "delta"; seq: number; text: string; at: number; gapMs: number }
-  | { type: "revise"; seq: number; text: string; at: number }
+  | { type: "revise"; seq: number; text: string; at: number; gapMs: number }
   | { type: "final"; seq: number; text: string }
   | { type: "reset"; seq: number }
   | { type: "settle"; before: number };
@@ -59,8 +60,7 @@ function textReducer(s: TextState, a: TextAction): TextState {
       if (!base) return s;
       const text = a.text.trimStart();
       const full = base.settled + base.fresh.map((t) => t.text).join("");
-      let same = 0;
-      while (same < text.length && text[same] === full[same]) same++;
+      const { same, pauses } = revisePauses(full, text, base.pauses, a.gapMs);
       let settled = base.settled.slice(0, same);
       const fresh: Token[] = [];
       if (same >= base.settled.length) {
@@ -75,7 +75,7 @@ function textReducer(s: TextState, a: TextAction): TextState {
       }
       const rest = text.slice(same);
       if (rest) fresh.push({ id: base.nextId, text: rest, at: a.at });
-      return { ...base, settled, fresh, nextId: base.nextId + 1, pauses: base.pauses.filter((p) => p.at <= same) };
+      return { ...base, settled, fresh, nextId: base.nextId + 1, pauses };
     }
     case "final":
       return a.seq === s.seq ? { ...s, final: a.text } : s;
@@ -253,7 +253,7 @@ export function Overlay() {
         setCopied(false);
       }),
       ciao.overlay.onDelta((seq, t, gapMs) => dispatch({ type: "delta", seq, text: t, at: performance.now(), gapMs })),
-      ciao.overlay.onRevise((seq, t) => dispatch({ type: "revise", seq, text: t, at: performance.now() })),
+      ciao.overlay.onRevise((seq, t, gapMs) => dispatch({ type: "revise", seq, text: t, at: performance.now(), gapMs })),
       ciao.overlay.onFinal((seq, t) => dispatch({ type: "final", seq, text: t })),
       ciao.capture.onStart((seq) => void startCapture(seq)),
       ciao.capture.onStop((seq) => void stopCapture(seq)),

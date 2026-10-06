@@ -14,7 +14,7 @@ const api = {
     onState: (cb: (s: OverlayState) => void) => on("overlay:state", cb),
     /** gapMs: time since the previous delta — a long one means the speaker paused. */
     onDelta: (cb: (seq: number, text: string, gapMs: number) => void) => on("overlay:delta", cb),
-    onRevise: (cb: (seq: number, text: string) => void) => on("overlay:revise", cb),
+    onRevise: (cb: (seq: number, text: string, gapMs: number) => void) => on("overlay:revise", cb),
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
     hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),

@@ -133,8 +133,8 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.send("overlay:delta", seq, text, gapMs);
   }
 
-  revise(seq: number, text: string): void {
-    this.win.webContents.send("overlay:revise", seq, text);
+  revise(seq: number, text: string, gapMs: number): void {
+    this.win.webContents.send("overlay:revise", seq, text, gapMs);
   }
 
   final(seq: number, text: string): void {

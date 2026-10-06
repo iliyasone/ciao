@@ -12,6 +12,7 @@ import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
+import { revisePauses } from "../core/revision";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
@@ -19,7 +20,7 @@ export interface OverlayPort {
   /** gapMs: time since the previous delta (a long gap = the speaker paused). */
   delta(seq: number, text: string, gapMs: number): void;
   /** The live text so far was revised (Gemini): show this instead. */
-  revise(seq: number, text: string): void;
+  revise(seq: number, text: string, gapMs: number): void;
   final(seq: number, text: string): void;
   startCapture(seq: number): void;
   stopCapture(seq: number): void;
@@ -291,14 +292,13 @@ export class DictationController {
         this.checkStopPhrase(a);
       },
       onRevise: (text) => {
-        // Pauses inside the part that stayed the same keep their place.
-        let same = 0;
-        while (same < text.length && text[same] === a.liveText[same]) same++;
-        a.pauses = a.pauses.filter((p) => p.at <= same);
-        a.lastDeltaAt = Date.now();
+        const now = Date.now();
+        const gapMs = a.lastDeltaAt === undefined ? 0 : now - a.lastDeltaAt;
+        a.pauses = revisePauses(a.liveText, text, a.pauses, gapMs).pauses;
+        a.lastDeltaAt = now;
         a.liveText = text;
-        if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = Date.now();
-        this.deps.overlay.revise(a.seq, text);
+        if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = now;
+        this.deps.overlay.revise(a.seq, text, gapMs);
         this.checkStopPhrase(a);
       },
       onCompleted: (text) => {

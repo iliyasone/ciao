@@ -180,8 +180,12 @@ function ApiKeyCard({ provider }: { provider: Provider }) {
   const [hasKey, setHasKey] = useState(true);
   const tr = useStrings().settings.apiKey;
   useEffect(() => {
+    let current = true;
     setValue("");
-    void ciao.settings.hasApiKey(provider).then(setHasKey);
+    void ciao.settings.hasApiKey(provider).then((has) => current && setHasKey(has));
+    return () => {
+      current = false;
+    };
   }, [provider]);
   return (
     <Card title={PROVIDERS[provider].name}>
