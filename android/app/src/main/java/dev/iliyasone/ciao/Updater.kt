@@ -272,6 +272,8 @@ object Updater {
 
     /** What the installer reports back (UpdateReceiver). */
     fun onStatus(context: Context, intent: Intent) {
+        // Only the session being installed: abandoning a leftover one reports ABORTED too.
+        if (intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1) != sessionId) return
         val version = release?.version ?: state.version
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
