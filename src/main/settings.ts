@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
 import { langFromLocale } from "../core/i18n";
-import type { Settings } from "../core/types";
+import { PROVIDERS } from "../core/providers";
+import type { Provider, Settings } from "../core/types";
 
 export const DEFAULT_SETTINGS: Settings = {
+  provider: "openai",
   liveModel: "gpt-live-transcribe",
   delay: "low",
   languages: ["ru", "en"],
@@ -15,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
     "TypeScript", "Python", "Electron", "React", "commit", "pull request", "Wispr Flow", "Windows",
   ],
   fileModel: "gpt-transcribe",
+  smart: true,
   // Linux can't keep a middle click from the app under the pointer (it would paste the selection there).
   // Mac keyboards mostly have no Right Control; Right Option is the spare key there.
   triggers:
@@ -50,6 +53,7 @@ export function loadSettings(): Settings {
     return { ...DEFAULT_SETTINGS, language: systemLanguage() };
   }
   if (raw.language !== "ru" && raw.language !== "en") raw.language = systemLanguage();
+  if (!raw.provider || !Object.hasOwn(PROVIDERS, raw.provider)) raw.provider = DEFAULT_SETTINGS.provider;
   // Older configs had a single `hotkey` plus a `middleClick` switch.
   if (!raw.triggers && (raw.hotkey || raw.middleClick !== undefined)) {
     raw.triggers = [raw.hotkey ?? "RControlKey", ...(raw.middleClick === false ? [] : ["MButton"])];
@@ -64,12 +68,16 @@ export function saveSettings(s: Settings): void {
   fs.writeFileSync(file(), JSON.stringify(s, null, 2));
 }
 
-/** OPENAI_API_KEY, or openai-key.txt next to the settings. */
-export function loadApiKey(): string | null {
-  const env = process.env.OPENAI_API_KEY?.trim();
+export function keyPath(provider: Provider): string {
+  return path.join(app.getPath("userData"), PROVIDERS[provider].keyFile);
+}
+
+/** The provider's key: OPENAI_API_KEY / GEMINI_API_KEY, or openai-key.txt / gemini-key.txt next to the settings. */
+export function loadApiKey(provider: Provider): string | null {
+  const env = process.env[PROVIDERS[provider].keyEnv]?.trim();
   if (env) return env;
   try {
-    return fs.readFileSync(path.join(app.getPath("userData"), "openai-key.txt"), "utf8").trim() || null;
+    return fs.readFileSync(keyPath(provider), "utf8").trim() || null;
   } catch {
     return null;
   }

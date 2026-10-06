@@ -2,8 +2,11 @@ import { ArrowDownToLine, Check, Cloud, KeyRound, Loader2, Monitor, Moon, MouseP
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
 import type { Strings } from "../../core/i18n";
-import { DELAYS, type Lang, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
+import { models, PROVIDERS } from "../../core/providers";
+import { DELAYS, type Lang, type Provider, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
 import { useStrings } from "../lang";
+
+const PROVIDER_OPTIONS: { value: Provider; label: string }[] = (Object.keys(PROVIDERS) as Provider[]).map((value) => ({ value, label: PROVIDERS[value].name }));
 
 const THEMES: { value: Theme; icon: typeof Sun }[] = [
   { value: "system", icon: Monitor },
@@ -19,7 +22,6 @@ const LANGUAGES: { value: Lang; label: string }[] = [
 
 export function SettingsPanel({ updateState }: { updateState: UpdateState | null }) {
   const [s, setS] = useState<Settings | null>(null);
-  const [hasKey, setHasKey] = useState(true);
   const [wakeAvailable, setWakeAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -32,7 +34,6 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
       latest.current = v;
       setS(v);
     });
-    void ciao.settings.hasApiKey().then(setHasKey);
     void ciao.settings.wakeAvailable().then(setWakeAvailable);
     // Terms and context merged from another device replace what's shown here.
     return ciao.settings.onSynced((synced) => {
@@ -64,27 +65,36 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
       <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 pt-5 pb-16">
         <div className="h-4 text-right text-[12px] text-emerald-700 dark:text-emerald-400/80">{saved && <><Check className="mr-1 inline size-3.5" />{tr.saved}</>}</div>
 
-        <ApiKeyCard hasKey={hasKey} onSaved={() => setHasKey(true)} />
+        <ApiKeyCard provider={s.provider} />
         <PermissionsCard />
         <SyncCard />
 
         <Card title={tr.recognition.title}>
-          <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>
-            <input
-              value={s.languages.join(", ")}
-              onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)}
-              className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-            />
+          <Row label={tr.recognition.provider} hint={tr.recognition.providerHint(models(s).live, models(s).file)}>
+            <Segmented value={s.provider} options={PROVIDER_OPTIONS} onChange={(provider) => update({ provider })} />
           </Row>
-          <Field label={tr.recognition.context} hint={tr.recognition.contextHint}>
-            <textarea
-              value={s.prompt}
-              onChange={(e) => update({ prompt: e.target.value }, true)}
-              rows={3}
-              className="selectable w-full resize-none rounded-xl bg-tint/5 px-3 py-2 text-[13px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-            />
-          </Field>
-          <Field label={tr.recognition.terms} hint={tr.recognition.termsHint}>
+          {s.provider === "gemini" ? (
+            <Toggle label={tr.recognition.smart} hint={tr.recognition.smartHint} value={s.smart} onChange={(v) => update({ smart: v })} />
+          ) : (
+            <>
+              <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>
+                <input
+                  value={s.languages.join(", ")}
+                  onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)}
+                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                />
+              </Row>
+              <Field label={tr.recognition.context} hint={tr.recognition.contextHint}>
+                <textarea
+                  value={s.prompt}
+                  onChange={(e) => update({ prompt: e.target.value }, true)}
+                  rows={3}
+                  className="selectable w-full resize-none rounded-xl bg-tint/5 px-3 py-2 text-[13px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                />
+              </Field>
+            </>
+          )}
+          <Field label={tr.recognition.terms} hint={s.provider === "gemini" ? `${tr.recognition.termsHint} ${tr.recognition.geminiNote}` : tr.recognition.termsHint}>
             <textarea
               value={s.keywords.join("\n")}
               onChange={(e) => update({ keywords: e.target.value.split("\n") }, true)}
@@ -146,7 +156,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         {updateState && <UpdateCard state={updateState} />}
 
-        <Card title={tr.developer.title}>
+        {/* The delay level is all it holds, and only OpenAI has one. */}
+        {s.provider === "openai" && <Card title={tr.developer.title}>
           <Toggle
             label={tr.developer.showDelay}
             hint={tr.developer.showDelayHint}
@@ -158,33 +169,42 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
               <Segmented value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />
             </Row>
           )}
-        </Card>
+        </Card>}
       </div>
     </div>
   );
 }
 
-function ApiKeyCard({ hasKey, onSaved }: { hasKey: boolean; onSaved: () => void }) {
+function ApiKeyCard({ provider }: { provider: Provider }) {
   const [value, setValue] = useState("");
+  const [hasKey, setHasKey] = useState(true);
   const tr = useStrings().settings.apiKey;
+  useEffect(() => {
+    let current = true;
+    setValue("");
+    void ciao.settings.hasApiKey(provider).then((has) => current && setHasKey(has));
+    return () => {
+      current = false;
+    };
+  }, [provider]);
   return (
-    <Card title="OpenAI">
+    <Card title={PROVIDERS[provider].name}>
       <Row label={tr.label} hint={hasKey ? tr.saved : tr.missing}>
         <div className="flex items-center gap-2">
           <KeyRound className={`size-4 ${hasKey ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
           <input
             type="password"
             value={value}
-            placeholder={hasKey ? tr.replace : "sk-…"}
+            placeholder={hasKey ? tr.replace : PROVIDERS[provider].keyPlaceholder}
             onChange={(e) => setValue(e.target.value)}
             className="selectable w-56 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
           />
           <button
             disabled={!value.trim()}
             onClick={async () => {
-              await ciao.settings.setApiKey(value);
+              await ciao.settings.setApiKey(provider, value);
               setValue("");
-              onSaved();
+              setHasKey(true);
             }}
             className="rounded-lg bg-tint/10 px-3 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-tint/15 disabled:opacity-40"
           >

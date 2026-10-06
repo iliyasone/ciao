@@ -2,7 +2,8 @@ import { clipboard } from "electron";
 import { level } from "../core/audio";
 import { costUsd, pricePerMinute } from "../core/cost";
 import { t } from "../core/i18n";
-import type { RealtimeSession } from "../core/realtime";
+import { models, PROVIDERS } from "../core/providers";
+import type { LiveSession } from "../core/realtime";
 import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
@@ -11,12 +12,15 @@ import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
+import { revisePauses } from "../core/revision";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
   state(s: OverlayState): void;
   /** gapMs: time since the previous delta (a long gap = the speaker paused). */
   delta(seq: number, text: string, gapMs: number): void;
+  /** The live text so far was revised (Gemini): show this instead. */
+  revise(seq: number, text: string, gapMs: number): void;
   final(seq: number, text: string): void;
   startCapture(seq: number): void;
   stopCapture(seq: number): void;
@@ -39,6 +43,9 @@ export interface DictationReport {
   trigger: string;
   ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
   hands_free: boolean;
+  /** Who transcribed it: "openai" or "gemini" (and with Gemini, whether smart mode was on). */
+  provider: string;
+  smart?: boolean;
   /** "live" = the streaming transcript, "file" = the saved audio re-sent after the live one failed, "none" = no transcript (Esc, mic error). */
   transcribed_by: "live" | "file" | "none";
   voice_onset_ms?: number;
@@ -60,7 +67,7 @@ interface Active {
   seq: number;
   entry: HistoryEntry;
   wav: WavWriter;
-  session: RealtimeSession;
+  session: LiveSession;
   settings: Settings;
   apiKey: string;
   startedAt: number;
@@ -253,7 +260,7 @@ export class DictationController {
     const apiKey = this.deps.apiKey();
     const seq = ++this.seq;
     if (!apiKey) {
-      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint });
+      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint(PROVIDERS[settings.provider].name) });
       return;
     }
     const session = this.deps.pool.take()!;
@@ -282,10 +289,17 @@ export class DictationController {
         a.liveText += text;
         if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = Date.now();
         this.deps.overlay.delta(a.seq, text, gapMs);
-        if (this.handsFree && a.settings.stopPhrase && a.phase === "recording" && endsWithStopPhrase(a.liveText)) {
-          a.stoppedByPhrase = true;
-          this.stop();
-        }
+        this.checkStopPhrase(a);
+      },
+      onRevise: (text) => {
+        const now = Date.now();
+        const gapMs = a.lastDeltaAt === undefined ? 0 : now - a.lastDeltaAt;
+        a.pauses = revisePauses(a.liveText, text, a.pauses, gapMs).pauses;
+        a.lastDeltaAt = now;
+        a.liveText = text;
+        if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = now;
+        this.deps.overlay.revise(a.seq, text, gapMs);
+        this.checkStopPhrase(a);
       },
       onCompleted: (text) => {
         a.final = text;
@@ -310,6 +324,13 @@ export class DictationController {
       a.shown = true;
       this.push(a);
     }, SHOW_AFTER_MS);
+  }
+
+  private checkStopPhrase(a: Active): void {
+    if (this.handsFree && a.settings.stopPhrase && a.phase === "recording" && endsWithStopPhrase(a.liveText)) {
+      a.stoppedByPhrase = true;
+      this.stop();
+    }
   }
 
   private stop(): void {
@@ -363,6 +384,7 @@ export class DictationController {
 
   private async finish(a: Active): Promise<void> {
     const { entry, settings } = a;
+    const model = models(settings);
     entry.status = "transcribing";
     this.deps.store.save(entry);
 
@@ -372,14 +394,14 @@ export class DictationController {
     const now = new Date().toISOString();
     const add = (source: TranscriptSource, model: string, text: string) => {
       const t: Transcript = { id: `t${entry.transcripts.length + 1}`, source, model, text, createdAt: now, costUsd: costUsd(model, entry.durationMs) };
-      if (source === "live") t.delay = settings.delay;
+      if (source === "live" && settings.provider === "openai") t.delay = settings.delay;
       entry.transcripts.push(t);
     };
 
     let live = (a.final ?? a.liveText).trim();
     if (a.stoppedByPhrase) live = stripStopPhrase(live);
     if (a.wakeStarted) live = stripWakeWord(live);
-    if (live || a.final !== undefined) add("live", settings.liveModel, live);
+    if (live || a.final !== undefined) add("live", model.live, live);
 
     let text: string | null = a.final !== undefined ? live : null;
     if (text === null) {
@@ -388,7 +410,7 @@ export class DictationController {
         text = (await transcribeFile(a.apiKey, WavWriter.readPcm(this.deps.store.audioPath(entry.id)), settings)).trim();
         if (a.stoppedByPhrase) text = stripStopPhrase(text);
         if (a.wakeStarted) text = stripWakeWord(text);
-        add("retry-file", settings.fileModel, text);
+        add("retry-file", model.file, text);
       } catch (e) {
         entry.error = t().errors.fileFailed(a.offline ?? t().errors.noFinalText, (e as Error).message);
         text = live || null;
@@ -401,7 +423,9 @@ export class DictationController {
       finalAfterReleaseMs: a.completedAt && a.releasedAt && a.completedAt - a.releasedAt,
     };
 
-    if (text && settings.formatText) {
+    // Gemini's smart mode often lays out paragraphs itself; leave its layout alone when it did.
+    const laidOutByModel = settings.provider === "gemini" && settings.smart && !!text?.includes("\n");
+    if (text && settings.formatText && !laidOutByModel) {
       // Same rules as the live card. Pause offsets refer to the live text; they carry over when the
       // final text contains the same words (possibly without a leading "чао" or trailing "чао-чао").
       const lead = a.liveText.length - a.liveText.trimStart().length;
@@ -477,6 +501,8 @@ export class DictationController {
       trigger: a.trigger,
       ended_by: a.endedBy ?? "release",
       hands_free: a.handsFree ?? this.handsFree,
+      provider: a.settings.provider,
+      smart: a.settings.provider === "gemini" ? a.settings.smart : undefined,
       // A partial live transcript is kept even when the saved file had to be transcribed instead.
       transcribed_by: entry.transcripts.some((x) => x.source === "retry-file") ? "file" : entry.transcripts.length ? "live" : "none",
       // A wake-word start begins with the audio since the word, so its onset is ~0 and means nothing.
@@ -500,9 +526,9 @@ export class DictationController {
       startedAt: a.startedAt,
       endedAt: a.releasedAt,
       showCost: a.settings.showCost,
-      costPerMinuteUsd: pricePerMinute(a.settings.liveModel),
+      costPerMinuteUsd: pricePerMinute(models(a.settings).live),
       offline: a.offline !== null,
-      delay: a.settings.showDelay ? a.settings.delay : undefined,
+      delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
       layout: a.settings.formatText,
     };
   }

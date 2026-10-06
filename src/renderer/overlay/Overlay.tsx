@@ -2,6 +2,7 @@ import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCc
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
+import { revisePauses } from "../../core/revision";
 import type { OverlayState } from "../../core/types";
 import { useStrings } from "../lang";
 import { meter, setWake, startCapture, stopCapture } from "./capture";
@@ -30,6 +31,7 @@ interface TextState {
 
 type TextAction =
   | { type: "delta"; seq: number; text: string; at: number; gapMs: number }
+  | { type: "revise"; seq: number; text: string; at: number; gapMs: number }
   | { type: "final"; seq: number; text: string }
   | { type: "reset"; seq: number }
   | { type: "settle"; before: number };
@@ -50,6 +52,30 @@ function textReducer(s: TextState, a: TextAction): TextState {
       const at = textLength(base);
       const pauses = a.gapMs >= PARAGRAPH_PAUSE_MS && at > 0 ? [...base.pauses, { at, ms: a.gapMs }] : base.pauses;
       return { ...base, fresh: [...base.fresh, { id: base.nextId, text, at: a.at }], nextId: base.nextId + 1, pauses };
+    }
+    case "revise": {
+      // The whole text so far, changed somewhere (Gemini revising its guess): keep what stayed the
+      // same as it is, and fade in the rest as new.
+      const base = a.seq === s.seq ? s : a.seq > s.seq ? emptyText(a.seq) : null;
+      if (!base) return s;
+      const text = a.text.trimStart();
+      const full = base.settled + base.fresh.map((t) => t.text).join("");
+      const { same, pauses } = revisePauses(full, text, base.pauses, a.gapMs);
+      let settled = base.settled.slice(0, same);
+      const fresh: Token[] = [];
+      if (same >= base.settled.length) {
+        settled = base.settled;
+        let at = settled.length;
+        for (const t of base.fresh) {
+          if (at + t.text.length <= same) fresh.push(t);
+          else if (same > at) fresh.push({ ...t, text: t.text.slice(0, same - at) });
+          if (at + t.text.length >= same) break;
+          at += t.text.length;
+        }
+      }
+      const rest = text.slice(same);
+      if (rest) fresh.push({ id: base.nextId, text: rest, at: a.at });
+      return { ...base, settled, fresh, nextId: base.nextId + 1, pauses };
     }
     case "final":
       return a.seq === s.seq ? { ...s, final: a.text } : s;
@@ -227,6 +253,7 @@ export function Overlay() {
         setCopied(false);
       }),
       ciao.overlay.onDelta((seq, t, gapMs) => dispatch({ type: "delta", seq, text: t, at: performance.now(), gapMs })),
+      ciao.overlay.onRevise((seq, t, gapMs) => dispatch({ type: "revise", seq, text: t, at: performance.now(), gapMs })),
       ciao.overlay.onFinal((seq, t) => dispatch({ type: "final", seq, text: t })),
       ciao.capture.onStart((seq) => void startCapture(seq)),
       ciao.capture.onStop((seq) => void stopCapture(seq)),

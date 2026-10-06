@@ -4,18 +4,25 @@ export type Delay = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type Theme = "system" | "light" | "dark";
 /** Interface language (src/core/i18n.ts). */
 export type Lang = "ru" | "en";
+/** Who transcribes (src/core/providers.ts). */
+export type Provider = "openai" | "gemini";
 export const DELAYS: Delay[] = ["minimal", "low", "medium", "high", "xhigh"];
 
 export interface Settings {
-  /** Streaming model used while you speak. */
+  provider: Provider;
+  /** OpenAI: streaming model used while you speak. */
   liveModel: string;
+  /** OpenAI only. */
   delay: Delay;
+  /** OpenAI only; Gemini detects the language itself (codes would turn its smart mode off). */
   languages: string[];
-  /** Free-form context for the recognizer. */
+  /** Free-form context for the recognizer (OpenAI only). */
   prompt: string;
+  /** Gemini: drop fillers and false starts, apply spoken corrections ("at 2, no, 3" → "at 3"). */
+  smart: boolean;
   /** Literal terms to get right (product names, identifiers). */
   keywords: string[];
-  /** Model for "transcribe the whole recording again, more accurately". */
+  /** OpenAI: model for "transcribe the whole recording again, more accurately". */
   fileModel: string;
   /**
    * Dictation triggers, in the native helper's syntax (see core/triggers.ts): hold = push-to-talk,
