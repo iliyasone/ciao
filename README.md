@@ -64,8 +64,12 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     audio on the next start and shown on screen with a *Copy* button.
 - **History.** Click the tray icon to see every dictation. You can play it, copy
   it, delete it, or transcribe it again:
-  - **More accurate** re-runs the whole file through `gpt-transcribe`.
+  - **More accurate** re-runs the whole file through the file model
+    (`gpt-transcribe` or `gemini-3.5-transcribe`).
   - **Live** re-runs it through the streaming model.
+  - With keys for both services, *Via OpenAI / Gemini* next to these buttons
+    picks the service for this recording (the one in Settings by default), and
+    when a retry fails, *Try with …* runs it through the other one.
 - **Paragraphs and lists, live.** The card lays the text out while you speak, and
   the pasted text has the same layout:
   - a long pause (1.2 s) before a new sentence starts a paragraph;
@@ -106,6 +110,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - A Gemini live connection lasts about 10 minutes from when it opens, and Ciao
     opens it up to 2 minutes ahead, so a dictation longer than about 8 minutes
     may be transcribed from the saved audio when you stop instead.
+  - Google's first paid tier takes about 6.5 minutes of audio a minute. *Live*
+    in the history therefore sends a recording at 4× its speed with Gemini, one
+    at a time, and *More accurate* waits and tries again when a long recording
+    runs into the limit.
 
 ## Requirements
 

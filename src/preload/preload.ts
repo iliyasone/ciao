@@ -39,7 +39,8 @@ const api = {
   history: {
     list: (): Promise<HistoryEntry[]> => ipcRenderer.invoke("history:list"),
     remove: (id: string): Promise<void> => ipcRenderer.invoke("history:remove", id),
-    retry: (id: string, mode: RetryMode): Promise<HistoryEntry> => ipcRenderer.invoke("history:retry", id, mode),
+    /** provider: the service to use instead of the one in Settings. */
+    retry: (id: string, mode: RetryMode, provider?: Provider): Promise<HistoryEntry> => ipcRenderer.invoke("history:retry", id, mode, provider),
     copy: (text: string): Promise<void> => ipcRenderer.invoke("history:copy", text),
     openFolder: (id?: string): Promise<void> => ipcRenderer.invoke("history:open-folder", id),
     onChanged: (cb: (entry: HistoryEntry) => void) => on("history:changed", cb),

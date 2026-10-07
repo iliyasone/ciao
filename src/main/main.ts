@@ -265,21 +265,23 @@ function buildTrayMenu(): void {
 /** The key for the provider in use. */
 const currentKey = () => loadApiKey(settings.provider);
 
-async function retry(id: string, mode: RetryMode): Promise<HistoryEntry> {
-  const key = currentKey();
+/** provider: the service to run it through, if not the one in use (History lets you pick per recording). */
+async function retry(id: string, mode: RetryMode, provider = settings.provider): Promise<HistoryEntry> {
+  const s = { ...settings, provider };
+  const key = loadApiKey(provider);
   const entry = store.get(id);
-  if (!key) throw new Error(t().errors.noApiKey);
+  if (!key) throw new Error(t().errors.noApiKeyHint(PROVIDERS[provider].name));
   if (!entry) throw new Error(t().errors.entryNotFound);
   const pcm = WavWriter.readPcm(store.audioPath(id));
-  const model = mode === "file" ? models(settings).file : models(settings).live;
-  const text = (mode === "file" ? await transcribeFile(key, pcm, settings) : await transcribeLive(key, pcm, settings)).trim();
+  const model = mode === "file" ? models(s).file : models(s).live;
+  const text = (mode === "file" ? await transcribeFile(key, pcm, s) : await transcribeLive(key, pcm, s)).trim();
   // Re-read: the entry may have changed while we waited.
   const fresh = store.get(id) ?? entry;
   fresh.transcripts.push({
     id: `t${fresh.transcripts.length + 1}`,
     source: mode === "file" ? "retry-file" : "retry-live",
     model,
-    delay: mode === "live" && settings.provider === "openai" ? "high" : undefined,
+    delay: mode === "live" && provider === "openai" ? "high" : undefined,
     text,
     createdAt: new Date().toISOString(),
     costUsd: costUsd(model, fresh.durationMs),
@@ -342,7 +344,7 @@ function registerIpc(): void {
 
   ipcMain.handle("history:list", () => store.list());
   ipcMain.handle("history:remove", (_e, id: string) => store.delete(id));
-  ipcMain.handle("history:retry", (_e, id: string, mode: RetryMode) => retry(id, mode));
+  ipcMain.handle("history:retry", (_e, id: string, mode: RetryMode, provider?: Provider) => retry(id, mode, provider));
   ipcMain.handle("history:copy", (_e, text: string) => clipboard.writeText(text));
   ipcMain.handle("history:open-folder", (_e, id?: string) => shell.openPath(id ? path.dirname(store.audioPath(id)) : store.dir));
 
