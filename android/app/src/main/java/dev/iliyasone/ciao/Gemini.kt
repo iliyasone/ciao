@@ -28,10 +28,17 @@ fun geminiVocabulary(keywords: List<String>): List<String> =
  * smart mode the finals drop fillers and false starts and apply spoken corrections ("в два, нет, в
  * три" → "в три"), so a final may differ from the guesses before it.
  *
+ * The server ends an activity on its own about 220 s after it started and ignores the audio after
+ * that, so a long dictation is cut into several, each with its own final: [ROLL_AFTER_MS] into one,
+ * it ends at the next pause, or at [ROLL_BY_MS] without one. The next may start only once the server
+ * reports the end (ACTIVITY_END), so the audio in between is held and sent after it. Should the
+ * server end one first, the next starts right away. Mirrors src/core/gemini.ts.
+ *
  * Never send language codes along with smart mode: on Gemini's transcription endpoints that silently
  * turns smart mode off. Without them the language is detected per utterance.
  *
- * Everything the socket reports is handled on the main thread, so the state needs no locks.
+ * Everything the socket reports is handled on the main thread, so the state needs no locks, except
+ * what [append] shares from the recorder's thread: that is under [lock].
  */
 class GeminiSession(private val context: Context, apiKey: String) : LiveSession {
     override val createdAt = SystemClock.elapsedRealtime()
@@ -49,7 +56,15 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     private var shown = ""
     private var committed = false
     private var completed = false
+    private val lock = Any()
+    private var activityAt = 0L
+    /** Quiet at the end of the audio so far. */
+    private var quietMs = 0.0
+    /** We ended an activity early and wait for the server to confirm; audio meanwhile is held. */
+    private var rolling = false
+    private val held = mutableListOf<ByteArray>()
     private val settle = Runnable { complete() }
+    private var settling = false
 
     // The key goes in a header, not ?key=: query strings end up in logs.
     private val socket: WebSocket = http.newWebSocket(
@@ -89,18 +104,48 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
             .put("inputAudioTranscription", transcription)
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject().put("disabled", true)))
         send(JSONObject().put("setup", setup))
-        send(JSONObject().put("realtimeInput", JSONObject().put("activityStart", JSONObject())))
+        synchronized(lock) { startActivity() }
     }
 
     override fun append(pcm: ByteArray, length: Int) {
+        synchronized(lock) { appendLocked(pcm, length) }
+    }
+
+    private fun appendLocked(pcm: ByteArray, length: Int) {
+        val ms = length / 2 * 1000.0 / Recorder.SAMPLE_RATE
+        quietMs = if (Recorder.level(pcm, 0, length) < QUIET_LEVEL) quietMs + ms else 0.0
+        if (rolling) {
+            held.add(pcm.copyOf(length))
+            return
+        }
+        val age = SystemClock.elapsedRealtime() - activityAt
+        if ((age >= ROLL_AFTER_MS && quietMs >= PAUSE_MS) || age >= ROLL_BY_MS) {
+            rolling = true
+            held.add(pcm.copyOf(length))
+            send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
+            return
+        }
+        sendAudio(pcm, length)
+    }
+
+    /** Under [lock]. */
+    private fun startActivity() {
+        activityAt = SystemClock.elapsedRealtime()
+        send(JSONObject().put("realtimeInput", JSONObject().put("activityStart", JSONObject())))
+    }
+
+    private fun sendAudio(pcm: ByteArray, length: Int) {
         val audio = JSONObject().put("data", Base64.encodeToString(pcm, 0, length, Base64.NO_WRAP)).put("mimeType", AUDIO_MIME)
         send(JSONObject().put("realtimeInput", JSONObject().put("audio", audio)))
     }
 
-    /** On the main thread, like everything that reads [committed]. */
+    /**
+     * On the main thread, like everything that reads [committed]. While rolling over, the turn ends
+     * once the held audio is sent (see handle).
+     */
     override fun commit() {
         committed = true
-        send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
+        synchronized(lock) { if (!rolling) send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject()))) }
     }
 
     override fun close() {
@@ -136,9 +181,12 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     }
 
     private fun settleIn(ms: Long) {
+        settling = true
         main.removeCallbacks(settle)
         main.postDelayed(settle, ms)
     }
+
+    private fun isRolling() = synchronized(lock) { rolling }
 
     private fun handle(raw: String) {
         if (closedByUs) return
@@ -151,9 +199,27 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
             return fail(e.optString("message").takeIf { it.isNotEmpty() } ?: context.getString(R.string.error_provider, NAME))
         }
         if (msg.has("goAway") && !committed) return fail(context.getString(R.string.error_closed, "goAway"))
-        // Nothing was said: after the turn ends no final comes at all, only this. With speech, the
-        // final arrives before it.
-        if (msg.optJSONObject("voiceActivity")?.optString("type") == "ACTIVITY_END" && committed && finals.isEmpty() && shown.isEmpty()) settleIn(500)
+        // Each activity ends with this, after its final.
+        if (msg.optJSONObject("voiceActivity")?.optString("type") == "ACTIVITY_END") {
+            val settleNow = synchronized(lock) {
+                if (rolling) {
+                    rolling = false
+                    startActivity()
+                    for (pcm in held) sendAudio(pcm, pcm.size)
+                    held.clear()
+                    if (committed) send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
+                    false
+                } else if (!committed) {
+                    // The server cut the activity short: start another, or it ignores the rest.
+                    startActivity()
+                    false
+                } else true
+            }
+            // The turn is over and no guess awaits its final. Nothing was said in this activity, so no
+            // final comes at all, only this; with speech, the final arrives before it. A wait already
+            // set (below) knows better.
+            if (settleNow && interim.isEmpty() && !settling) settleIn(500)
+        }
         val content = msg.optJSONObject("serverContent") ?: return
         // A frame may carry both; the final wins.
         val final = content.optJSONObject("inputTranscription")
@@ -163,17 +229,29 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
             interim = ""
             show()
             // After the turn ended, the final is followed by generationComplete; don't hang on it.
-            if (committed) settleIn(300)
+            if (committed && !isRolling()) settleIn(300)
         } else if (guess != null && guess.has("text")) {
             interim = guess.optString("text")
             show()
         }
-        if ((content.optBoolean("generationComplete") || content.optBoolean("turnComplete")) && committed) complete()
+        // While rolling over, this ends the activity cut short, not the turn.
+        if ((content.optBoolean("generationComplete") || content.optBoolean("turnComplete")) && committed && !isRolling()) {
+            if (finals.isNotEmpty()) return complete()
+            // A turn that ends with no final is either silence or the server giving up (it closes with
+            // "Resource has been exhausted" a moment later): wait for that close, so it fails instead
+            // of passing for silence. Mirrors core/gemini.ts.
+            settleIn(1500)
+        }
     }
 
     companion object {
         const val URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
         const val NAME = "Gemini"
+        const val ROLL_AFTER_MS = 150_000
+        const val ROLL_BY_MS = 200_000
+        /** Quiet this long (below QUIET_LEVEL) counts as a pause to cut at. */
+        private const val PAUSE_MS = 300
+        private const val QUIET_LEVEL = 400
         private const val AUDIO_MIME = "audio/pcm;rate=${Recorder.SAMPLE_RATE}"
     }
 }

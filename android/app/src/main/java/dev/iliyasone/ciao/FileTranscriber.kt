@@ -90,31 +90,43 @@ object FileTranscriber {
                 .header("x-goog-api-key", key)
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
                 .build()
-            val response = try {
-                http.newCall(request).execute()
-            } catch (e: IOException) {
-                throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
-            }
-            response.use {
-                val raw = it.body?.string() ?: ""
-                // Errors come wrapped in an array here, unlike on :generateContent.
-                val first = runCatching { JSONObject(raw) }.getOrNull() ?: runCatching { JSONArray(raw).getJSONObject(0) }.getOrNull() ?: JSONObject()
-                val error = first.optJSONObject("error")?.optString("message")?.takeIf { m -> m.isNotEmpty() }
-                if (!it.isSuccessful) throw IOException(error ?: context.getString(R.string.error_status, GeminiSession.NAME, it.code))
-                val status = first.optString("status")
-                if (status != "completed") throw IOException(error ?: context.getString(R.string.error_status_text, GeminiSession.NAME, status.ifEmpty { it.code.toString() }))
-                val text = StringBuilder()
-                val steps = first.optJSONArray("steps") ?: JSONArray()
-                for (i in 0 until steps.length()) {
-                    val step = steps.optJSONObject(i) ?: continue
-                    if (step.optString("type") != "model_output") continue
-                    val content = step.optJSONArray("content") ?: continue
-                    for (j in 0 until content.length()) {
-                        val c = content.optJSONObject(j) ?: continue
-                        if (c.optString("type") == "text") text.append(c.optString("text"))
-                    }
+            // Tier 1 takes 10,000 audio tokens (~6.5 min) a minute, so the parts of a long recording run
+            // into the limit; the error says when to come back ("Please retry in 8s").
+            var attempt = 0
+            while (true) {
+                val response = try {
+                    http.newCall(request).execute()
+                } catch (e: IOException) {
+                    throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
                 }
-                texts.add(text.toString().trim())
+                if (response.code == 429 && attempt++ < 2) {
+                    val message = response.use { it.body?.string() ?: "" }
+                    val wait = Regex("""retry in ([\d.]+)\s*s""", RegexOption.IGNORE_CASE).find(message)?.groupValues?.get(1)?.toDoubleOrNull() ?: 20.0
+                    Thread.sleep((minOf(wait + 1, 60.0) * 1000).toLong())
+                    continue
+                }
+                response.use {
+                    val raw = it.body?.string() ?: ""
+                    // Errors come wrapped in an array here, unlike on :generateContent.
+                    val first = runCatching { JSONObject(raw) }.getOrNull() ?: runCatching { JSONArray(raw).getJSONObject(0) }.getOrNull() ?: JSONObject()
+                    val error = first.optJSONObject("error")?.optString("message")?.takeIf { m -> m.isNotEmpty() }
+                    if (!it.isSuccessful) throw IOException(error ?: context.getString(R.string.error_status, GeminiSession.NAME, it.code))
+                    val status = first.optString("status")
+                    if (status != "completed") throw IOException(error ?: context.getString(R.string.error_status_text, GeminiSession.NAME, status.ifEmpty { it.code.toString() }))
+                    val text = StringBuilder()
+                    val steps = first.optJSONArray("steps") ?: JSONArray()
+                    for (i in 0 until steps.length()) {
+                        val step = steps.optJSONObject(i) ?: continue
+                        if (step.optString("type") != "model_output") continue
+                        val content = step.optJSONArray("content") ?: continue
+                        for (j in 0 until content.length()) {
+                            val c = content.optJSONObject(j) ?: continue
+                            if (c.optString("type") == "text") text.append(c.optString("text"))
+                        }
+                    }
+                    texts.add(text.toString().trim())
+                }
+                break
             }
         }
         return texts.filter { it.isNotEmpty() }.joinToString(" ")

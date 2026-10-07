@@ -56,9 +56,18 @@ export class SessionPool {
   }
 }
 
+/**
+ * Gemini takes a saved recording at most this many times faster than real time. Sent all at once,
+ * its live model transcribes the first second, ends the turn and closes with "Resource has been
+ * exhausted" (Tier 1 allows 10,000 audio tokens, ~6.5 min, a minute); 4× went through whole for a
+ * 5.5-minute recording (measured).
+ */
+const GEMINI_LIVE_SPEEDUP = 4;
+
 /** Re-runs the live model over a saved recording, sending it faster than real time. */
 export function transcribeLive(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
   return new Promise((resolve, reject) => {
+    let stopped = false;
     const s = openLive(settings.provider, apiKey);
     const timer = setTimeout(() => {
       s.close();
@@ -66,11 +75,13 @@ export function transcribeLive(apiKey: string, pcm: Buffer, settings: Settings):
     }, 60_000 + pcm.byteLength / BYTES_PER_MS / 2);
     s.handlers = {
       onCompleted: (text) => {
+        stopped = true;
         clearTimeout(timer);
         s.close();
         resolve(text);
       },
       onError: (msg) => {
+        stopped = true;
         clearTimeout(timer);
         s.close();
         reject(new Error(msg));
@@ -78,8 +89,20 @@ export function transcribeLive(apiKey: string, pcm: Buffer, settings: Settings):
     };
     s.configure({ ...settings, delay: "high" });
     const chunk = 24_000 * 2; // 1 s per message
-    for (let i = 0; i < pcm.byteLength; i += chunk) s.append(pcm.subarray(i, i + chunk));
-    s.commit();
+    if (settings.provider !== "gemini") {
+      for (let i = 0; i < pcm.byteLength; i += chunk) s.append(pcm.subarray(i, i + chunk));
+      s.commit();
+      return;
+    }
+    let i = 0;
+    const next = () => {
+      if (stopped) return;
+      if (i >= pcm.byteLength) return s.commit();
+      s.append(pcm.subarray(i, i + chunk));
+      i += chunk;
+      setTimeout(next, 1000 / GEMINI_LIVE_SPEEDUP);
+    };
+    next();
   });
 }
 
@@ -158,20 +181,30 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
   if (terms.length) config.custom_vocabulary = terms;
   const texts: string[] = [];
   for (const part of splitPcm(pcm, GEMINI_MAX_PART_MS)) {
-    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-      method: "POST",
-      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: models(settings).file,
-        // Interactions are kept on Google's side by default; recordings stay on this machine.
-        store: false,
-        input: [{ type: "audio", mime_type: "audio/wav", data: Buffer.from(wav(part)).toString("base64") }],
-        ...(Object.keys(config).length && { generation_config: { transcription_config: config } }),
-      }),
+    const request = JSON.stringify({
+      model: models(settings).file,
+      // Interactions are kept on Google's side by default; recordings stay on this machine.
+      store: false,
+      input: [{ type: "audio", mime_type: "audio/wav", data: Buffer.from(wav(part)).toString("base64") }],
+      ...(Object.keys(config).length && { generation_config: { transcription_config: config } }),
     });
-    const body = (await res.json().catch(() => ({}))) as GeminiInteraction | GeminiInteraction[];
-    // Errors come wrapped in an array here, unlike on :generateContent.
-    const first = Array.isArray(body) ? body[0] : body;
+    let res: Response;
+    let first: GeminiInteraction | undefined;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+        method: "POST",
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        body: request,
+      });
+      const body = (await res.json().catch(() => ({}))) as GeminiInteraction | GeminiInteraction[];
+      // Errors come wrapped in an array here, unlike on :generateContent.
+      first = Array.isArray(body) ? body[0] : body;
+      // Tier 1 takes 10,000 audio tokens (~6.5 min) a minute, so the parts of a long recording run
+      // into the limit; the error says when to come back ("Please retry in 8s").
+      if (res.status !== 429 || attempt === 2) break;
+      const wait = Number(/retry in ([\d.]+)\s*s/i.exec(first?.error?.message ?? "")?.[1] ?? 20);
+      await new Promise((r) => setTimeout(r, Math.min(wait + 1, 60) * 1000));
+    }
     if (!res.ok) throw new Error(first?.error?.message ?? t().errors.status("Gemini", res.status));
     if (first?.status !== "completed") throw new Error(first?.error?.message ?? t().errors.status("Gemini", first?.status ?? res.status));
     const text = (first.steps ?? [])

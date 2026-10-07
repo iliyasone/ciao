@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCost } from "../../core/cost";
 import type { Strings } from "../../core/i18n";
 import { isMac } from "../../core/platform";
-import type { HistoryEntry, RetryMode } from "../../core/types";
+import { PROVIDERS } from "../../core/providers";
+import type { HistoryEntry, Provider, RetryMode } from "../../core/types";
 import { useStrings } from "../lang";
 import { SettingsPanel } from "./SettingsPanel";
 import { UpdateButton, useUpdateState } from "./update";
@@ -62,6 +63,34 @@ const duration = (ms: number) => {
 
 const entryCost = (e: HistoryEntry) => e.transcripts.reduce((sum, t) => sum + t.costUsd, 0);
 
+/** The service in Settings and every service with a key: a recording can be retried with any of them. */
+interface Services {
+  current: Provider;
+  keyed: Provider[];
+}
+
+function useServices(): Services {
+  const [current, setCurrent] = useState<Provider>("openai");
+  const [keyed, setKeyed] = useState<Provider[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const check = () =>
+      void Promise.all((Object.keys(PROVIDERS) as Provider[]).map(async (p) => ((await ciao.settings.hasApiKey(p)) ? p : null))).then(
+        (list) => alive && setKeyed(list.filter((p) => p !== null)),
+      );
+    void ciao.settings.get().then((s) => alive && setCurrent(s.provider));
+    check();
+    const offSettings = ciao.settings.onChanged((s) => setCurrent(s.provider));
+    const offKeys = ciao.settings.onKeys(check); // one may have come from another device
+    return () => {
+      alive = false;
+      offSettings();
+      offKeys();
+    };
+  }, []);
+  return { current, keyed };
+}
+
 /** Cards drawn at first and added per scroll: drawing a long history at once froze the window. */
 const PAGE = 40;
 
@@ -71,6 +100,7 @@ function History() {
   const [limit, setLimit] = useState(PAGE);
   const scroller = useRef<HTMLDivElement | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
+  const services = useServices();
   const tr = useStrings();
 
   useEffect(() => {
@@ -154,7 +184,7 @@ function History() {
             <h2 className="mb-2 px-1 text-[12px] font-semibold tracking-wide text-faint uppercase">{day}</h2>
             <div className="flex flex-col gap-2">
               {list.map((e) => (
-                <EntryCard key={e.id} entry={e} onRemoved={() => setEntries((l) => l?.filter((x) => x.id !== e.id) ?? l)} />
+                <EntryCard key={e.id} entry={e} services={services} onRemoved={() => setEntries((l) => l?.filter((x) => x.id !== e.id) ?? l)} />
               ))}
             </div>
           </section>
@@ -189,11 +219,14 @@ function StatusBadge({ entry }: { entry: HistoryEntry }) {
   return null;
 }
 
-function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () => void }) {
+function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; services: Services; onRemoved: () => void }) {
   const [shown, setShown] = useState<string | null>(null); // transcript id
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<RetryMode | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; mode: RetryMode; provider: Provider } | null>(null);
+  // The service retries go through; Settings' by default.
+  const [picked, setPicked] = useState<Provider | null>(null);
+  const via = picked && services.keyed.includes(picked) ? picked : services.current;
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const strings = useStrings();
@@ -203,14 +236,14 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
   const time = new Date(entry.createdAt).toLocaleTimeString(strings.locale, { hour: "2-digit", minute: "2-digit" });
   const needsAttention = entry.status === "failed" || entry.status === "cancelled";
 
-  const retry = async (mode: RetryMode) => {
+  const retry = async (mode: RetryMode, provider = via) => {
     setBusy(mode);
     setError(null);
     try {
-      const updated = await ciao.history.retry(entry.id, mode);
+      const updated = await ciao.history.retry(entry.id, mode, provider);
       setShown(updated.transcripts.at(-1)?.id ?? null);
     } catch (e) {
-      setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+      setError({ message: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""), mode, provider });
     } finally {
       setBusy(null);
     }
@@ -237,7 +270,24 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
         <p className="text-[13.5px] text-faint italic">{tr.noText}</p>
       )}
 
-      {(entry.error || error) && <p className="mt-1.5 text-[12px] text-amber-700 dark:text-amber-300/90">{error ?? entry.error}</p>}
+      {(entry.error || error) && <p className="mt-1.5 text-[12px] text-amber-700 dark:text-amber-300/90">{error?.message ?? entry.error}</p>}
+      {/* One service failing (an outage, a rate limit) shouldn't mean a trip to Settings: offer the other. */}
+      {error &&
+        services.keyed
+          .filter((p) => p !== error.provider)
+          .map((p) => (
+            <button
+              key={p}
+              disabled={busy !== null}
+              onClick={() => {
+                setPicked(p);
+                void retry(error.mode, p);
+              }}
+              className="mt-1 text-[12px] font-medium text-fg2 underline decoration-tint/30 underline-offset-2 hover:text-fg disabled:opacity-40"
+            >
+              {tr.tryWith(PROVIDERS[p].name)}
+            </button>
+          ))}
 
       {entry.transcripts.length > 1 && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -267,6 +317,22 @@ function EntryCard({ entry, onRemoved }: { entry: HistoryEntry; onRemoved: () =>
         />
         <Action icon={busy === "file" ? Loader2 : Sparkles} spin={busy === "file"} label={tr.retryFile} title={tr.retryFileTitle} disabled={busy !== null} onClick={() => retry("file")} />
         <Action icon={busy === "live" ? Loader2 : RotateCcw} spin={busy === "live"} label={tr.retryLive} title={tr.retryLiveTitle} disabled={busy !== null} onClick={() => retry("live")} />
+        {services.keyed.length > 1 && (
+          <div className="ml-1 flex items-center gap-0.5 text-[11px]">
+            <span className="mr-0.5 text-ghost">{tr.via}</span>
+            {services.keyed.map((p) => (
+              <button
+                key={p}
+                title={tr.viaTitle(PROVIDERS[p].name)}
+                disabled={busy !== null}
+                onClick={() => setPicked(p)}
+                className={`rounded-md px-1.5 py-0.5 transition-colors disabled:opacity-40 ${p === via ? "bg-tint/12 text-fg" : "text-faint hover:text-fg2"}`}
+              >
+                {PROVIDERS[p].name}
+              </button>
+            ))}
+          </div>
+        )}
         <Action icon={FolderOpen} title={tr.openFolder} onClick={() => void ciao.history.openFolder(entry.id)} />
         <div className="ml-auto">
           <Action
