@@ -58,6 +58,8 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     private var completed = false
     private val lock = Any()
     private var activityAt = 0L
+    /** Finals from the activities before the current one (main thread, like [finals]). */
+    private var earlierFinals = 0
     /** Quiet at the end of the audio so far. */
     private var quietMs = 0.0
     /** We ended an activity early and wait for the server to confirm; audio meanwhile is held. */
@@ -136,6 +138,7 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     /** Under [lock]. */
     private fun startActivity() {
         activityAt = SystemClock.elapsedRealtime()
+        earlierFinals = finals.size
         send(JSONObject().put("realtimeInput", JSONObject().put("activityStart", JSONObject())))
     }
 
@@ -250,7 +253,7 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
         }
         // While rolling over, this ends the activity cut short, not the turn.
         if ((content.optBoolean("generationComplete") || content.optBoolean("turnComplete")) && committed && !isRolling()) {
-            if (finals.isNotEmpty()) return complete()
+            if (finals.size > earlierFinals) return complete()
             // A turn that ends with no final is either silence or the server giving up (it closes with
             // "Resource has been exhausted" a moment later): wait for that close, so it fails instead
             // of passing for silence. Mirrors core/gemini.ts.

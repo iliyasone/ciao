@@ -58,6 +58,8 @@ export class GeminiLiveSession implements LiveSession {
   private completed = false;
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
   private activityAt = 0;
+  /** Finals from the activities before the current one. */
+  private earlierFinals = 0;
   /** Quiet at the end of the audio so far. */
   private quietMs = 0;
   /** We ended an activity early and wait for the server to confirm; audio meanwhile is held. */
@@ -142,6 +144,7 @@ export class GeminiLiveSession implements LiveSession {
 
   private startActivity(): void {
     this.activityAt = Date.now();
+    this.earlierFinals = this.finals.length;
     this.send({ realtimeInput: { activityStart: {} } });
   }
 
@@ -230,8 +233,8 @@ export class GeminiLiveSession implements LiveSession {
     }
     // While rolling over, this ends the activity cut short, not the turn.
     if ((content.generationComplete || content.turnComplete) && this.committed && !this.rolling) {
-      if (this.finals.length) return this.complete();
-      // A turn that ends with no final is either silence or the server giving up: sent too fast, it
+      if (this.finals.length > this.earlierFinals) return this.complete();
+      // A last activity with no final is either silence or the server giving up: sent too fast, it
       // transcribes the first second, ends the turn and closes with "Resource has been exhausted" a
       // moment later (measured). Wait for that close, so it fails instead of passing for silence.
       clearTimeout(this.settleTimer);
