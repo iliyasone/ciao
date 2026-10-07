@@ -31,6 +31,12 @@ jobs:
           CIAO_GOOGLE_CLIENT_SECRET: ${{ secrets.CIAO_GOOGLE_CLIENT_SECRET }}
       - run: test -f release/win-unpacked/resources/kws/model/tokens.txt
         shell: bash
+      # electron-builder writes our icon and name into Ciao.exe; without that, the taskbar and the
+      # Start menu show Electron's icon.
+      - run: |
+          $info = (Get-Item release/win-unpacked/Ciao.exe).VersionInfo
+          if ($info.ProductName -ne "Ciao") { throw "Ciao.exe still says $($info.ProductName)" }
+        shell: pwsh
       - uses: actions/upload-artifact@v4
         with:
           name: Ciao-Setup
