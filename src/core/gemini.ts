@@ -63,6 +63,8 @@ export class GeminiLiveSession implements LiveSession {
   /** We ended an activity early and wait for the server to confirm; audio meanwhile is held. */
   private rolling = false;
   private held: Uint8Array[] = [];
+  /** Whether any of the held audio is more than quiet. */
+  private heldVoice = false;
 
   /** Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer". */
   constructor(factory: SocketFactory) {
@@ -99,13 +101,18 @@ export class GeminiLiveSession implements LiveSession {
   }
 
   append(pcm: Uint8Array): void {
-    this.quietMs = level(pcm) < GeminiLiveSession.QUIET_LEVEL ? this.quietMs + pcm.byteLength / BYTES_PER_MS : 0;
-    if (this.rolling) return void this.held.push(pcm);
+    const quiet = level(pcm) < GeminiLiveSession.QUIET_LEVEL;
+    this.quietMs = quiet ? this.quietMs + pcm.byteLength / BYTES_PER_MS : 0;
+    if (this.rolling) {
+      this.heldVoice ||= !quiet;
+      return void this.held.push(pcm);
+    }
     const { ROLL_AFTER_MS, ROLL_BY_MS, PAUSE_MS } = GeminiLiveSession;
     const age = Date.now() - this.activityAt;
     if ((age >= ROLL_AFTER_MS && this.quietMs >= PAUSE_MS) || age >= ROLL_BY_MS) {
       this.rolling = true;
-      this.held.push(pcm);
+      this.held = [pcm];
+      this.heldVoice = !quiet;
       return this.send({ realtimeInput: { activityEnd: {} } });
     }
     this.sendAudio(pcm);
@@ -189,6 +196,9 @@ export class GeminiLiveSession implements LiveSession {
     if (msg.voiceActivity?.type === "ACTIVITY_END") {
       if (this.rolling) {
         this.rolling = false;
+        // Released in the pause the cut was made at: the final for what was said is in, and the
+        // quiet tail isn't worth another round trip.
+        if (this.committed && !this.heldVoice) return this.complete();
         this.startActivity();
         for (const pcm of this.held.splice(0)) this.sendAudio(pcm);
         if (this.committed) this.send({ realtimeInput: { activityEnd: {} } });

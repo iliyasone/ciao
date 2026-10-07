@@ -99,19 +99,21 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       },
     };
     s.configure({ ...settings, delay: "high" });
-    const chunk = 24_000 * 2; // 1 s per message
     if (settings.provider !== "gemini") {
+      const chunk = 24_000 * 2; // 1 s per message
       for (let i = 0; i < pcm.byteLength; i += chunk) s.append(pcm.subarray(i, i + chunk));
       s.commit();
       return;
     }
+    // 250 ms per message, fine enough for the session to find pauses to cut a long one at.
+    const chunk = 250 * BYTES_PER_MS;
     let i = 0;
     const next = () => {
       if (stopped) return;
       if (i >= pcm.byteLength) return s.commit();
       s.append(pcm.subarray(i, i + chunk));
       i += chunk;
-      setTimeout(next, 1000 / GEMINI_LIVE_SPEEDUP);
+      setTimeout(next, 250 / GEMINI_LIVE_SPEEDUP);
     };
     next();
   });

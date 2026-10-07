@@ -63,6 +63,8 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     /** We ended an activity early and wait for the server to confirm; audio meanwhile is held. */
     private var rolling = false
     private val held = mutableListOf<ByteArray>()
+    /** Whether any of the held audio is more than quiet. */
+    private var heldVoice = false
     private val settle = Runnable { complete() }
     private var settling = false
 
@@ -113,8 +115,10 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
 
     private fun appendLocked(pcm: ByteArray, length: Int) {
         val ms = length / 2 * 1000.0 / Recorder.SAMPLE_RATE
-        quietMs = if (Recorder.level(pcm, 0, length) < QUIET_LEVEL) quietMs + ms else 0.0
+        val quiet = Recorder.level(pcm, 0, length) < QUIET_LEVEL
+        quietMs = if (quiet) quietMs + ms else 0.0
         if (rolling) {
+            if (!quiet) heldVoice = true
             held.add(pcm.copyOf(length))
             return
         }
@@ -122,6 +126,7 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
         if ((age >= ROLL_AFTER_MS && quietMs >= PAUSE_MS) || age >= ROLL_BY_MS) {
             rolling = true
             held.add(pcm.copyOf(length))
+            heldVoice = !quiet
             send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
             return
         }
@@ -201,9 +206,17 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
         if (msg.has("goAway") && !committed) return fail(context.getString(R.string.error_closed, "goAway"))
         // Each activity ends with this, after its final.
         if (msg.optJSONObject("voiceActivity")?.optString("type") == "ACTIVITY_END") {
+            var done = false
             val settleNow = synchronized(lock) {
                 if (rolling) {
                     rolling = false
+                    if (committed && !heldVoice) {
+                        // Released in the pause the cut was made at: the final for what was said is
+                        // in, and the quiet tail isn't worth another round trip.
+                        held.clear()
+                        done = true
+                        return@synchronized false
+                    }
                     startActivity()
                     for (pcm in held) sendAudio(pcm, pcm.size)
                     held.clear()
@@ -215,6 +228,7 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
                     false
                 } else true
             }
+            if (done) return complete()
             // The turn is over and no guess awaits its final. Nothing was said in this activity, so no
             // final comes at all, only this; with speech, the final arrives before it. A wait already
             // set (below) knows better.

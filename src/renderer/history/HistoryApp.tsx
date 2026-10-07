@@ -227,7 +227,8 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
   const [error, setError] = useState<{ message: string; mode: RetryMode; provider: Provider } | null>(null);
   // The service retries go through; Settings' by default.
   const [picked, setPicked] = useState<Provider | null>(null);
-  const via = picked && services.keyed.includes(picked) ? picked : services.current;
+  const { keyed, current: inSettings } = services;
+  const via = picked && keyed.includes(picked) ? picked : inSettings && !keyed.includes(inSettings) && keyed.length ? keyed[0]! : inSettings;
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const strings = useStrings();
