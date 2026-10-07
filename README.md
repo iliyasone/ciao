@@ -111,7 +111,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     opens it up to 2 minutes ahead, so a dictation longer than about 8 minutes
     may be transcribed from the saved audio when you stop instead.
   - Google's first paid tier takes about 6.5 minutes of audio a minute. *Live*
-    in the history therefore sends a recording at 4× its speed with Gemini, and
+    in the history therefore sends a recording at 4× its speed with Gemini, one at a time, and
     *More accurate* waits and tries again when a long recording runs into the
     limit.
 

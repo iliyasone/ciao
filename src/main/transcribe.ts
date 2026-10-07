@@ -64,12 +64,23 @@ export class SessionPool {
  */
 const GEMINI_LIVE_SPEEDUP = 4;
 
+/** Gemini replays one at a time: two at 4× would be over the limit together. */
+let geminiReplays: Promise<unknown> = Promise.resolve();
+
 /** Re-runs the live model over a saved recording, sending it faster than real time. */
 export function transcribeLive(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
+  if (settings.provider !== "gemini") return replay(apiKey, pcm, settings);
+  const run = geminiReplays.then(() => replay(apiKey, pcm, settings));
+  geminiReplays = run.catch(() => {});
+  return run;
+}
+
+function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
   return new Promise((resolve, reject) => {
     let stopped = false;
     const s = openLive(settings.provider, apiKey);
     const timer = setTimeout(() => {
+      stopped = true;
       s.close();
       reject(new Error(t().errors.timeout(PROVIDERS[settings.provider].name)));
     }, 60_000 + pcm.byteLength / BYTES_PER_MS / 2);

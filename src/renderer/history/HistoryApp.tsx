@@ -65,12 +65,13 @@ const entryCost = (e: HistoryEntry) => e.transcripts.reduce((sum, t) => sum + t.
 
 /** The service in Settings and every service with a key: a recording can be retried with any of them. */
 interface Services {
-  current: Provider;
+  /** null until Settings are read. */
+  current: Provider | null;
   keyed: Provider[];
 }
 
 function useServices(): Services {
-  const [current, setCurrent] = useState<Provider>("openai");
+  const [current, setCurrent] = useState<Provider | null>(null);
   const [keyed, setKeyed] = useState<Provider[]>([]);
   useEffect(() => {
     let alive = true;
@@ -237,6 +238,7 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
   const needsAttention = entry.status === "failed" || entry.status === "cancelled";
 
   const retry = async (mode: RetryMode, provider = via) => {
+    if (!provider) return;
     setBusy(mode);
     setError(null);
     try {
@@ -315,8 +317,8 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
             setTimeout(() => setCopied(false), 1200);
           }}
         />
-        <Action icon={busy === "file" ? Loader2 : Sparkles} spin={busy === "file"} label={tr.retryFile} title={tr.retryFileTitle} disabled={busy !== null} onClick={() => retry("file")} />
-        <Action icon={busy === "live" ? Loader2 : RotateCcw} spin={busy === "live"} label={tr.retryLive} title={tr.retryLiveTitle} disabled={busy !== null} onClick={() => retry("live")} />
+        <Action icon={busy === "file" ? Loader2 : Sparkles} spin={busy === "file"} label={tr.retryFile} title={tr.retryFileTitle} disabled={busy !== null || !via} onClick={() => retry("file")} />
+        <Action icon={busy === "live" ? Loader2 : RotateCcw} spin={busy === "live"} label={tr.retryLive} title={tr.retryLiveTitle} disabled={busy !== null || !via} onClick={() => retry("live")} />
         {services.keyed.length > 1 && (
           <div className="ml-1 flex items-center gap-0.5 text-[11px]">
             <span className="mr-0.5 text-ghost">{tr.via}</span>
