@@ -64,6 +64,20 @@ class UiTest {
         assertEquals("Надиктованный текст", app.getSystemService(ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString())
     }
 
+    @Test
+    fun languageAndThemeOverrideTheSystem() {
+        val app = RuntimeEnvironment.getApplication()
+        val prefs = Prefs(app)
+        prefs.language = "ru"
+        prefs.theme = "dark"
+        val activity = Robolectric.buildActivity(HistoryActivity::class.java).setup().get()
+        assertEquals("История", activity.getString(R.string.history_title))
+        assertEquals(android.content.res.Configuration.UI_MODE_NIGHT_YES, activity.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+        prefs.language = "en"
+        prefs.theme = "system"
+        assertEquals("History", Ui.wrap(app).getString(R.string.history_title))
+    }
+
     private fun findText(v: View, text: String): TextView = findAll(v).filterIsInstance<TextView>().first { it.text.toString() == text }
 
     private fun findAll(v: View): List<View> = listOf(v) + ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).flatMap { findAll(g.getChildAt(it)) } } ?: emptyList())

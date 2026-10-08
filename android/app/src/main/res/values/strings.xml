@@ -138,4 +138,25 @@
     <string name="history_source_formatted">with paragraphs</string>
     <string name="history_gone">The dictation was deleted</string>
     <string name="error_timeout">%1$s didn’t answer in time</string>
+
+    <string name="languages_title">Languages</string>
+    <string name="languages_text">Codes separated by commas: ru, en. OpenAI only; Gemini detects the language itself.</string>
+    <string name="auto_paste">Insert the text right away</string>
+    <string name="auto_paste_hint">Otherwise it is only put on the clipboard.</string>
+    <string name="restore_clipboard">Restore the clipboard</string>
+    <string name="restore_clipboard_hint">After an insert, the clipboard holds what it held before the dictation.</string>
+    <string name="telemetry">Anonymous usage counts</string>
+    <string name="telemetry_hint">How many people use Ciao and how dictation goes: how it was started and ended, how long it took and what it cost, whether the text was inserted, the Android version, with a random install id. No text, audio or app names are sent.</string>
+    <string name="paste_last">Paste last</string>
+    <string name="paste_last_text">Add the “Paste last” tile to the quick settings (pull the shade down twice, then the pencil): tap it and the shade closes and the last dictation goes into the field you were typing in, or onto the clipboard.</string>
+    <string name="section_appearance">Appearance</string>
+    <string name="ui_language">Language</string>
+    <string name="system_default">As the system</string>
+    <string name="theme">Theme</string>
+    <string name="theme_system">As the system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="section_developer">For developers</string>
+    <string name="show_delay">Show delay</string>
+    <string name="show_delay_hint">The OpenAI recognizer’s delay level: lower shows words sooner, higher is more accurate. The price is the same.</string>
 </resources>

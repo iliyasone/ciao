@@ -274,6 +274,24 @@
                 android:inputType="textMultiLine|textCapSentences" />
 
             <TextView
+                android:id="@+id/languagesTitle"
+                style="@style/CardTitle"
+                android:layout_marginTop="16dp"
+                android:text="@string/languages_title" />
+
+            <TextView
+                android:id="@+id/languagesText"
+                style="@style/CardText"
+                android:text="@string/languages_text" />
+
+            <EditText
+                android:id="@+id/languages"
+                style="@style/Field"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <TextView
                 style="@style/CardTitle"
                 android:layout_marginTop="16dp"
                 android:text="@string/terms_title" />
@@ -317,6 +335,133 @@
                 android:id="@+id/showCost"
                 style="@style/Toggle"
                 android:text="@string/show_cost" />
+
+            <Switch
+                android:id="@+id/autoPaste"
+                style="@style/Toggle"
+                android:text="@string/auto_paste" />
+
+            <TextView
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/auto_paste_hint" />
+
+            <Switch
+                android:id="@+id/restoreClipboard"
+                style="@style/Toggle"
+                android:text="@string/restore_clipboard" />
+
+            <TextView
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/restore_clipboard_hint" />
+
+            <Switch
+                android:id="@+id/telemetry"
+                style="@style/Toggle"
+                android:text="@string/telemetry" />
+
+            <TextView
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:text="@string/telemetry_hint" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Card">
+
+            <TextView
+                style="@style/CardTitle"
+                android:text="@string/paste_last" />
+
+            <TextView
+                style="@style/CardText"
+                android:text="@string/paste_last_text" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/Section"
+            android:text="@string/section_appearance" />
+
+        <LinearLayout style="@style/Card">
+
+            <TextView
+                style="@style/CardTitle"
+                android:text="@string/ui_language" />
+
+            <RadioGroup
+                android:id="@+id/uiLanguage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/languageSystem"
+                    style="@style/Toggle"
+                    android:text="@string/system_default" />
+
+                <RadioButton
+                    android:id="@+id/languageRu"
+                    style="@style/Toggle"
+                    android:text="Русский" />
+
+                <RadioButton
+                    android:id="@+id/languageEn"
+                    style="@style/Toggle"
+                    android:text="English" />
+            </RadioGroup>
+
+            <TextView
+                style="@style/CardTitle"
+                android:layout_marginTop="16dp"
+                android:text="@string/theme" />
+
+            <RadioGroup
+                android:id="@+id/theme"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/themeSystem"
+                    style="@style/Toggle"
+                    android:text="@string/theme_system" />
+
+                <RadioButton
+                    android:id="@+id/themeLight"
+                    style="@style/Toggle"
+                    android:text="@string/theme_light" />
+
+                <RadioButton
+                    android:id="@+id/themeDark"
+                    style="@style/Toggle"
+                    android:text="@string/theme_dark" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <TextView
+            style="@style/Section"
+            android:text="@string/section_developer" />
+
+        <LinearLayout style="@style/Card">
+
+            <Switch
+                android:id="@+id/showDelay"
+                style="@style/Toggle"
+                android:text="@string/show_delay" />
+
+            <TextView
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:text="@string/show_delay_hint" />
+
+            <RadioGroup
+                android:id="@+id/delay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
         </LinearLayout>
 
         <TextView

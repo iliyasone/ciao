@@ -133,4 +133,25 @@
     <string name="history_source_formatted">с абзацами</string>
     <string name="history_gone">Диктовку удалили</string>
     <string name="error_timeout">%1$s не ответил вовремя</string>
+
+    <string name="languages_title">Языки</string>
+    <string name="languages_text">Коды через запятую: ru, en. Только для OpenAI: Gemini определяет язык сам.</string>
+    <string name="auto_paste">Вставлять текст сразу</string>
+    <string name="auto_paste_hint">Иначе он просто окажется в буфере обмена.</string>
+    <string name="restore_clipboard">Возвращать буфер обмена</string>
+    <string name="restore_clipboard_hint">После вставки в буфере снова то, что было до диктовки.</string>
+    <string name="telemetry">Анонимная статистика</string>
+    <string name="telemetry_hint">Сколько людей пользуется Ciao и как работает диктовка: чем запущена и закончена, сколько длилась и стоила, вставился ли текст, версия Android — со случайным id установки. Ни текст, ни звук, ни названия приложений не отправляются.</string>
+    <string name="paste_last">Вставить последнее</string>
+    <string name="paste_last_text">Добавьте плитку «Вставить последнее» в быстрые настройки (дважды потяните шторку вниз, затем карандаш): нажмёте — шторка закроется, а последняя диктовка вставится в поле, где вы печатали, или окажется в буфере.</string>
+    <string name="section_appearance">Оформление</string>
+    <string name="ui_language">Язык</string>
+    <string name="system_default">Как в системе</string>
+    <string name="theme">Тема</string>
+    <string name="theme_system">Как в системе</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+    <string name="section_developer">Для разработчика</string>
+    <string name="show_delay">Показывать задержку</string>
+    <string name="show_delay_hint">Уровень задержки распознавания OpenAI: меньше — слова появляются раньше, больше — точнее. На цену не влияет.</string>
 </resources>

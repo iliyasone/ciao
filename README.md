@@ -386,7 +386,15 @@ transcribes it into the history and says so in a notification. Android 13+ asks
 once to allow notifications; without them the dictation still goes on with the
 screen off, just without the buttons.
 
-The Android app has no wake word or usage counts yet.
+The settings match the desktop's: *Languages* (OpenAI), *Insert the text right
+away* (off: the clipboard only), *Restore the clipboard*, *Anonymous usage
+counts*, the interface language and the theme (*As the system*, light, dark), and
+under *For developers* the delay level. *Paste last* is a quick-settings tile:
+add it once (pull the shade down twice, then the pencil); tapping it closes the
+shade and puts the last dictation into the field you were typing in, or onto the
+clipboard. What the desktop has and Android doesn't: the wake word, and what a
+phone has no use for (hotkeys, the card going see-through under the pointer,
+starting at sign-in: the service starts by itself).
 
 ### Updates on Android
 
@@ -464,7 +472,8 @@ transcribed by OpenAI or Google, whichever you chose.
 ## Telemetry
 
 Ciao sends anonymous usage counts to [PostHog](https://posthog.com) (EU cloud), so
-we can see how many people use it. Two events:
+we can see how many people use it. Two events (Android sends the same ones, with
+`os` `android`, `trigger` `bubble` and no `target_app`):
 
 - `app_started`: app version, OS version, CPU architecture, the transcription
   service (`provider`: `openai` or `gemini`), and whether its API key is set and the
@@ -625,6 +634,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     running dictation; `Recovery.kt` — transcribes dictations cut off by a kill;
   - `History.kt`, `HistoryActivity.kt` — the history, stored as on the desktop
     (`src/main/history.ts`), one folder per dictation, and its screen;
+    `Telemetry.kt` — the usage counts of `src/main/telemetry.ts`; `Ui.kt` — the
+    interface language and theme; `PasteLastTile.kt` — *Paste last*;
     `Retry.kt` — its *More accurate* and *Live*, as `retry` in `src/main/main.ts`
     and `transcribeLive` in `src/main/transcribe.ts`; `Player.kt` plays a recording;
   - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and

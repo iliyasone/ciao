@@ -51,8 +51,54 @@ class Prefs(context: Context) {
 
     val liveModel: String get() = provider.liveModel
     val fileModel: String get() = provider.fileModel
-    val delay: String get() = "low"
-    val languages: List<String> get() = listOf("ru", "en")
+    /** OpenAI's recognizer delay; shown only with [showDelay], as on the desktop. */
+    var delay: String
+        get() = sp.getString("delay", "low")!!.takeIf { it in DELAYS } ?: "low"
+        set(v) = sp.edit().putString("delay", v).apply()
+
+    var showDelay: Boolean
+        get() = sp.getBoolean("showDelay", false)
+        set(v) = sp.edit().putBoolean("showDelay", v).apply()
+
+    /** OpenAI only; Gemini detects the language itself. */
+    var languages: List<String>
+        get() = (sp.getString("languages", null)?.split(",") ?: listOf("ru", "en")).map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("languages", v.joinToString(",")).apply()
+
+    /** Off: the text only goes to the clipboard. */
+    var autoPaste: Boolean
+        get() = sp.getBoolean("autoPaste", true)
+        set(v) = sp.edit().putBoolean("autoPaste", v).apply()
+
+    /** After a paste, put back what was on the clipboard. */
+    var restoreClipboard: Boolean
+        get() = sp.getBoolean("restoreClipboard", true)
+        set(v) = sp.edit().putBoolean("restoreClipboard", v).apply()
+
+    /** Anonymous usage counts (Telemetry.kt). */
+    var telemetry: Boolean
+        get() = sp.getBoolean("telemetry", true)
+        set(v) = sp.edit().putBoolean("telemetry", v).apply()
+
+    /** A random UUID made on first use; it says nothing about the phone or the person. */
+    var telemetryId: String
+        get() = sp.getString("telemetryId", "")!!
+        set(v) = sp.edit().putString("telemetryId", v).apply()
+
+    /** "system", "light" or "dark". */
+    var theme: String
+        get() = sp.getString("theme", "system")!!
+        set(v) = sp.edit().putString("theme", v).apply()
+
+    /** "system", "ru" or "en". */
+    var language: String
+        get() = sp.getString("language", "system")!!
+        set(v) = sp.edit().putString("language", v).apply()
+
+    /** The text of the last dictation, for "Paste last" (PasteLastTile). */
+    var lastText: String
+        get() = sp.getString("lastText", "")!!
+        set(v) = sp.edit().putString("lastText", v).apply()
 
     var prompt: String
         get() = sp.getString("prompt", DEFAULT_PROMPT)!!
@@ -110,6 +156,7 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putInt("bubbleLift", v).apply()
 
     companion object {
+        val DELAYS = listOf("minimal", "low", "medium", "high", "xhigh")
         const val DEFAULT_PROMPT =
             "Диктовка промптов для ИИ-агентов программирования. Русская речь с английскими техническими терминами, названиями библиотек, файлов и команд."
         val DEFAULT_KEYWORDS = listOf(
