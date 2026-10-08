@@ -104,8 +104,6 @@
     <string name="history_no_text">No text</string>
     <string name="history_copied">Copied</string>
     <string name="history_copy">Copy</string>
-    <string name="history_share">Share</string>
-    <string name="history_retry">Transcribe again</string>
     <string name="history_delete">Delete</string>
     <string name="history_transcribing">transcribing…</string>
     <string name="history_failed">not transcribed</string>
@@ -119,4 +117,25 @@
     <string name="recovered">Recovered a cut-off dictation</string>
     <string name="recovered_failed">A dictation was cut off</string>
     <string name="recovered_failed_text">Its recording is in the history: open it to transcribe it again.</string>
+
+    <string name="history_stats">today %1$d min · total %2$d min</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_nothing_found">Nothing found</string>
+    <string name="history_play">Listen</string>
+    <string name="history_pause">Pause</string>
+    <string name="history_retry_file">More accurate</string>
+    <string name="history_retry_live">Live</string>
+    <string name="history_via">Via %1$s</string>
+    <string name="history_try_with">Try with %1$s</string>
+    <string name="history_delete_short">Delete</string>
+    <string name="history_confirm_delete">Delete this dictation and its recording?</string>
+    <string name="history_pasted">pasted</string>
+    <string name="history_clipboard">on the clipboard</string>
+    <string name="history_source_live">live</string>
+    <string name="history_source_retry_live">live again</string>
+    <string name="history_source_retry_file">whole recording</string>
+    <string name="history_source_formatted">with paragraphs</string>
+    <string name="history_gone">The dictation was deleted</string>
+    <string name="error_timeout">%1$s didn’t answer in time</string>
 </resources>

@@ -49,7 +49,7 @@ class UiTest {
         val app = RuntimeEnvironment.getApplication()
         val history = History(File(app.filesDir, "history"))
         val e = history.create(Provider.OPENAI)
-        history.save(e.copy(status = History.Status.DONE, text = "Надиктованный текст", durationMs = 4000))
+        history.save(e.plus(History.Transcript(History.Source.LIVE, "gpt-live-transcribe", "Надиктованный текст", 0)).copy(durationMs = 4000))
         val activity = Robolectric.buildActivity(HistoryActivity::class.java).setup().get()
         // The list is read off the main thread.
         val list = findList(activity.window.decorView)
@@ -58,10 +58,15 @@ class UiTest {
             Thread.sleep(20)
             ShadowLooper.idleMainLooper()
         }
-        assertEquals(1, list.adapter.count)
-        list.performItemClick(list.adapter.getView(0, null, list), 0, 0)
+        assertEquals(2, list.adapter.count) // the day, then the dictation
+        val card = list.adapter.getView(1, null, list)
+        findText(card, "Надиктованный текст").performClick()
         assertEquals("Надиктованный текст", app.getSystemService(ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString())
     }
+
+    private fun findText(v: View, text: String): TextView = findAll(v).filterIsInstance<TextView>().first { it.text.toString() == text }
+
+    private fun findAll(v: View): List<View> = listOf(v) + ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).flatMap { findAll(g.getChildAt(it)) } } ?: emptyList())
 
     private fun findList(v: View): ListView = v as? ListView ?: (v as android.view.ViewGroup).let { g -> (0 until g.childCount).firstNotNullOf { runCatching { findList(g.getChildAt(it)) }.getOrNull() } }
 }

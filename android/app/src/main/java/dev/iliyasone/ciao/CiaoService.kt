@@ -549,14 +549,16 @@ class CiaoService : AccessibilityService() {
             val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes(), d.provider, prefs.keyOf(d.provider), d.smart) }
             main.post {
                 if (dictation !== d) return@post
-                result.fold(onSuccess = { deliver(d, it) }, onFailure = { fail(d, it.message ?: getString(R.string.error_provider, d.provider.displayName)) })
+                result.fold(onSuccess = { deliver(d, it, History.Source.RETRY_FILE) }, onFailure = { fail(d, it.message ?: getString(R.string.error_provider, d.provider.displayName)) })
             }
         }.start()
     }
 
-    private fun deliver(d: Dictation, raw: String) {
+    /** [source]: the live model, or the file model it fell back to. */
+    private fun deliver(d: Dictation, raw: String, source: History.Source = History.Source.LIVE) {
         var text = raw.trim()
         if (d.stoppedByPhrase) text = VoiceCommands.stripStopPhrase(text)
+        val heard = text
         // Gemini's smart mode often lays out paragraphs itself; leave its layout alone when it did.
         val laidOutByModel = d.provider == Provider.GEMINI && d.smart && text.contains('\n')
         if (prefs.formatText && text.isNotEmpty() && !laidOutByModel) {
@@ -573,14 +575,19 @@ class CiaoService : AccessibilityService() {
                 forget(d)
                 return finish(0)
             }
-            record(d, History.Status.FAILED)
+            record(d, History.Status.FAILED, error = getString(R.string.nothing_heard))
             c?.final("")
             c?.setPhase(CardView.Phase.FAILED, getString(R.string.nothing_heard))
             return finish(1400)
         }
-        record(d, History.Status.DONE, text)
         c?.final(text)
         val inserted = d.target != null && runCatching { TextInserter.insert(this, d.target, text) }.getOrDefault(false)
+        // As on the desktop: what the model heard, then the laid-out text if the layout changed it.
+        val now = System.currentTimeMillis()
+        val model = if (source == History.Source.LIVE) d.provider.liveModel else d.provider.fileModel
+        val transcripts = listOf(History.Transcript(source, model, heard, now)) +
+            (if (text != heard) listOf(History.Transcript(History.Source.FORMATTED, model, text, now)) else emptyList())
+        record(d, History.Status.DONE, transcripts, if (inserted) History.Delivery.PASTED else History.Delivery.CLIPBOARD)
         if (inserted) {
             c?.setPhase(CardView.Phase.DONE)
             finish(600)
@@ -597,7 +604,7 @@ class CiaoService : AccessibilityService() {
         if (live.isNotBlank()) return deliver(d, live)
         // Nothing to deliver: keep the recording (offline, say) until the user retries or dismisses it.
         d.phase = Phase.FAILED
-        record(d, History.Status.FAILED)
+        record(d, History.Status.FAILED, error = message)
         RecordingService.hide(this)
         bubble?.state = BubbleView.State.IDLE
         card?.setPhase(CardView.Phase.FAILED, getString(R.string.failed, message), retry = true)
@@ -648,9 +655,15 @@ class CiaoService : AccessibilityService() {
         runCatching { d.audio.close() }
     }
 
-    private fun record(d: Dictation, status: History.Status, text: String = "") {
+    private fun record(
+        d: Dictation,
+        status: History.Status,
+        transcripts: List<History.Transcript> = emptyList(),
+        delivery: History.Delivery = History.Delivery.NONE,
+        error: String? = null,
+    ) {
         val end = if (d.endedAt != 0L) d.endedAt else SystemClock.elapsedRealtime()
-        val e = d.entry.copy(status = status, text = text, durationMs = end - d.startedAt)
+        val e = d.entry.copy(status = status, transcripts = transcripts, delivery = delivery, error = error, durationMs = end - d.startedAt)
         disk.execute {
             runCatching {
                 history.save(e)

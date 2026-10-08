@@ -363,12 +363,19 @@ the context and the API keys (OpenAI and Gemini) with your other devices
 ([Sync](#sync)). Signing in needs Google Play services. The service picked stays
 per device, as on the desktop.
 
-*Open history* lists every dictation, newest first, with a search: tap one to
-copy it, hold it to share it, transcribe its recording again (with the service
-picked now) or delete it. A dictation that failed, or that you cancelled, stays
-there with its recording. The recordings of the newest 200 dictations are kept
-(about 3 MB a minute); older ones keep only their text. The history stays on the
-phone: it isn't synced and has no playback yet.
+*Open history* lists every dictation by day, newest first, with the minutes
+dictated today and in total and a search, as the desktop's history window. Each
+shows how it went (pasted, on the clipboard, not transcribed, cancelled) and
+every text it has, labelled (live, with paragraphs, whole recording, live
+again); tap a text to copy it. Its buttons: *Listen*, *Copy*, *More accurate*
+(the file model), *Live* (the streaming model, at 4× with Gemini), *Via OpenAI /
+Gemini* with keys for both, *Try with …* after a failed retry, and *Delete*. A
+dictation that failed, or that you cancelled, stays there with its recording,
+so a dictation lost to a dropped connection can be transcribed again. The
+recordings of the newest 200 dictations are kept (about 3 MB a minute); older
+ones keep only their text. Entries from Ciao 0.8.3 keep their text as the live
+one. The history stays on the
+phone: it isn't synced.
 
 While you dictate, a *Ciao is listening* notification shows with *Done* and
 *Cancel*: the dictation goes on with the screen off or locked, and you can finish
@@ -618,6 +625,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     running dictation; `Recovery.kt` — transcribes dictations cut off by a kill;
   - `History.kt`, `HistoryActivity.kt` — the history, stored as on the desktop
     (`src/main/history.ts`), one folder per dictation, and its screen;
+    `Retry.kt` — its *More accurate* and *Live*, as `retry` in `src/main/main.ts`
+    and `transcribeLive` in `src/main/transcribe.ts`; `Player.kt` plays a recording;
   - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
     Gemini calls as `src/core/realtime.ts`, `src/core/gemini.ts` and
     `src/main/transcribe.ts`; `Revision.kt` — the port of `src/core/revision.ts`,

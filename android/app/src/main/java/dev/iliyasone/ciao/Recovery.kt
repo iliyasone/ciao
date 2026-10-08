@@ -19,9 +19,7 @@ object Recovery {
             val audio = history.audioFile(e.id)
             if (!audio.exists() || audio.length() < MIN_BYTES) continue
             val provider = e.provider.takeIf { prefs.keyOf(it).isNotEmpty() } ?: prefs.provider
-            val key = prefs.keyOf(provider)
-            val text = if (key.isEmpty()) null else runCatching { FileTranscriber.transcribe(context, prefs, audio.readBytes(), provider, key, prefs.smart).trim() }.getOrNull()
-            if (!text.isNullOrEmpty()) history.save(e.copy(status = History.Status.DONE, text = text, provider = provider))
+            val text = runCatching { Retry.run(context, prefs, history, e.id, Retry.Mode.FILE, provider).text }.getOrNull()
             notify(context, e, text)
         }
     }

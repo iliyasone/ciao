@@ -99,8 +99,6 @@
     <string name="history_no_text">Без текста</string>
     <string name="history_copied">Скопировано</string>
     <string name="history_copy">Скопировать</string>
-    <string name="history_share">Поделиться</string>
-    <string name="history_retry">Распознать ещё раз</string>
     <string name="history_delete">Удалить</string>
     <string name="history_transcribing">распознаю…</string>
     <string name="history_failed">не распознано</string>
@@ -114,4 +112,25 @@
     <string name="recovered">Восстановил оборванную диктовку</string>
     <string name="recovered_failed">Диктовка оборвалась</string>
     <string name="recovered_failed_text">Запись сохранилась в истории: откройте, чтобы распознать её ещё раз.</string>
+
+    <string name="history_stats">сегодня %1$d мин · всего %2$d мин</string>
+    <string name="history_today">Сегодня</string>
+    <string name="history_yesterday">Вчера</string>
+    <string name="history_nothing_found">Ничего не нашлось</string>
+    <string name="history_play">Слушать</string>
+    <string name="history_pause">Пауза</string>
+    <string name="history_retry_file">Точнее</string>
+    <string name="history_retry_live">Вживую</string>
+    <string name="history_via">Через %1$s</string>
+    <string name="history_try_with">Попробовать через %1$s</string>
+    <string name="history_delete_short">Удалить</string>
+    <string name="history_confirm_delete">Удалить диктовку вместе с записью?</string>
+    <string name="history_pasted">вставлено</string>
+    <string name="history_clipboard">в буфере</string>
+    <string name="history_source_live">вживую</string>
+    <string name="history_source_retry_live">повтор вживую</string>
+    <string name="history_source_retry_file">целиком</string>
+    <string name="history_source_formatted">с абзацами</string>
+    <string name="history_gone">Диктовку удалили</string>
+    <string name="error_timeout">%1$s не ответил вовремя</string>
 </resources>
