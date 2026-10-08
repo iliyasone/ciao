@@ -83,7 +83,7 @@ class RealtimeSession(private val context: Context, apiKey: String) : LiveSessio
     override val usable: Boolean get() = failure == null && !closedByUs
 
     override fun configure(prefs: Prefs) {
-        val transcription = JSONObject().put("model", prefs.liveModel).put("delay", prefs.delay)
+        val transcription = JSONObject().put("model", Provider.OPENAI.liveModel).put("delay", prefs.delay)
         if (prefs.languages.isNotEmpty()) transcription.put("languages", JSONArray(prefs.languages))
         if (prefs.prompt.isNotBlank()) transcription.put("prompt", prefs.prompt.trim())
         // The API rejects keywords containing <, > or line breaks.

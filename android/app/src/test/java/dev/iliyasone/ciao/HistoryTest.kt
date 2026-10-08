@@ -14,12 +14,14 @@ class HistoryTest {
     fun savesAndListsNewestFirst() {
         val old = history.create(Provider.OPENAI, now = 1_000)
         val new = history.create(Provider.GEMINI, now = 2_000)
-        history.save(old.copy(status = History.Status.DONE, text = "привет", durationMs = 1500))
+        history.save(old.plus(History.Transcript(History.Source.LIVE, "gpt-live-transcribe", "привет", 1_500)).copy(durationMs = 1500, delivery = History.Delivery.PASTED))
         assertEquals(listOf(new.id, old.id), history.list().map { it.id })
         val e = history.get(old.id)!!
         assertEquals("привет", e.text)
         assertEquals(History.Status.DONE, e.status)
         assertEquals(1500L, e.durationMs)
+        assertEquals(History.Delivery.PASTED, e.delivery)
+        assertEquals(History.Source.LIVE, e.transcripts.single().source)
         assertEquals(Provider.GEMINI, history.get(new.id)!!.provider)
     }
 
@@ -37,7 +39,7 @@ class HistoryTest {
     fun deletedEntryIsNotWrittenBack() {
         val e = history.create(Provider.OPENAI)
         history.delete(e.id)
-        history.save(e.copy(status = History.Status.DONE, text = "x"))
+        history.save(e.copy(status = History.Status.DONE))
         assertNull(history.get(e.id))
     }
 
@@ -48,12 +50,28 @@ class HistoryTest {
         val newest = history.create(Provider.OPENAI, now = 3_000)
         for (e in listOf(failed, done, newest)) history.audioFile(e.id).writeBytes(ByteArray(10))
         history.save(failed.copy(status = History.Status.FAILED))
-        history.save(done.copy(status = History.Status.DONE, text = "a"))
-        history.save(newest.copy(status = History.Status.DONE, text = "b"))
+        history.save(done.plus(History.Transcript(History.Source.LIVE, "m", "a", 0)))
+        history.save(newest.plus(History.Transcript(History.Source.LIVE, "m", "b", 0)))
         history.trim(keepAudio = 1)
         assertTrue(history.audioFile(newest.id).exists())
         assertFalse(history.audioFile(done.id).exists())
         assertTrue(history.audioFile(failed.id).exists())
         assertEquals("a", history.get(done.id)!!.text)
+    }
+
+    @Test
+    fun readsEntriesFromCiao083() {
+        val e = history.create(Provider.GEMINI, now = 5_000)
+        // As 0.8.3 wrote it: one "text", no transcripts.
+        java.io.File(history.audioFile(e.id).parentFile, "entry.json").writeText(
+            """{"id":"${e.id}","createdAt":5000,"durationMs":2000,"status":"done","text":"старое","provider":"gemini"}""",
+        )
+        val old = history.get(e.id)!!
+        assertEquals("старое", old.text)
+        assertEquals(History.Source.LIVE, old.transcripts.single().source)
+        assertEquals(Provider.GEMINI.liveModel, old.transcripts.single().model)
+        // Saved again, it keeps the text in the new form.
+        history.save(old.plus(History.Transcript(History.Source.RETRY_FILE, Provider.GEMINI.fileModel, "новое", 6_000)))
+        assertEquals(listOf("старое", "новое"), history.get(e.id)!!.transcripts.map { it.text })
     }
 }
