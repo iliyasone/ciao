@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.Editable
@@ -44,6 +45,8 @@ class HistoryActivity : Activity() {
     private val adapter = Adapter()
     private val density get() = resources.displayMetrics.density
     private fun dp(v: Number) = (v.toFloat() * density).toInt()
+
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(Ui.wrap(base))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

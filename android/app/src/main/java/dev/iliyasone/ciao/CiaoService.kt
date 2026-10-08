@@ -4,6 +4,7 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
@@ -85,6 +86,10 @@ class CiaoService : AccessibilityService() {
         var final: String? = null
         var offline: String? = null
         var stoppedByPhrase = false
+        /** For the usage counts (Telemetry): when the first words showed, what ended it, whether it was counted. */
+        var firstTextAt = 0L
+        var endedBy = "cancel"
+        var reported = false
 
         @Volatile var heardAnything = false
     }
@@ -93,6 +98,8 @@ class CiaoService : AccessibilityService() {
     private val hideCardLater = Runnable { if (dictation == null) hideCard() }
     private val closePool = Runnable { pool.close() }
 
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(Ui.wrap(base))
+
     override fun onServiceConnected() {
         prefs = Prefs(this)
         GoogleSync.load(this)
@@ -100,6 +107,12 @@ class CiaoService : AccessibilityService() {
         wm = getSystemService(WindowManager::class.java)
         history = History(File(filesDir, "history"))
         instance = this
+        Telemetry.capture(this, "app_started", mapOf(
+            "has_api_key" to prefs.currentKey.isNotEmpty(),
+            "provider" to prefs.provider.id,
+            "wake_word_enabled" to false,
+            "format_text_enabled" to prefs.formatText,
+        ))
         RecordingService.channel(this)
         // Recordings cut off by a crash or Android killing Ciao (out of memory, say): transcribe what was recorded.
         disk.execute { runCatching { history.recover() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { Thread { Recovery.run(this, prefs, history, it) }.start() } }
@@ -334,10 +347,10 @@ class CiaoService : AccessibilityService() {
                         }
                         // Stopped mid-glide, not a tap: let it carry on, still catchable.
                         caught -> glide(motion.toX.roundToInt(), motion.toY.roundToInt())
-                        e.actionMasked == MotionEvent.ACTION_CANCEL -> if (held) stop()
-                        held -> stop()
+                        e.actionMasked == MotionEvent.ACTION_CANCEL -> if (held) stop("release")
+                        held -> stop("release")
                         idle -> start(pushToTalk = false)
-                        dictation?.phase == Phase.RECORDING -> stop()
+                        dictation?.phase == Phase.RECORDING -> stop("press")
                     }
                     held = false
                     // Placing it was held back while the finger was down (a keyboard change, a catch).
@@ -387,7 +400,7 @@ class CiaoService : AccessibilityService() {
     private fun showCard(): CardView {
         main.removeCallbacks(hideCardLater)
         card?.let { return it }
-        val c = CardView(this, onCancel = { cancel() }, onDone = { stop() }, onRetry = { retry() })
+        val c = CardView(this, onCancel = { cancel() }, onDone = { stop("press") }, onRetry = { retry() })
         val host = FrameLayout(this).apply {
             setPadding(dp(10), dp(6), dp(10), dp(12))
             addView(c, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(20), dp(640)), FrameLayout.LayoutParams.WRAP_CONTENT))
@@ -434,6 +447,7 @@ class CiaoService : AccessibilityService() {
                 val gap = if (d.lastDeltaAt == 0L) 0 else now - d.lastDeltaAt
                 if (gap >= LiveLayout.PARAGRAPH_PAUSE_MS && d.liveText.isNotBlank()) d.pauses.add(Pause(d.liveText.length, gap))
                 d.lastDeltaAt = now
+                if (d.firstTextAt == 0L) d.firstTextAt = now
                 d.liveText.append(text)
                 card?.delta(text, gap)
                 checkStopPhrase(d)
@@ -480,7 +494,7 @@ class CiaoService : AccessibilityService() {
         }, onError = { message ->
             main.post {
                 if (dictation === d && d.phase == Phase.RECORDING) {
-                    stop()
+                    stop("mic_error")
                     card?.notice(getString(R.string.mic_stopped, message))
                 }
             }
@@ -513,15 +527,16 @@ class CiaoService : AccessibilityService() {
     private fun checkStopPhrase(d: Dictation) {
         if (!d.pushToTalk && prefs.stopPhrase && d.phase == Phase.RECORDING && VoiceCommands.endsWithStopPhrase(d.liveText.toString())) {
             d.stoppedByPhrase = true
-            stop()
+            stop("stop_phrase")
         }
     }
 
-    private fun stop() {
+    private fun stop(by: String) {
         val d = dictation ?: return
         if (d.phase != Phase.RECORDING) return
         d.phase = Phase.FINISHING
         d.endedAt = SystemClock.elapsedRealtime()
+        d.endedBy = by
         d.recorder?.stop()
         runCatching { d.audio.close() }
         d.session.commit()
@@ -581,7 +596,8 @@ class CiaoService : AccessibilityService() {
             return finish(1400)
         }
         c?.final(text)
-        val inserted = d.target != null && runCatching { TextInserter.insert(this, d.target, text) }.getOrDefault(false)
+        prefs.lastText = text
+        val inserted = prefs.autoPaste && d.target != null && runCatching { TextInserter.insert(this, d.target, text, prefs.restoreClipboard) }.getOrDefault(false)
         // As on the desktop: what the model heard, then the laid-out text if the layout changed it.
         val now = System.currentTimeMillis()
         val model = if (source == History.Source.LIVE) d.provider.liveModel else d.provider.fileModel
@@ -663,6 +679,7 @@ class CiaoService : AccessibilityService() {
         error: String? = null,
     ) {
         val end = if (d.endedAt != 0L) d.endedAt else SystemClock.elapsedRealtime()
+        report(d, status, transcripts, delivery, end)
         val e = d.entry.copy(status = status, transcripts = transcripts, delivery = delivery, error = error, durationMs = end - d.startedAt)
         disk.execute {
             runCatching {
@@ -672,12 +689,53 @@ class CiaoService : AccessibilityService() {
         }
     }
 
+    /** The desktop's "dictation" event (README → Telemetry), once per dictation kept in the history. */
+    private fun report(d: Dictation, status: History.Status, transcripts: List<History.Transcript>, delivery: History.Delivery, end: Long) {
+        if (d.reported) return
+        d.reported = true
+        val outcome = when {
+            status == History.Status.CANCELLED -> "cancelled"
+            status == History.Status.FAILED && d.liveText.isBlank() && d.final == null -> "failed"
+            transcripts.isEmpty() -> "empty"
+            delivery == History.Delivery.PASTED -> "pasted"
+            else -> "clipboard"
+        }
+        val by = transcripts.firstOrNull()?.source
+        val seconds = (end - d.startedAt) / 1000.0
+        Telemetry.capture(this, "dictation", mapOf(
+            "outcome" to outcome,
+            "transcribed_by" to when (by) { null -> "none"; History.Source.RETRY_FILE -> "file"; else -> "live" },
+            "trigger" to "bubble",
+            "ended_by" to d.endedBy,
+            "hands_free" to !d.pushToTalk,
+            "provider" to d.provider.id,
+            "smart" to if (d.provider == Provider.GEMINI) d.smart else null,
+            "duration_s" to Math.round(seconds * 10) / 10.0,
+            "first_text_ms" to if (d.firstTextAt != 0L) d.firstTextAt - d.startedAt else null,
+            "final_after_release_ms" to if (d.endedAt != 0L && transcripts.isNotEmpty()) SystemClock.elapsedRealtime() - d.endedAt else null,
+            "cost_usd" to Math.round(seconds / 60 * d.provider.pricePerMinute * 10000) / 10000.0,
+        ))
+    }
+
     private fun forget(d: Dictation) {
         disk.execute { history.delete(d.entry.id) }
     }
 
+    /** From the quick-settings tile: close the shade, then paste into the field that has the focus again. */
+    fun pasteLast(text: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+        main.postDelayed({
+            val field = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()?.takeIf { it.isEditable && !it.isPassword }
+            val inserted = field != null && runCatching { TextInserter.insert(this, field, text, prefs.restoreClipboard) }.getOrDefault(false)
+            if (!inserted) {
+                TextInserter.copy(this, text)
+                Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
+            }
+        }, SHADE_CLOSE_MS)
+    }
+
     /** Done and Cancel in the notification: the same as on the card. */
-    fun stopFromNotification() = main.post { stop() }
+    fun stopFromNotification() = main.post { stop("notification") }
 
     fun cancelFromNotification() = main.post { cancel() }
 
@@ -691,6 +749,8 @@ class CiaoService : AccessibilityService() {
         var instance: CiaoService? = null
             private set
         private const val HOLD_MS = 400L
+        /** The shade's closing animation, before the app's field has the focus again. */
+        private const val SHADE_CLOSE_MS = 450L
         /** How long the keyboard's top must hold still before the bubble is placed against it. */
         private const val IME_SETTLE_MS = 250L
         private const val APPEAR_MS = 160L

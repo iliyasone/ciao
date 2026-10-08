@@ -22,7 +22,8 @@ object TextInserter {
      * update their accessibility tree later, so reading the text back would look like a miss and
      * insert twice.
      */
-    fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String): Boolean {
+    /** [restoreClipboard] off: a paste may leave the transcript on the clipboard, so a field with text always gets one. */
+    fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String, restoreClipboard: Boolean = true): Boolean {
         if (!node.refresh() || !node.isEditable) return false
         val (current, before, piece, after) = place(
             node.text?.toString().orEmpty(), node.hintText?.toString(), node.isShowingHintText,
@@ -34,7 +35,8 @@ object TextInserter {
         // grant ends once the clip is replaced, and setting it again would throw.
         val saved = runCatching { clipboard.primaryClip }.getOrNull()
             ?.takeIf { clip -> (0 until clip.itemCount).all { clip.getItemAt(it).run { uri == null && intent == null } } }
-        if (current.isNotEmpty() && saved != null && paste(context, node, piece, saved)) return true
+            ?.takeIf { restoreClipboard }
+        if (current.isNotEmpty() && (saved != null || !restoreClipboard) && paste(context, node, piece, saved)) return true
 
         val updated = before + piece + after
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, updated) }

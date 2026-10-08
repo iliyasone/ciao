@@ -3,6 +3,7 @@ package dev.iliyasone.ciao
 import android.Manifest
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,10 +12,12 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
@@ -24,6 +27,8 @@ import java.util.Date
 /** Setup (service and key, microphone, accessibility), a field to try it in, sync, the recognition settings, updates. */
 class MainActivity : Activity() {
     private lateinit var prefs: Prefs
+
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(Ui.wrap(base))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +57,33 @@ class MainActivity : Activity() {
         bindSwitch(R.id.formatText, prefs.formatText) { prefs.formatText = it }
         bindSwitch(R.id.stopPhrase, prefs.stopPhrase) { prefs.stopPhrase = it }
         bindSwitch(R.id.showCost, prefs.showCost) { prefs.showCost = it }
+        bindText(R.id.languages, prefs.languages.joinToString(", ")) { s -> prefs.languages = s.split(",") }
+        bindSwitch(R.id.autoPaste, prefs.autoPaste) { prefs.autoPaste = it }
+        bindSwitch(R.id.restoreClipboard, prefs.restoreClipboard) { prefs.restoreClipboard = it }
+        bindSwitch(R.id.telemetry, prefs.telemetry) { prefs.telemetry = it }
+        bindSwitch(R.id.showDelay, prefs.showDelay) {
+            prefs.showDelay = it
+            showProvider()
+        }
+        findViewById<RadioGroup>(R.id.delay).apply {
+            for (d in Prefs.DELAYS) addView(RadioButton(context, null, 0, R.style.Toggle).apply {
+                id = View.generateViewId()
+                text = d
+                tag = d
+                layoutParams = RadioGroup.LayoutParams(RadioGroup.LayoutParams.MATCH_PARENT, RadioGroup.LayoutParams.WRAP_CONTENT)
+            })
+            check(findViewWithTag<RadioButton>(prefs.delay).id)
+            setOnCheckedChangeListener { g, id -> prefs.delay = g.findViewById<RadioButton>(id).tag as String }
+        }
+        // Language and theme apply to every screen and the card: recreate this one to show them.
+        bindChoice(R.id.uiLanguage, mapOf("system" to R.id.languageSystem, "ru" to R.id.languageRu, "en" to R.id.languageEn), prefs.language) {
+            prefs.language = it
+            recreate()
+        }
+        bindChoice(R.id.theme, mapOf("system" to R.id.themeSystem, "light" to R.id.themeLight, "dark" to R.id.themeDark), prefs.theme) {
+            prefs.theme = it
+            recreate()
+        }
 
         findViewById<Button>(R.id.syncButton).setOnClickListener {
             if (GoogleSync.status.email != null) GoogleSync.signOut(this) else GoogleSync.signIn(this)
@@ -87,6 +119,9 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.geminiNote).visibility = if (gemini) TextView.VISIBLE else TextView.GONE
         findViewById<Switch>(R.id.smart).visibility = if (gemini) Switch.VISIBLE else Switch.GONE
         findViewById<TextView>(R.id.smartHint).visibility = if (gemini) TextView.VISIBLE else TextView.GONE
+        // OpenAI only, as on the desktop: Gemini detects the language itself and has no delay level.
+        for (id in listOf(R.id.languagesTitle, R.id.languagesText, R.id.languages)) findViewById<View>(id).visibility = if (gemini) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.delay).visibility = if (!gemini && prefs.showDelay) View.VISIBLE else View.GONE
         updateStatus()
     }
 
@@ -215,6 +250,13 @@ class MainActivity : Activity() {
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: Editable) = save(s.toString())
             })
+        }
+    }
+
+    private fun bindChoice(id: Int, buttons: Map<String, Int>, value: String, save: (String) -> Unit) {
+        findViewById<RadioGroup>(id).apply {
+            check(buttons[value] ?: buttons.values.first())
+            setOnCheckedChangeListener { _, checked -> buttons.entries.firstOrNull { it.value == checked }?.let { save(it.key) } }
         }
     }
 
