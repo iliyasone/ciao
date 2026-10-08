@@ -64,6 +64,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.appInfoButton).setOnClickListener {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
         }
+        findViewById<Button>(R.id.historyButton).setOnClickListener { startActivity(Intent(this, HistoryActivity::class.java)) }
         findViewById<Button>(R.id.checkButton).setOnClickListener { Updater.check(this) }
         findViewById<Button>(R.id.updateButton).setOnClickListener { if (Updater.canConfirm) Updater.confirmAgain(this) else Updater.install(this) }
         findViewById<Button>(R.id.whatsNewButton).setOnClickListener {

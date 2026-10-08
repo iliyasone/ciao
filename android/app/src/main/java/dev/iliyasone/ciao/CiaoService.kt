@@ -26,6 +26,7 @@ import android.widget.Toast
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.Executors
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -36,6 +37,9 @@ import kotlin.math.roundToInt
  */
 class CiaoService : AccessibilityService() {
     private lateinit var prefs: Prefs
+    private lateinit var history: History
+    /** History writes, in order and off the main thread (trimming reads every entry). */
+    private val disk = Executors.newSingleThreadExecutor()
     private lateinit var pool: SessionPool
     private lateinit var wm: WindowManager
     private val main = Handler(Looper.getMainLooper())
@@ -65,8 +69,9 @@ class CiaoService : AccessibilityService() {
         val smart = prefs.smart
         val startedAt = SystemClock.elapsedRealtime()
         var endedAt = 0L
-        /** The recording, written as it comes in so a long one doesn't sit in memory; read back only for the file model. */
-        val audioFile = File(cacheDir, "dictation-$startedAt.pcm")
+        val entry = history.create(provider)
+        /** The recording, written into the history as it comes in so a long one doesn't sit in memory. */
+        val audioFile = history.audioFile(entry.id)
         val audio = BufferedOutputStream(FileOutputStream(audioFile))
         var recorder: Recorder? = null
         var phase = Phase.RECORDING
@@ -89,7 +94,10 @@ class CiaoService : AccessibilityService() {
         GoogleSync.load(this)
         pool = SessionPool(this, prefs)
         wm = getSystemService(WindowManager::class.java)
-        // Recordings left behind by a crash or a kill mid-dictation.
+        history = History(File(filesDir, "history"))
+        // Recordings left behind by a crash or a kill mid-dictation: kept in the history for a retry.
+        disk.execute { runCatching { history.recover() } }
+        // Where recordings went before the history (Ciao 0.8.2 and older).
         cacheDir.listFiles { f -> f.name.startsWith("dictation-") }?.forEach { it.delete() }
     }
 
@@ -105,6 +113,7 @@ class CiaoService : AccessibilityService() {
         hideBubble()
         main.removeCallbacksAndMessages(null)
         if (::pool.isInitialized) pool.close()
+        disk.shutdown() // after the writes already queued
         super.onDestroy()
     }
 
@@ -455,6 +464,7 @@ class CiaoService : AccessibilityService() {
         } catch (e: Exception) {
             session.close()
             closeAudio(d)
+            forget(d)
             Toast.makeText(this, getString(R.string.mic_error, e.message ?: ""), Toast.LENGTH_LONG).show()
             return
         }
@@ -529,11 +539,16 @@ class CiaoService : AccessibilityService() {
         }
         val c = card
         if (text.isEmpty()) {
-            if (d.endedAt - d.startedAt < 1500) return finish(0)
+            if (d.endedAt - d.startedAt < 1500) {
+                forget(d)
+                return finish(0)
+            }
+            record(d, History.Status.FAILED)
             c?.final("")
             c?.setPhase(CardView.Phase.FAILED, getString(R.string.nothing_heard))
             return finish(1400)
         }
+        record(d, History.Status.DONE, text)
         c?.final(text)
         val inserted = d.target != null && runCatching { TextInserter.insert(this, d.target, text) }.getOrDefault(false)
         if (inserted) {
@@ -552,6 +567,7 @@ class CiaoService : AccessibilityService() {
         if (live.isNotBlank()) return deliver(d, live)
         // Nothing to deliver: keep the recording (offline, say) until the user retries or dismisses it.
         d.phase = Phase.FAILED
+        record(d, History.Status.FAILED)
         bubble?.state = BubbleView.State.IDLE
         card?.setPhase(CardView.Phase.FAILED, getString(R.string.failed, message), retry = true)
         refreshBubble()
@@ -583,6 +599,11 @@ class CiaoService : AccessibilityService() {
         d.recorder?.stop()
         d.session.close()
         closeAudio(d)
+        // A failed one is in the history already; a cancelled one stays there too, unless it was a slip.
+        if (d.phase != Phase.FAILED) {
+            if (d.endedAt == 0L) d.endedAt = SystemClock.elapsedRealtime()
+            if (d.endedAt - d.startedAt < 1500) forget(d) else record(d, History.Status.CANCELLED)
+        }
         dictation = null
         bubble?.state = BubbleView.State.IDLE
         hideCard()
@@ -591,7 +612,21 @@ class CiaoService : AccessibilityService() {
 
     private fun closeAudio(d: Dictation) {
         runCatching { d.audio.close() }
-        d.audioFile.delete()
+    }
+
+    private fun record(d: Dictation, status: History.Status, text: String = "") {
+        val end = if (d.endedAt != 0L) d.endedAt else SystemClock.elapsedRealtime()
+        val e = d.entry.copy(status = status, text = text, durationMs = end - d.startedAt)
+        disk.execute {
+            runCatching {
+                history.save(e)
+                history.trim()
+            }
+        }
+    }
+
+    private fun forget(d: Dictation) {
+        disk.execute { history.delete(d.entry.id) }
     }
 
     private fun openApp(message: String) {
