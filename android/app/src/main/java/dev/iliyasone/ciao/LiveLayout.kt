@@ -40,8 +40,8 @@ object LiveLayout {
     private val ORDINALS = ORDINAL_SOURCES.map { (src, n) -> Regex("(?iu)^(?:$src)$") to n }
     private val ORDINAL = Regex("(?iu)^(?:${ORDINAL_SOURCES.joinToString("|") { it.first }})(?![\\p{L}-])")
     private val CONTINUE = Regex("(?iu)^(?:и ещё|и еще|ещё|еще|дальше|далее|также|и также|и последнее|последнее|next|also)(?![\\p{L}-])")
-    /** What may follow an ordinal before the item's text: [\s,:;.!—–-]*. */
-    private const val AFTER_WORD = " \t\n\u000B\u000C\r,:;.!—–-"
+    /** What may follow an ordinal before the item's text, besides whitespace: [\s,:;.!—–-]*. */
+    private const val AFTER_WORD = ",:;.!—–-"
     private val SENTENCE_END = Regex("[.!?…]+[\"»”)]*\\s+(?=\\S)")
     private val RU = java.util.Locale("ru", "RU")
 
@@ -101,7 +101,7 @@ object LiveLayout {
             breaks.add(Break.Item(start, n))
             val afterWord = start + word.length
             var end = afterWord
-            while (end < text.length && text[end] in AFTER_WORD) end++
+            while (end < text.length && (text[end].isWhitespace() || text[end] in AFTER_WORD)) end++
             val next = text.getOrNull(end)
             // Only once the next letter has arrived, so a half-streamed word isn't mangled.
             if (next != null && next.isLetter()) edits.add(Edit(start, end + 1, next.toString().uppercase(RU)))

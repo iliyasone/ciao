@@ -19,6 +19,8 @@ class LiveLayoutTest {
         check("Третий момент очень важен. Четвёртое", listOf(), "3. Очень важен.\n4.")
         check("Первое", listOf(), "1.")
         check("Первое ", listOf(), "1.")
+        // JS \s takes the no-break space too.
+        check("Первое,\u00A0проверить", listOf(), "1. Проверить")
     }
 
     @Test

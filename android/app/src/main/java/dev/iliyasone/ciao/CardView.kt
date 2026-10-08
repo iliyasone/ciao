@@ -101,6 +101,7 @@ class CardView(
      */
     private var shownFrom = 0
     private var cutOff = ""
+    private var finalShown = false
 
     private val tick = object : Runnable {
         override fun run() {
@@ -164,6 +165,7 @@ class CardView(
         stick = true
         shownFrom = 0
         cutOff = ""
+        finalShown = false
         dirty = true
         startedAt = SystemClock.elapsedRealtime()
         endedAt = 0
@@ -280,8 +282,10 @@ class CardView(
         while (fresh.isNotEmpty() && now - fresh[0].at > FRESH_MS) settled += fresh.removeAt(0).text
 
         val f = final
-        // Laid out once: a long final is costly, and finishing marks the card dirty again.
-        if (f != null && body.text.toString() == f) return
+        // Laid out once (a long final is costly, and finishing marks the card dirty again), as plain
+        // text: the live frame before it may hold the same words in fading colours.
+        if (f != null && finalShown) return
+        finalShown = f != null
         body.text = when {
             f != null -> f.also { shownFrom = 0 }
             settled.isEmpty() && fresh.isEmpty() -> SpannableStringBuilder("…").apply {
@@ -309,7 +313,8 @@ class CardView(
         if (kept && stick && l != null && l.text.length == shown.length && l.lineCount > MAX_LINES && shownFrom + shown.length <= text.length) {
             val line = l.lineCount - KEEP_LINES
             var drop = l.getLineStart(line)
-            // Only where the text up to there is still the same, so that is still a line start.
+            // Only where the text up to there is still the same, so that is still a line start (a
+            // revision of the word right after could wrap that one line differently: cosmetic).
             if (text.substring(shownFrom, shownFrom + drop) == shown.substring(0, drop)) {
                 while (shownFrom + drop < text.length && text[shownFrom + drop] == '\n') drop++
                 shownFrom += drop
