@@ -58,6 +58,8 @@ object Retry {
         var result: String? = null
         var error: String? = null
         val main = Handler(Looper.getMainLooper())
+        // Opened before the socket: a missing recording fails without one.
+        val input = audio.inputStream()
         val session: LiveSession = if (provider == Provider.GEMINI) GeminiSession(context, key) else RealtimeSession(context, key)
         session.listener = object : LiveSession.Listener {
             override fun onDelta(text: String) {}
@@ -80,7 +82,7 @@ object Retry {
             // Gemini: 250 ms per message, fine enough for the session to find pauses to cut a long one at.
             val chunk = if (provider == Provider.GEMINI) 250 * BYTES_PER_MS else Recorder.SAMPLE_RATE * 2 // 1 s per message
             val pending = AtomicInteger()
-            audio.inputStream().use { input ->
+            input.use {
                 val buf = ByteArray(chunk)
                 while (done.count > 0) {
                     var n = 0

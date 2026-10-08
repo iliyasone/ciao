@@ -95,9 +95,10 @@ class CardView(
     /** The text changed since the last render (the clock alone doesn't rebuild it). */
     private var dirty = true
     /**
-     * While recording, the card holds the last lines only: laying out a long dictation in full every
-     * frame made it lag. They start [shownFrom] into the laid-out text, always at a line start, and
-     * [cutOff] is what is left out: should a revision change it, the text is shown whole again.
+     * Until the final text arrives, the card holds the last lines only: laying out a long dictation
+     * in full every frame made it lag. They start [shownFrom] into the laid-out text, always at a
+     * line start, and [cutOff] is what is left out: should a revision change it, the text is shown
+     * whole again.
      */
     private var shownFrom = 0
     private var cutOff = ""
