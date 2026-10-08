@@ -40,7 +40,8 @@ object LiveLayout {
     private val ORDINALS = ORDINAL_SOURCES.map { (src, n) -> Regex("(?iu)^(?:$src)$") to n }
     private val ORDINAL = Regex("(?iu)^(?:${ORDINAL_SOURCES.joinToString("|") { it.first }})(?![\\p{L}-])")
     private val CONTINUE = Regex("(?iu)^(?:и ещё|и еще|ещё|еще|дальше|далее|также|и также|и последнее|последнее|next|also)(?![\\p{L}-])")
-    private val AFTER_WORD = Regex("^[\\s,:;.!—–-]*")
+    /** What may follow an ordinal before the item's text: [\s,:;.!—–-]*. */
+    private const val AFTER_WORD = " \t\n\u000B\u000C\r,:;.!—–-"
     private val SENTENCE_END = Regex("[.!?…]+[\"»”)]*\\s+(?=\\S)")
     private val RU = java.util.Locale("ru", "RU")
 
@@ -51,13 +52,16 @@ object LiveLayout {
     }
 
     /**
-     * [re] matched at [start], as re.find(text.substring(start)) but without copying the rest of
-     * the text: called for every sentence, the copies made a long dictation quadratic.
+     * [re] (anchored, at most [WINDOW] - 1 characters long) matched at [start]: as
+     * re.find(text.substring(start)), but copying only a few characters. Called for every sentence,
+     * copying the rest of the text made a long dictation quadratic (Android's Matcher copies its
+     * whole input too, so a region doesn't help). The one character past the longest match is in
+     * the window, so the (?![\p{L}-]) after a word sees what really follows it.
      */
-    private fun matchAt(re: Regex, text: String, start: Int): String? {
-        val m = re.toPattern().matcher(text).region(start, text.length).useTransparentBounds(true)
-        return if (m.lookingAt()) m.group() else null
-    }
+    private fun matchAt(re: Regex, text: String, start: Int): String? =
+        re.find(text.substring(start, minOf(text.length, start + WINDOW)))?.value
+
+    private const val WINDOW = 32
 
     private fun sentenceStarts(text: String, pauses: List<Pause>): List<Int> {
         val starts = sortedSetOf<Int>()
@@ -96,7 +100,8 @@ object LiveLayout {
         fun startItem(start: Int, word: String, n: Int) {
             breaks.add(Break.Item(start, n))
             val afterWord = start + word.length
-            val end = afterWord + matchAt(AFTER_WORD, text, afterWord)!!.length
+            var end = afterWord
+            while (end < text.length && text[end] in AFTER_WORD) end++
             val next = text.getOrNull(end)
             // Only once the next letter has arrived, so a half-streamed word isn't mangled.
             if (next != null && next.isLetter()) edits.add(Edit(start, end + 1, next.toString().uppercase(RU)))
