@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.text.LineBreaker
 import android.os.SystemClock
 import android.text.Layout as TextLayout
 import android.text.SpannableString
@@ -66,7 +67,7 @@ class CardView(
         setLineSpacing(0f, 1.15f)
         setTextColor(settledColor)
         // Greedy line breaking: text cut at a line start (see render) wraps exactly as it did uncut.
-        breakStrategy = TextLayout.BREAK_STRATEGY_SIMPLE
+        breakStrategy = LineBreaker.BREAK_STRATEGY_SIMPLE // a constant, inlined: fine below API 29
         hyphenationFrequency = TextLayout.HYPHENATION_FREQUENCY_NONE
     }
     private val scroller = object : ScrollView(context) {
