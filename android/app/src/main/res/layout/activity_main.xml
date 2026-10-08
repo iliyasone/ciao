@@ -89,6 +89,23 @@
             </LinearLayout>
         </LinearLayout>
 
+        <LinearLayout style="@style/Card"
+            android:layout_marginTop="20dp">
+
+            <TextView
+                style="@style/CardTitle"
+                android:text="@string/history_title" />
+
+            <TextView
+                style="@style/CardText"
+                android:text="@string/history_text" />
+
+            <Button
+                android:id="@+id/historyButton"
+                style="@style/Action"
+                android:text="@string/history_open" />
+        </LinearLayout>
+
         <TextView
             style="@style/Section"
             android:text="@string/section_setup" />

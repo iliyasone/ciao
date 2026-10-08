@@ -90,4 +90,20 @@
     <string name="error_status_text">%1$s ответил %2$s</string>
     <string name="error_closed">Соединение закрыто %1$s</string>
     <string name="error_provider">Ошибка %1$s</string>
+
+    <string name="history_title">История</string>
+    <string name="history_text">Всё, что вы надиктовали, вместе с записью: скопировать ещё раз или распознать то, что не получилось.</string>
+    <string name="history_open">Открыть историю</string>
+    <string name="history_search">Поиск</string>
+    <string name="history_empty">Пока пусто. Здесь появятся ваши диктовки.</string>
+    <string name="history_no_text">Без текста</string>
+    <string name="history_copied">Скопировано</string>
+    <string name="history_copy">Скопировать</string>
+    <string name="history_share">Поделиться</string>
+    <string name="history_retry">Распознать ещё раз</string>
+    <string name="history_delete">Удалить</string>
+    <string name="history_transcribing">распознаю…</string>
+    <string name="history_failed">не распознано</string>
+    <string name="history_cancelled">отменено</string>
+    <string name="history_recording">идёт запись</string>
 </resources>

@@ -363,7 +363,14 @@ the context and the API keys (OpenAI and Gemini) with your other devices
 ([Sync](#sync)). Signing in needs Google Play services. The service picked stays
 per device, as on the desktop.
 
-The Android app has no history, wake word or usage counts yet.
+*Open history* lists every dictation, newest first, with a search: tap one to
+copy it, hold it to share it, transcribe its recording again (with the service
+picked now) or delete it. A dictation that failed, or that you cancelled, stays
+there with its recording. The recordings of the newest 200 dictations are kept
+(about 3 MB a minute); older ones keep only their text. The history stays on the
+phone: it isn't synced and has no playback yet.
+
+The Android app has no wake word or usage counts yet.
 
 ### Updates on Android
 
@@ -598,6 +605,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `CiaoService.kt` — the accessibility service: the icon over the keyboard
     (`Spring.kt` moves it), the dictation pipeline, typing into the field;
   - `CardView.kt` — the live card;
+  - `History.kt`, `HistoryActivity.kt` — the history, stored as on the desktop
+    (`src/main/history.ts`), one folder per dictation, and its screen;
   - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
     Gemini calls as `src/core/realtime.ts`, `src/core/gemini.ts` and
     `src/main/transcribe.ts`; `Revision.kt` — the port of `src/core/revision.ts`,

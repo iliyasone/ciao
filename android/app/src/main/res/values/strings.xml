@@ -95,4 +95,20 @@
     <string name="error_status_text">%1$s responded with %2$s</string>
     <string name="error_closed">Connection closed %1$s</string>
     <string name="error_provider">%1$s error</string>
+
+    <string name="history_title">History</string>
+    <string name="history_text">Everything you dictated, with the recording: copy it again, or transcribe one that failed.</string>
+    <string name="history_open">Open history</string>
+    <string name="history_search">Search</string>
+    <string name="history_empty">Nothing yet. Your dictations will appear here.</string>
+    <string name="history_no_text">No text</string>
+    <string name="history_copied">Copied</string>
+    <string name="history_copy">Copy</string>
+    <string name="history_share">Share</string>
+    <string name="history_retry">Transcribe again</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_transcribing">transcribing…</string>
+    <string name="history_failed">not transcribed</string>
+    <string name="history_cancelled">cancelled</string>
+    <string name="history_recording">recording</string>
 </resources>
