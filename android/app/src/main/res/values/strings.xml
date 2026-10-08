@@ -111,4 +111,12 @@
     <string name="history_failed">not transcribed</string>
     <string name="history_cancelled">cancelled</string>
     <string name="history_recording">recording</string>
+
+    <string name="channel_dictation">Dictation</string>
+    <string name="channel_recovered">Recovered dictations</string>
+    <string name="notification_recording">Ciao is listening</string>
+    <string name="notification_finishing">Ciao is transcribing…</string>
+    <string name="recovered">Recovered a cut-off dictation</string>
+    <string name="recovered_failed">A dictation was cut off</string>
+    <string name="recovered_failed_text">Its recording is in the history: open it to transcribe it again.</string>
 </resources>

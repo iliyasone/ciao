@@ -370,6 +370,15 @@ there with its recording. The recordings of the newest 200 dictations are kept
 (about 3 MB a minute); older ones keep only their text. The history stays on the
 phone: it isn't synced and has no playback yet.
 
+While you dictate, a *Ciao is listening* notification shows with *Done* and
+*Cancel*: the dictation goes on with the screen off or locked, and you can finish
+it from the shade or the lock screen. With the shade pulled down, the bubble and
+the card step aside so they don't cover it. If Android kills Ciao mid-dictation
+(out of memory, say), what was recorded is kept: when Ciao comes back it
+transcribes it into the history and says so in a notification. Android 13+ asks
+once to allow notifications; without them the dictation still goes on with the
+screen off, just without the buttons.
+
 The Android app has no wake word or usage counts yet.
 
 ### Updates on Android
@@ -605,6 +614,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `CiaoService.kt` — the accessibility service: the icon over the keyboard
     (`Spring.kt` moves it), the dictation pipeline, typing into the field;
   - `CardView.kt` — the live card;
+  - `RecordingService.kt` — the foreground service and notification of a
+    running dictation; `Recovery.kt` — transcribes dictations cut off by a kill;
   - `History.kt`, `HistoryActivity.kt` — the history, stored as on the desktop
     (`src/main/history.ts`), one folder per dictation, and its screen;
   - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
