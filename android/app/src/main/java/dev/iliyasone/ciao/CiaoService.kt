@@ -3,6 +3,7 @@ package dev.iliyasone.ciao
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.app.KeyguardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
@@ -12,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.View
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -59,6 +61,8 @@ class CiaoService : AccessibilityService() {
     /** The lowest the current glide may go: never below its start or its spot, so it doesn't bounce over the keys. */
     private var glideFloor = Int.MAX_VALUE
     private var dictation: Dictation? = null
+    /** The shade is down: the bubble and the card step aside until it's back up. */
+    private var shade = false
 
     /** FAILED: not transcribed; the recording is kept on the card until you retry or dismiss it. */
     private enum class Phase { RECORDING, FINISHING, DONE, FAILED }
@@ -95,8 +99,10 @@ class CiaoService : AccessibilityService() {
         pool = SessionPool(this, prefs)
         wm = getSystemService(WindowManager::class.java)
         history = History(File(filesDir, "history"))
-        // Recordings left behind by a crash or a kill mid-dictation: kept in the history for a retry.
-        disk.execute { runCatching { history.recover() } }
+        instance = this
+        RecordingService.channel(this)
+        // Recordings cut off by a crash or Android killing Ciao (out of memory, say): transcribe what was recorded.
+        disk.execute { runCatching { history.recover() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { Thread { Recovery.run(this, prefs, history, it) }.start() } }
         // Where recordings went before the history (Ciao 0.8.2 and older).
         cacheDir.listFiles { f -> f.name.startsWith("dictation-") }?.forEach { it.delete() }
     }
@@ -109,7 +115,9 @@ class CiaoService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         dictation?.let { cancel() }
+        RecordingService.hide(this)
         hideBubble()
         main.removeCallbacksAndMessages(null)
         if (::pool.isInitialized) pool.close()
@@ -144,6 +152,24 @@ class CiaoService : AccessibilityService() {
             imeTopSeen = -1
         }
         if (!idle || (ime != null && field != null)) showBubble() else hideBubble()
+        // Over the shade they'd cover its notifications, ours with Done and Cancel among them.
+        val open = shadeOpen()
+        if (open != shade) {
+            shade = open
+            if (open) setBubbleTouchable(false) else if (bubble?.alpha == 1f && !motion.running) setBubbleTouchable(true)
+        }
+        bubble?.visibility = if (shade) View.INVISIBLE else View.VISIBLE
+        cardHost?.visibility = if (shade) View.GONE else View.VISIBLE
+    }
+
+    /** The notification shade or quick settings are pulled down (the lock screen doesn't count: the card belongs there). */
+    private fun shadeOpen(): Boolean {
+        if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
+        val height = resources.displayMetrics.heightPixels
+        val r = Rect()
+        return runCatching {
+            windows.any { w -> w.type == AccessibilityWindowInfo.TYPE_SYSTEM && r.also { w.getBoundsInScreen(it) }.height() > height / 2 }
+        }.getOrDefault(false)
     }
 
     private fun overlayParams(width: Int, height: Int, gravity: Int) = WindowManager.LayoutParams(
@@ -219,7 +245,7 @@ class CiaoService : AccessibilityService() {
     private fun setBubbleTouchable(touchable: Boolean) {
         val v = bubble ?: return
         val flag = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        val flags = if (touchable) bubbleParams.flags and flag.inv() else bubbleParams.flags or flag
+        val flags = if (touchable && !shade) bubbleParams.flags and flag.inv() else bubbleParams.flags or flag
         if (flags == bubbleParams.flags) return
         bubbleParams.flags = flags
         wm.updateViewLayout(v, bubbleParams)
@@ -459,9 +485,12 @@ class CiaoService : AccessibilityService() {
                 }
             }
         })
+        // Before the microphone opens: with it, the recording goes on with the screen off or locked.
+        RecordingService.show(this, System.currentTimeMillis())
         try {
             recorder.start()
         } catch (e: Exception) {
+            RecordingService.hide(this)
             session.close()
             closeAudio(d)
             forget(d)
@@ -496,6 +525,7 @@ class CiaoService : AccessibilityService() {
         d.recorder?.stop()
         runCatching { d.audio.close() }
         d.session.commit()
+        RecordingService.show(this, 0, finishing = true)
         bubble?.state = BubbleView.State.FINISHING
         bubble?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
         card?.setPhase(CardView.Phase.FINISHING)
@@ -568,6 +598,7 @@ class CiaoService : AccessibilityService() {
         // Nothing to deliver: keep the recording (offline, say) until the user retries or dismisses it.
         d.phase = Phase.FAILED
         record(d, History.Status.FAILED)
+        RecordingService.hide(this)
         bubble?.state = BubbleView.State.IDLE
         card?.setPhase(CardView.Phase.FAILED, getString(R.string.failed, message), retry = true)
         refreshBubble()
@@ -576,6 +607,7 @@ class CiaoService : AccessibilityService() {
     private fun retry() {
         val d = dictation?.takeIf { it.phase == Phase.FAILED } ?: return
         d.phase = Phase.DONE
+        RecordingService.show(this, 0, finishing = true)
         showBubble()
         bubble?.state = BubbleView.State.FINISHING
         card?.setPhase(CardView.Phase.FINISHING)
@@ -587,6 +619,7 @@ class CiaoService : AccessibilityService() {
         val d = dictation
         dictation = null
         d?.let { closeAudio(it) }
+        RecordingService.hide(this)
         bubble?.state = BubbleView.State.IDLE
         main.removeCallbacks(hideCardLater)
         main.postDelayed(hideCardLater, delayMs)
@@ -605,6 +638,7 @@ class CiaoService : AccessibilityService() {
             if (d.endedAt - d.startedAt < 1500) forget(d) else record(d, History.Status.CANCELLED)
         }
         dictation = null
+        RecordingService.hide(this)
         bubble?.state = BubbleView.State.IDLE
         hideCard()
         refreshBubble()
@@ -629,24 +663,32 @@ class CiaoService : AccessibilityService() {
         disk.execute { history.delete(d.entry.id) }
     }
 
+    /** Done and Cancel in the notification: the same as on the card. */
+    fun stopFromNotification() = main.post { stop() }
+
+    fun cancelFromNotification() = main.post { cancel() }
+
     private fun openApp(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    private companion object {
-        const val HOLD_MS = 400L
+    companion object {
+        /** The running service, for the notification's buttons (RecordingService). */
+        var instance: CiaoService? = null
+            private set
+        private const val HOLD_MS = 400L
         /** How long the keyboard's top must hold still before the bubble is placed against it. */
-        const val IME_SETTLE_MS = 250L
-        const val APPEAR_MS = 160L
-        const val APPEAR_SCALE = 0.6f
-        const val PRESS_MS = 120L
-        const val PRESS_SCALE = 0.9f
-        const val DRAG_SCALE = 1.08f
+        private const val IME_SETTLE_MS = 250L
+        private const val APPEAR_MS = 160L
+        private const val APPEAR_SCALE = 0.6f
+        private const val PRESS_MS = 120L
+        private const val PRESS_SCALE = 0.9f
+        private const val DRAG_SCALE = 1.08f
         /** A throw carries the bubble this far ahead (in seconds of its speed) before it settles. */
-        const val FLING_PROJECTION_S = 0.12f
-        const val MAX_FLING_DP_S = 1500f
-        const val COMPLETION_TIMEOUT_MS = 6000L
-        const val DEFAULT_LIFT_DP = 72
+        private const val FLING_PROJECTION_S = 0.12f
+        private const val MAX_FLING_DP_S = 1500f
+        private const val COMPLETION_TIMEOUT_MS = 6000L
+        private const val DEFAULT_LIFT_DP = 72
     }
 }

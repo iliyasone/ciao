@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
@@ -56,8 +57,12 @@ class MainActivity : Activity() {
             if (GoogleSync.status.email != null) GoogleSync.signOut(this) else GoogleSync.signIn(this)
         }
         findViewById<Button>(R.id.micButton).setOnClickListener {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO) + notificationPermission(), 1)
         }
+        // The notification with Done and Cancel while you dictate with the screen off (RecordingService).
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED && notificationPermission().isNotEmpty() &&
+            checkSelfPermission(notificationPermission()[0]) != PackageManager.PERMISSION_GRANTED
+        ) requestPermissions(notificationPermission(), 2)
         findViewById<Button>(R.id.a11yButton).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
@@ -188,6 +193,9 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.micButton).visibility = if (mic) Button.GONE else Button.VISIBLE
         findViewById<Button>(R.id.a11yButton).setText(if (a11y) R.string.a11y_open_again else R.string.a11y_open)
     }
+
+    private fun notificationPermission(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
 
     private fun mark(id: Int, title: String, done: Boolean) {
         findViewById<TextView>(id).text = (if (done) "✓  " else "") + title

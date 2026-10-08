@@ -106,4 +106,12 @@
     <string name="history_failed">не распознано</string>
     <string name="history_cancelled">отменено</string>
     <string name="history_recording">идёт запись</string>
+
+    <string name="channel_dictation">Диктовка</string>
+    <string name="channel_recovered">Восстановленные диктовки</string>
+    <string name="notification_recording">Ciao слушает</string>
+    <string name="notification_finishing">Ciao распознаёт…</string>
+    <string name="recovered">Восстановил оборванную диктовку</string>
+    <string name="recovered_failed">Диктовка оборвалась</string>
+    <string name="recovered_failed_text">Запись сохранилась в истории: откройте, чтобы распознать её ещё раз.</string>
 </resources>

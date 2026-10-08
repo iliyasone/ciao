@@ -72,11 +72,9 @@ class History(private val dir: File) {
     }
 
     /** Entries left mid-recording by a crash or a kill: mark them failed, so they can be transcribed again. */
-    fun recover() {
-        for (e in list()) if (e.status == Status.RECORDING) {
-            val ms = audioFile(e.id).length() / BYTES_PER_MS
-            save(e.copy(status = Status.FAILED, durationMs = ms))
-        }
+    fun recover(): List<Entry> = list().filter { it.status == Status.RECORDING }.map { e ->
+        val ms = audioFile(e.id).length() / BYTES_PER_MS
+        e.copy(status = Status.FAILED, durationMs = ms).also { save(it) }
     }
 
     /** Recordings take ~2.9 MB a minute: keep the audio of the newest [keepAudio] entries only (the text stays). */
