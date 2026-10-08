@@ -38,8 +38,14 @@ object FileTranscriber {
      * Blocking; call off the main thread. [provider] and [smart] are the dictation's own, as when it
      * started; [key] is that provider's current key (a retry after fixing a bad key must use the new one).
      */
-    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, smart: Boolean): String {
-        if (provider == Provider.GEMINI) return transcribeGemini(context, prefs, audio, key, smart)
+    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, smart: Boolean): String =
+        // Opened once, before any request: a file trimmed from the history meanwhile stays readable,
+        // and a missing one fails as such rather than as a network error.
+        RandomAccessFile(audio, "r").use { file ->
+            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key, smart) else transcribeOpenAI(context, prefs, file, key)
+        }
+
+    private fun transcribeOpenAI(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String): String {
         val texts = mutableListOf<String>()
         val hints = listOf(prefs.prompt.trim(), if (prefs.keywords.isNotEmpty()) "Термины: ${prefs.keywords.joinToString(", ")}." else "")
             .filter { it.isNotEmpty() }.joinToString(" ")
@@ -84,7 +90,7 @@ object FileTranscriber {
      * gemini-3.5-transcribe through the Interactions API: the only Gemini endpoint where smart mode
      * works. Never add language codes, see Gemini.kt. Mirrors transcribeFileGemini.
      */
-    private fun transcribeGemini(context: Context, prefs: Prefs, audio: File, key: String, smart: Boolean): String {
+    private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, smart: Boolean): String {
         val config = JSONObject()
         if (smart) config.put("mode", "smart")
         val terms = geminiVocabulary(prefs.keywords)
@@ -161,40 +167,38 @@ object FileTranscriber {
     }
 
     /** Parts of at most [maxPartMs], as byte ranges of [audio], each cut at the quietest 100 ms before its end. */
-    private fun split(audio: File, maxPartMs: Int): List<Pair<Long, Long>> {
+    private fun split(audio: RandomAccessFile, maxPartMs: Int): List<Pair<Long, Long>> {
         val parts = mutableListOf<Pair<Long, Long>>()
         val size = audio.length()
         var start = 0L
         val maxBytes = maxPartMs.toLong() * BYTES_PER_MS
         val step = 100 * BYTES_PER_MS
         val window = ByteArray(SEARCH_MS * BYTES_PER_MS)
-        RandomAccessFile(audio, "r").use { file ->
-            while (size - start > maxBytes) {
-                val hardEnd = start + maxBytes
-                val from = hardEnd - window.size
-                file.seek(from)
-                file.readFully(window)
-                var cut = hardEnd
-                var quietest = Double.MAX_VALUE
-                var at = 0
-                while (at < window.size) {
-                    val l = Recorder.level(window, at, step)
-                    if (l < quietest) {
-                        quietest = l
-                        cut = from + at
-                    }
-                    at += step
+        while (size - start > maxBytes) {
+            val hardEnd = start + maxBytes
+            val from = hardEnd - window.size
+            audio.seek(from)
+            audio.readFully(window)
+            var cut = hardEnd
+            var quietest = Double.MAX_VALUE
+            var at = 0
+            while (at < window.size) {
+                val l = Recorder.level(window, at, step)
+                if (l < quietest) {
+                    quietest = l
+                    cut = from + at
                 }
-                parts.add(start to cut)
-                start = cut
+                at += step
             }
+            parts.add(start to cut)
+            start = cut
         }
         parts.add(start to size)
         return parts
     }
 
     /** [audio]'s bytes [start, end) as a WAV file, into [out] a piece at a time. */
-    private fun writeWav(audio: File, start: Long, end: Long, out: OutputStream) {
+    private fun writeWav(audio: RandomAccessFile, start: Long, end: Long, out: OutputStream) {
         val n = (end - start).toInt()
         val h = ByteBuffer.allocate(WAV_HEADER).order(ByteOrder.LITTLE_ENDIAN)
         h.put("RIFF".toByteArray()).putInt(36 + n).put("WAVE".toByteArray())
@@ -202,16 +206,14 @@ object FileTranscriber {
         h.putInt(Recorder.SAMPLE_RATE).putInt(Recorder.SAMPLE_RATE * 2).putShort(2).putShort(16)
         h.put("data".toByteArray()).putInt(n)
         out.write(h.array())
-        RandomAccessFile(audio, "r").use { file ->
-            file.seek(start)
-            val buf = ByteArray(64 * 1024)
-            var left = n
-            while (left > 0) {
-                val got = file.read(buf, 0, minOf(buf.size, left))
-                if (got < 0) throw IOException("${audio.name} is shorter than expected")
-                out.write(buf, 0, got)
-                left -= got
-            }
+        audio.seek(start)
+        val buf = ByteArray(64 * 1024)
+        var left = n
+        while (left > 0) {
+            val got = audio.read(buf, 0, minOf(buf.size, left))
+            if (got < 0) throw IOException("The recording is shorter than expected")
+            out.write(buf, 0, got)
+            left -= got
         }
     }
 }

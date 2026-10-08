@@ -50,12 +50,6 @@ object LiveLayout {
         return i
     }
 
-    /** Whether text[from, to) is all whitespace, without copying it. */
-    private fun blank(text: String, from: Int, to: Int): Boolean {
-        for (i in from until to) if (!text[i].isWhitespace()) return false
-        return true
-    }
-
     /**
      * [re] matched at [start], as re.find(text.substring(start)) but without copying the rest of
      * the text: called for every sentence, the copies made a long dictation quadratic.
@@ -80,8 +74,17 @@ object LiveLayout {
 
     /** The longest pause right before [start] (only whitespace in between). */
     private fun pauseBefore(text: String, pauses: List<Pause>, start: Int): Long {
+        // Only pauses in the whitespace right before it count: find those in [pauses], sorted by offset.
+        var from = start
+        while (from > 0 && text[from - 1].isWhitespace()) from--
+        var lo = 0
+        var hi = pauses.size
+        while (lo < hi) {
+            val mid = (lo + hi) / 2
+            if (pauses[mid].at < from) lo = mid + 1 else hi = mid
+        }
         var ms = 0L
-        for (p in pauses) if (p.at <= start && blank(text, p.at, start)) ms = maxOf(ms, p.ms)
+        while (lo < pauses.size && pauses[lo].at <= start) ms = maxOf(ms, pauses[lo++].ms)
         return ms
     }
 
@@ -102,8 +105,9 @@ object LiveLayout {
         }
 
         val first = firstNonSpace(text, 0)
+        val byOffset = pauses.sortedBy { it.at }
         for (start in sentenceStarts(text, pauses)) {
-            val pause = pauseBefore(text, pauses, start)
+            val pause = pauseBefore(text, byOffset, start)
             val ordinal = matchAt(ORDINAL, text, start)
             if (ordinal != null) {
                 val value = ORDINALS.first { it.first.matches(ordinal) }.second

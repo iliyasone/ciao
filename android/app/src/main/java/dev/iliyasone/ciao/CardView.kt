@@ -214,6 +214,9 @@ class CardView(
 
     fun final(text: String) {
         final = text
+        // Nothing left to fade: a long final text is laid out once, not every frame.
+        for (t in fresh) settled += t.text
+        fresh.clear()
         dirty = true
         render()
     }
@@ -266,6 +269,8 @@ class CardView(
             else -> time
         }
         if (clock.text.toString() != status) clock.text = status
+        // Every frame, as the text grows: a scroll animating to an older bottom would end short of it.
+        if (stick) scroller.post { scroller.smoothScrollTo(0, body.height) }
 
         // Fading words redraw every frame; otherwise only a change does.
         if (!dirty && fresh.isEmpty()) return
@@ -274,6 +279,8 @@ class CardView(
         while (fresh.isNotEmpty() && now - fresh[0].at > FRESH_MS) settled += fresh.removeAt(0).text
 
         val f = final
+        // Laid out once: a long final is costly, and finishing marks the card dirty again.
+        if (f != null && body.text.toString() == f) return
         body.text = when {
             f != null -> f.also { shownFrom = 0 }
             settled.isEmpty() && fresh.isEmpty() -> SpannableStringBuilder("…").apply {
@@ -281,7 +288,6 @@ class CardView(
             }
             else -> lastLines(liveText(now))
         }
-        if (stick) scroller.post { scroller.smoothScrollTo(0, body.height) }
     }
 
     /** The laid-out text, colour runs and paragraph gaps by offset (settled text needs no span: it is the body's colour). */
@@ -304,7 +310,7 @@ class CardView(
             var drop = l.getLineStart(line)
             // Only where the text up to there is still the same, so that is still a line start.
             if (text.substring(shownFrom, shownFrom + drop) == shown.substring(0, drop)) {
-                while (drop < shown.length && shown[drop] == '\n') drop++
+                while (shownFrom + drop < text.length && text[shownFrom + drop] == '\n') drop++
                 shownFrom += drop
                 // The scroller is at the bottom; with less above, its next layout clamps it there again.
                 cutOff = text.substring(0, shownFrom)

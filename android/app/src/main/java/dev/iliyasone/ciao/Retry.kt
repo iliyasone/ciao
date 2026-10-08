@@ -51,7 +51,7 @@ object Retry {
     /**
      * Re-runs the streaming model over a saved recording, faster than real time. It is read from the
      * file a piece at a time, and sent no faster than the socket takes it: OkHttp closes a socket
-     * with over 16 MB waiting, about 3 minutes of audio.
+     * with over 16 MB waiting, about 4 minutes of audio.
      */
     private fun live(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String): String {
         val done = CountDownLatch(1)
