@@ -1,7 +1,7 @@
 {
   "name": "ciao",
   "productName": "Ciao",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Dictation with a live preview: see what you say while you say it.",
   "homepage": "https://sayciao.vercel.app",
   "private": true,
