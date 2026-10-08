@@ -35,6 +35,8 @@ interface LiveSession {
     val failure: String?
     /** Still worth handing to a new dictation. */
     val usable: Boolean
+    /** Bytes sent but still waiting for the network. */
+    val queued: Long
     var listener: Listener?
 
     fun configure(prefs: Prefs)
@@ -81,6 +83,8 @@ class RealtimeSession(private val context: Context, apiKey: String) : LiveSessio
     )
 
     override val usable: Boolean get() = failure == null && !closedByUs
+
+    override val queued: Long get() = socket.queueSize()
 
     override fun configure(prefs: Prefs) {
         val transcription = JSONObject().put("model", Provider.OPENAI.liveModel).put("delay", prefs.delay)

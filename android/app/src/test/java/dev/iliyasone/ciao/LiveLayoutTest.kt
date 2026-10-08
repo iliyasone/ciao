@@ -22,6 +22,20 @@ class LiveLayoutTest {
     }
 
     @Test
+    fun longDictation() {
+        // Half an hour of speech: laid out every frame while it streams, so it must stay linear.
+        val sentence = "Это одно предложение из долгой диктовки, и в нём есть несколько слов. "
+        val text = sentence.repeat(600) + "Первое, проверить. Второе, отдохнуть."
+        val pauses = (1..300).map { Pause(it * sentence.length * 2 - 1, 1500) }
+        val started = System.nanoTime()
+        val l = LiveLayout.layout(text, pauses)
+        assertEquals(true, (System.nanoTime() - started) / 1_000_000 < 1000)
+        // The last pause is before "Первое": that one starts the list instead.
+        assertEquals(299 + 2, l.breaks.size)
+        assertEquals(true, LiveLayout.apply(text, l).endsWith("\n\n1. Проверить.\n2. Отдохнуть."))
+    }
+
+    @Test
     fun stopPhrase() {
         assertEquals(true, VoiceCommands.endsWithStopPhrase("Ну всё, чао-чао."))
         assertEquals("Ну всё", VoiceCommands.stripStopPhrase("Ну всё, чао-чао."))

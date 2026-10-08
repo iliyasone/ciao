@@ -50,6 +50,21 @@ object LiveLayout {
         return i
     }
 
+    /** Whether text[from, to) is all whitespace, without copying it. */
+    private fun blank(text: String, from: Int, to: Int): Boolean {
+        for (i in from until to) if (!text[i].isWhitespace()) return false
+        return true
+    }
+
+    /**
+     * [re] matched at [start], as re.find(text.substring(start)) but without copying the rest of
+     * the text: called for every sentence, the copies made a long dictation quadratic.
+     */
+    private fun matchAt(re: Regex, text: String, start: Int): String? {
+        val m = re.toPattern().matcher(text).region(start, text.length).useTransparentBounds(true)
+        return if (m.lookingAt()) m.group() else null
+    }
+
     private fun sentenceStarts(text: String, pauses: List<Pause>): List<Int> {
         val starts = sortedSetOf<Int>()
         val first = firstNonSpace(text, 0)
@@ -66,7 +81,7 @@ object LiveLayout {
     /** The longest pause right before [start] (only whitespace in between). */
     private fun pauseBefore(text: String, pauses: List<Pause>, start: Int): Long {
         var ms = 0L
-        for (p in pauses) if (p.at <= start && text.substring(p.at, start).isBlank()) ms = maxOf(ms, p.ms)
+        for (p in pauses) if (p.at <= start && blank(text, p.at, start)) ms = maxOf(ms, p.ms)
         return ms
     }
 
@@ -78,7 +93,7 @@ object LiveLayout {
         fun startItem(start: Int, word: String, n: Int) {
             breaks.add(Break.Item(start, n))
             val afterWord = start + word.length
-            val end = afterWord + AFTER_WORD.find(text.substring(afterWord))!!.value.length
+            val end = afterWord + matchAt(AFTER_WORD, text, afterWord)!!.length
             val next = text.getOrNull(end)
             // Only once the next letter has arrived, so a half-streamed word isn't mangled.
             if (next != null && next.isLetter()) edits.add(Edit(start, end + 1, next.toString().uppercase(RU)))
@@ -86,21 +101,21 @@ object LiveLayout {
             item = n
         }
 
+        val first = firstNonSpace(text, 0)
         for (start in sentenceStarts(text, pauses)) {
-            val rest = text.substring(start)
             val pause = pauseBefore(text, pauses, start)
-            val ordinal = ORDINAL.find(rest)
+            val ordinal = matchAt(ORDINAL, text, start)
             if (ordinal != null) {
-                val value = ORDINALS.first { it.first.matches(ordinal.value) }.second
-                startItem(start, ordinal.value, if (item != 0) item + 1 else value)
+                val value = ORDINALS.first { it.first.matches(ordinal) }.second
+                startItem(start, ordinal, if (item != 0) item + 1 else value)
                 continue
             }
-            val cont = if (item != 0) CONTINUE.find(rest) else null
+            val cont = if (item != 0) matchAt(CONTINUE, text, start) else null
             if (cont != null) {
-                startItem(start, cont.value, item + 1)
+                startItem(start, cont, item + 1)
                 continue
             }
-            if (start == 0 || text.substring(0, start).isBlank()) continue
+            if (start <= first) continue
             if (if (item != 0) pause >= LIST_END_PAUSE_MS else pause >= PARAGRAPH_PAUSE_MS) {
                 breaks.add(Break.Paragraph(start))
                 item = 0

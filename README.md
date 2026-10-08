@@ -332,6 +332,8 @@ yours.
   keys, not on them. While the keyboard is still moving, taps go through the icon,
   so a tap aimed at a key never starts a dictation.
 - **✕** on the card cancels; **✓** finishes.
+- In a long dictation the card keeps the last 30 or so lines while you speak, so
+  it stays smooth after many minutes; the whole text shows once you finish.
 - If the field won't take the text, it is copied to the clipboard instead.
 - If the live connection drops, recording continues and the audio is sent to
   the file model (`gpt-transcribe`, or `gemini-3.5-transcribe`) when you finish.

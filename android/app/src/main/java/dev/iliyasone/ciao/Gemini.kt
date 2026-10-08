@@ -98,6 +98,8 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
 
     override val usable: Boolean get() = failure == null && !closedByUs
 
+    override val queued: Long get() = socket.queueSize()
+
     override fun configure(prefs: Prefs) {
         val transcription = JSONObject().put("mode", if (prefs.smart) "SMART" else "VERBATIM")
         val terms = geminiVocabulary(prefs.keywords)
