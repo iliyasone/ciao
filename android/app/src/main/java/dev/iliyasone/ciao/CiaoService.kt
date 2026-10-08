@@ -560,8 +560,7 @@ class CiaoService : AccessibilityService() {
 
     private fun transcribeFile(d: Dictation) {
         Thread {
-            // runCatching also catches an OutOfMemoryError from reading a very long recording.
-            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile.readBytes(), d.provider, prefs.keyOf(d.provider), d.smart) }
+            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile, d.provider, prefs.keyOf(d.provider), d.smart) }
             main.post {
                 if (dictation !== d) return@post
                 result.fold(onSuccess = { deliver(d, it, History.Source.RETRY_FILE) }, onFailure = { fail(d, it.message ?: getString(R.string.error_provider, d.provider.displayName)) })

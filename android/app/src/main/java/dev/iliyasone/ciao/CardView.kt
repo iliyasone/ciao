@@ -4,7 +4,10 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.text.LineBreaker
 import android.os.SystemClock
+import android.text.Layout as TextLayout
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.AbsoluteSizeSpan
@@ -63,6 +66,9 @@ class CardView(
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
         setLineSpacing(0f, 1.15f)
         setTextColor(settledColor)
+        // Greedy line breaking: text cut at a line start (see render) wraps exactly as it did uncut.
+        breakStrategy = LineBreaker.BREAK_STRATEGY_SIMPLE // a constant, inlined: fine below API 29
+        hyphenationFrequency = TextLayout.HYPHENATION_FREQUENCY_NONE
     }
     private val scroller = object : ScrollView(context) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -86,6 +92,17 @@ class CardView(
     private var final: String? = null
     private var message: String? = null
     private var stick = true
+    /** The text changed since the last render (the clock alone doesn't rebuild it). */
+    private var dirty = true
+    /**
+     * Until the final text arrives, the card holds the last lines only: laying out a long dictation
+     * in full every frame made it lag. They start [shownFrom] into the laid-out text, always at a
+     * line start, and [cutOff] is what is left out: should a revision change it, the text is shown
+     * whole again.
+     */
+    private var shownFrom = 0
+    private var cutOff = ""
+    private var finalShown = false
 
     private val tick = object : Runnable {
         override fun run() {
@@ -147,6 +164,10 @@ class CardView(
         final = null
         message = null
         stick = true
+        shownFrom = 0
+        cutOff = ""
+        finalShown = false
+        dirty = true
         startedAt = SystemClock.elapsedRealtime()
         endedAt = 0
         setPhase(Phase.RECORDING)
@@ -159,6 +180,7 @@ class CardView(
         val at = settled.length + fresh.sumOf { it.text.length }
         if (gapMs >= LiveLayout.PARAGRAPH_PAUSE_MS && at > 0) pauses.add(Pause(at, gapMs))
         fresh.add(Token(t, SystemClock.elapsedRealtime()))
+        dirty = true
         removeCallbacks(tick)
         tick.run()
     }
@@ -189,12 +211,17 @@ class CardView(
         fresh.addAll(kept)
         val rest = next.substring(same)
         if (rest.isNotEmpty()) fresh.add(Token(rest, SystemClock.elapsedRealtime()))
+        dirty = true
         removeCallbacks(tick)
         tick.run()
     }
 
     fun final(text: String) {
         final = text
+        // Nothing left to fade: a long final text is laid out once, not every frame.
+        for (t in fresh) settled += t.text
+        fresh.clear()
+        dirty = true
         render()
     }
 
@@ -204,6 +231,7 @@ class CardView(
         if (message != null) this.message = message
         else if (p == Phase.DONE || phase == Phase.FAILED) this.message = null
         phase = p
+        dirty = true
         if (p != Phase.RECORDING && endedAt == 0L) endedAt = SystemClock.elapsedRealtime()
         dot.visibility = if (p == Phase.RECORDING) VISIBLE else GONE
         spinner.visibility = if (p == Phase.FINISHING) VISIBLE else GONE
@@ -239,65 +267,137 @@ class CardView(
         val elapsed = (if (endedAt != 0L) endedAt else now) - startedAt
         val secs = elapsed / 1000
         val time = "%d:%02d".format(secs / 60, secs % 60)
-        clock.text = when {
+        val status = when {
             message != null -> message
             showCost -> "$time · ${formatCost(elapsed / 60_000.0 * costPerMinute)}"
             else -> time
         }
+        if (clock.text.toString() != status) clock.text = status
+        // Every frame, as the text grows: a scroll animating to an older bottom would end short of it.
+        if (stick) scroller.post { scroller.smoothScrollTo(0, body.height) }
 
+        // Fading words redraw every frame; otherwise only a change does.
+        if (!dirty && fresh.isEmpty()) return
+        dirty = false
         // Merge settled tokens into plain text.
         while (fresh.isNotEmpty() && now - fresh[0].at > FRESH_MS) settled += fresh.removeAt(0).text
 
         val f = final
+        // Laid out once (a long final is costly, and finishing marks the card dirty again), as plain
+        // text: the live frame before it may hold the same words in fading colours.
+        if (f != null && finalShown) return
+        finalShown = f != null
         body.text = when {
-            f != null -> f
+            f != null -> f.also { shownFrom = 0 }
             settled.isEmpty() && fresh.isEmpty() -> SpannableStringBuilder("…").apply {
                 setSpan(ForegroundColorSpan(context.getColor(R.color.ghost)), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
-            else -> liveText(now)
+            else -> lastLines(liveText(now))
         }
-        if (stick) scroller.post { scroller.smoothScrollTo(0, body.height) }
+    }
+
+    /** The laid-out text, colour runs and paragraph gaps by offset (settled text needs no span: it is the body's colour). */
+    private class Live(val text: StringBuilder, val runs: List<Run>, val gaps: List<Int>)
+
+    private class Run(val from: Int, var to: Int, val color: Int)
+
+    /** [live] from [shownFrom] on, dropping more lines off the top once there are many. */
+    private fun lastLines(live: Live): CharSequence {
+        val text = live.text
+        val kept = shownFrom == 0 || text.startsWith(cutOff)
+        if (!kept) {
+            shownFrom = 0
+            cutOff = ""
+        }
+        val l = body.layout
+        val shown = body.text
+        if (kept && stick && l != null && l.text.length == shown.length && l.lineCount > MAX_LINES && shownFrom + shown.length <= text.length) {
+            val line = l.lineCount - KEEP_LINES
+            var drop = l.getLineStart(line)
+            // Only where the text up to there is still the same, so that is still a line start (a
+            // revision of the word right after could wrap that one line differently: cosmetic).
+            if (text.substring(shownFrom, shownFrom + drop) == shown.substring(0, drop)) {
+                while (shownFrom + drop < text.length && text[shownFrom + drop] == '\n') drop++
+                shownFrom += drop
+                // The scroller is at the bottom; with less above, its next layout clamps it there again.
+                cutOff = text.substring(0, shownFrom)
+            }
+        }
+        val out = SpannableString(text.substring(shownFrom))
+        for (r in live.runs) {
+            val from = maxOf(r.from, shownFrom) - shownFrom
+            val to = r.to - shownFrom
+            if (to > from) out.setSpan(ForegroundColorSpan(r.color), from, to, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        for (g in live.gaps) if (g >= shownFrom) out.setSpan(AbsoluteSizeSpan(dp(8)), g - shownFrom, g - shownFrom + 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return out
     }
 
     /** The live text with its layout applied, each fresh token coloured by its age. */
-    private fun liveText(now: Long): CharSequence {
+    private fun liveText(now: Long): Live {
         val full = settled + fresh.joinToString("") { it.text }
-        val colors = IntArray(full.length) { settledColor }
-        var offset = settled.length
-        for (t in fresh) {
-            val c = tokenColor(now - t.at)
-            for (i in offset until offset + t.text.length) colors[i] = c
-            offset += t.text.length
+        // Where each colour ends: the settled text, then each fresh token.
+        val ends = IntArray(fresh.size + 1)
+        val colors = IntArray(fresh.size + 1)
+        ends[0] = settled.length
+        colors[0] = settledColor
+        for ((k, t) in fresh.withIndex()) {
+            ends[k + 1] = ends[k] + t.text.length
+            colors[k + 1] = tokenColor(now - t.at)
+        }
+        var span = 0
+        fun colorAt(i: Int): Int {
+            while (span < ends.size - 1 && i >= ends[span]) span++
+            return colors[span]
         }
         val l = if (layoutText) LiveLayout.layout(full, pauses) else Layout(emptyList(), emptyList())
         val breakAt = l.breaks.associateBy { it.at }
         val editAt = l.edits.associateBy { it.start }
-        val out = SpannableStringBuilder()
-        fun add(s: String, color: Int, sizePx: Int = 0) {
+        // Breaks and edits in order: the text between two of them is copied as is.
+        val marks = (breakAt.keys + editAt.keys).sorted()
+        var mark = 0
+        val out = StringBuilder(full.length + 64)
+        val runs = mutableListOf<Run>()
+        val gaps = mutableListOf<Int>()
+        fun add(s: CharSequence, color: Int) {
             val from = out.length
             out.append(s)
-            out.setSpan(ForegroundColorSpan(color), from, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            if (sizePx > 0) out.setSpan(AbsoluteSizeSpan(sizePx), from, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (color == settledColor) return
+            val last = runs.lastOrNull()
+            if (last != null && last.to == from && last.color == color) last.to = out.length else runs.add(Run(from, out.length, color))
         }
         var i = 0
         while (i < full.length) {
             val b = breakAt[i]
             if (b != null && i > 0) {
                 // Trailing spaces would start the new line with a gap.
-                while (out.isNotEmpty() && out[out.length - 1] == ' ') out.delete(out.length - 1, out.length)
-                if (b is Break.Paragraph) add("\n\n", settledColor, dp(8)) else add("\n", settledColor)
+                while (out.isNotEmpty() && out[out.length - 1] == ' ') out.setLength(out.length - 1)
+                while (runs.isNotEmpty() && runs.last().to > out.length) {
+                    val last = runs.last()
+                    if (last.from >= out.length) runs.removeAt(runs.size - 1) else last.to = out.length
+                }
+                if (b is Break.Paragraph) {
+                    gaps.add(out.length)
+                    add("\n\n", settledColor)
+                } else {
+                    add("\n", settledColor)
+                }
             }
             if (b is Break.Item) add("${b.n}. ", faintColor)
             val e = editAt[i]
             if (e != null) {
-                add(e.insert, colors[i])
+                add(e.insert, colorAt(i))
                 i = e.end
             } else {
-                add(full[i].toString(), colors[i])
-                i++
+                // Up to the next break or edit, or where the colour changes.
+                while (mark < marks.size && marks[mark] <= i) mark++
+                val c = colorAt(i)
+                val j = minOf(if (mark < marks.size) marks[mark] else full.length, ends[span])
+                add(full.subSequence(i, j), c)
+                i = j
             }
         }
-        return out
+        return Live(out, runs, gaps)
     }
 
     /** Fades in bright, then settles to grey over FRESH_MS. */
@@ -323,6 +423,9 @@ class CardView(
     companion object {
         private const val FRESH_MS = 1250L
         private const val MAX_TEXT_DP = 25 * 6 // six lines, then it scrolls
+        /** Past this many lines while recording, the card drops the top ones down to [KEEP_LINES]. */
+        private const val MAX_LINES = 60
+        private const val KEEP_LINES = 30
 
         /** "0,4 ¢" under a dollar, "$1.23" above; as formatCost in src/core/cost.ts. */
         fun formatCost(usd: Double): String {

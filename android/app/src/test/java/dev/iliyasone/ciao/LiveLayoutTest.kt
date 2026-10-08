@@ -19,6 +19,20 @@ class LiveLayoutTest {
         check("Третий момент очень важен. Четвёртое", listOf(), "3. Очень важен.\n4.")
         check("Первое", listOf(), "1.")
         check("Первое ", listOf(), "1.")
+        // JS \s takes the no-break space too.
+        check("Первое,\u00A0проверить", listOf(), "1. Проверить")
+    }
+
+    @Test
+    fun longDictation() {
+        // Half an hour of speech, laid out deep into the text (offsets far from 0).
+        val sentence = "Это одно предложение из долгой диктовки, и в нём есть несколько слов. "
+        val text = sentence.repeat(600) + "Первое, проверить. Второе, отдохнуть."
+        val pauses = (1..300).map { Pause(it * sentence.length * 2 - 1, 1500) }
+        val l = LiveLayout.layout(text, pauses)
+        // The last pause is before "Первое": that one starts the list instead.
+        assertEquals(299 + 2, l.breaks.size)
+        assertEquals(true, LiveLayout.apply(text, l).endsWith("\n\n1. Проверить.\n2. Отдохнуть."))
     }
 
     @Test

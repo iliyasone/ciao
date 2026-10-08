@@ -2,19 +2,25 @@ package dev.iliyasone.ciao
 
 import android.content.Context
 import android.util.Base64
+import android.util.Base64OutputStream
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
+import okio.BufferedSink
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
+import java.io.OutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
  * Transcribes a whole recording with the (more accurate, cheaper) file model of the service in use:
  * the fallback when the live connection dropped. Mirrors transcribeFile in src/main/transcribe.ts.
+ * The audio is read from its file while it is sent, never held whole: an hour is ~170 MB.
  */
 object FileTranscriber {
     // The endpoint takes up to 25 MB, i.e. ~8.5 min of 24 kHz PCM16. Longer recordings are split at
@@ -24,21 +30,35 @@ object FileTranscriber {
     private const val GEMINI_MAX_PART_MS = 4 * 60_000
     private const val SEARCH_MS = 10_000
     private const val BYTES_PER_MS = Recorder.SAMPLE_RATE * 2 / 1000
+    private const val WAV_HEADER = 44
+    /** Stands for the audio in Gemini's JSON until it is sent. */
+    private const val DATA = "@ciao-audio@"
 
     /**
      * Blocking; call off the main thread. [provider] and [smart] are the dictation's own, as when it
      * started; [key] is that provider's current key (a retry after fixing a bad key must use the new one).
      */
-    fun transcribe(context: Context, prefs: Prefs, pcm: ByteArray, provider: Provider, key: String, smart: Boolean): String {
-        if (provider == Provider.GEMINI) return transcribeGemini(context, prefs, pcm, key, smart)
+    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, smart: Boolean): String =
+        // Opened once, before any request: a file trimmed from the history meanwhile stays readable,
+        // and a missing one fails as such rather than as a network error.
+        RandomAccessFile(audio, "r").use { file ->
+            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key, smart) else transcribeOpenAI(context, prefs, file, key)
+        }
+
+    private fun transcribeOpenAI(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String): String {
         val texts = mutableListOf<String>()
         val hints = listOf(prefs.prompt.trim(), if (prefs.keywords.isNotEmpty()) "Термины: ${prefs.keywords.joinToString(", ")}." else "")
             .filter { it.isNotEmpty() }.joinToString(" ")
-        for ((start, end) in split(pcm, MAX_PART_MS)) {
+        for ((start, end) in split(audio, MAX_PART_MS)) {
             // Continuity across parts.
             val prompt = if (texts.isEmpty()) hints else "$hints ${texts.last().takeLast(400)}".trim()
+            val wav = object : RequestBody() {
+                override fun contentType() = "audio/wav".toMediaType()
+                override fun contentLength() = WAV_HEADER + end - start
+                override fun writeTo(sink: BufferedSink) = writeWav(audio, start, end, sink.outputStream())
+            }
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("file", "audio.wav", wav(pcm, start, end).toRequestBody("audio/wav".toMediaType()))
+                .addFormDataPart("file", "audio.wav", wav)
                 .addFormDataPart("model", Provider.OPENAI.fileModel)
                 .apply {
                     prefs.languages.firstOrNull()?.let { addFormDataPart("language", it) }
@@ -70,25 +90,39 @@ object FileTranscriber {
      * gemini-3.5-transcribe through the Interactions API: the only Gemini endpoint where smart mode
      * works. Never add language codes, see Gemini.kt. Mirrors transcribeFileGemini.
      */
-    private fun transcribeGemini(context: Context, prefs: Prefs, pcm: ByteArray, key: String, smart: Boolean): String {
+    private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, smart: Boolean): String {
         val config = JSONObject()
         if (smart) config.put("mode", "smart")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("custom_vocabulary", JSONArray(terms))
         val texts = mutableListOf<String>()
-        for ((start, end) in split(pcm, GEMINI_MAX_PART_MS)) {
-            val audio = JSONObject().put("type", "audio").put("mime_type", "audio/wav")
-                .put("data", Base64.encodeToString(wav(pcm, start, end), Base64.NO_WRAP))
-            val body = JSONObject()
+        for ((start, end) in split(audio, GEMINI_MAX_PART_MS)) {
+            val part = JSONObject().put("type", "audio").put("mime_type", "audio/wav").put("data", DATA)
+            val json = JSONObject()
                 .put("model", Provider.GEMINI.fileModel)
                 // Interactions are kept on Google's side by default; recordings stay on this phone.
                 .put("store", false)
-                .put("input", JSONArray().put(audio))
-            if (config.length() > 0) body.put("generation_config", JSONObject().put("transcription_config", config))
+                .put("input", JSONArray().put(part))
+            if (config.length() > 0) json.put("generation_config", JSONObject().put("transcription_config", config))
+            // The audio goes in as base64 inside the JSON: written in place of DATA as it is read.
+            val text = json.toString()
+            val head = text.substringBefore(DATA).toByteArray()
+            val tail = text.substringAfter(DATA).toByteArray()
+            val body = object : RequestBody() {
+                override fun contentType() = "application/json".toMediaType()
+                override fun contentLength() = head.size + (WAV_HEADER + end - start + 2) / 3 * 4 + tail.size
+                override fun writeTo(sink: BufferedSink) {
+                    sink.write(head)
+                    val base64 = Base64OutputStream(sink.outputStream(), Base64.NO_WRAP or Base64.NO_CLOSE)
+                    writeWav(audio, start, end, base64)
+                    base64.close()
+                    sink.write(tail)
+                }
+            }
             val request = Request.Builder()
                 .url("https://generativelanguage.googleapis.com/v1beta/interactions")
                 .header("x-goog-api-key", key)
-                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .post(body)
                 .build()
             // Tier 1 takes 10,000 audio tokens (~6.5 min) a minute, so the parts of a long recording run
             // into the limit; the error says when to come back ("Please retry in 8s").
@@ -132,39 +166,54 @@ object FileTranscriber {
         return texts.filter { it.isNotEmpty() }.joinToString(" ")
     }
 
-    private fun split(pcm: ByteArray, maxPartMs: Int): List<Pair<Int, Int>> {
-        val parts = mutableListOf<Pair<Int, Int>>()
-        var start = 0
-        val maxBytes = maxPartMs * BYTES_PER_MS
+    /** Parts of at most [maxPartMs], as byte ranges of [audio], each cut at the quietest 100 ms before its end. */
+    private fun split(audio: RandomAccessFile, maxPartMs: Int): List<Pair<Long, Long>> {
+        val parts = mutableListOf<Pair<Long, Long>>()
+        val size = audio.length()
+        var start = 0L
+        val maxBytes = maxPartMs.toLong() * BYTES_PER_MS
         val step = 100 * BYTES_PER_MS
-        while (pcm.size - start > maxBytes) {
+        val window = ByteArray(SEARCH_MS * BYTES_PER_MS)
+        while (size - start > maxBytes) {
             val hardEnd = start + maxBytes
+            val from = hardEnd - window.size
+            audio.seek(from)
+            audio.readFully(window)
             var cut = hardEnd
             var quietest = Double.MAX_VALUE
-            var at = hardEnd - SEARCH_MS * BYTES_PER_MS
-            while (at < hardEnd) {
-                val l = Recorder.level(pcm, at, step)
+            var at = 0
+            while (at < window.size) {
+                val l = Recorder.level(window, at, step)
                 if (l < quietest) {
                     quietest = l
-                    cut = at
+                    cut = from + at
                 }
                 at += step
             }
             parts.add(start to cut)
             start = cut
         }
-        parts.add(start to pcm.size)
+        parts.add(start to size)
         return parts
     }
 
-    private fun wav(pcm: ByteArray, start: Int, end: Int): ByteArray {
-        val n = end - start
-        val h = ByteBuffer.allocate(44 + n).order(ByteOrder.LITTLE_ENDIAN)
+    /** [audio]'s bytes [start, end) as a WAV file, into [out] a piece at a time. */
+    private fun writeWav(audio: RandomAccessFile, start: Long, end: Long, out: OutputStream) {
+        val n = (end - start).toInt()
+        val h = ByteBuffer.allocate(WAV_HEADER).order(ByteOrder.LITTLE_ENDIAN)
         h.put("RIFF".toByteArray()).putInt(36 + n).put("WAVE".toByteArray())
         h.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1)
         h.putInt(Recorder.SAMPLE_RATE).putInt(Recorder.SAMPLE_RATE * 2).putShort(2).putShort(16)
         h.put("data".toByteArray()).putInt(n)
-        h.put(pcm, start, n)
-        return h.array()
+        out.write(h.array())
+        audio.seek(start)
+        val buf = ByteArray(64 * 1024)
+        var left = n
+        while (left > 0) {
+            val got = audio.read(buf, 0, minOf(buf.size, left))
+            if (got < 0) throw IOException("The recording is shorter than expected")
+            out.write(buf, 0, got)
+            left -= got
+        }
     }
 }
