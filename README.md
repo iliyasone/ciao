@@ -44,6 +44,27 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     *Settings → Voice*).
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
+- **Teach it a word by voice.** Say **"ciao, remember the word PostHog"** ("чао,
+  запомни слово PostHog"; also "чао, добавь в термины …", "ciao, add the term …")
+  anywhere in a dictation. Ciao cuts the command out of the text, adds the word to
+  your [terms](#sync) and says so on the card: *Added to your terms: PostHog*.
+  - Spelling it out works too, in Russian or English letter names: "чао, запомни
+    слово: пэ, о, эс, тэ, эйч, о, джи", "ciao, remember the word P-O-S-T-H-O-G", or the
+    word then its spelling ("…слово пост хог, по буквам: …").
+  - The recognizer writes the word as it heard it (often in Cyrillic, or letter by
+    letter), so unless it already looks like a term ("PostHog", "Next.js",
+    "gpt-5"), the words after the command go to a small text model of the
+    service you use, with the same key: `gpt-5.4-mini` for OpenAI,
+    `gemini-3.5-flash-lite` for Gemini (about half a second, a tiny fraction of a
+    cent). Only those few words are sent. If the model finds no term there, or the
+    service refuses (a key without access to that model), nothing is added and the
+    card says why; when the service can't be reached or is overloaded, Ciao keeps
+    a Latin word as heard ("Posthog", "P-O-S-T"), or says it couldn't make it out.
+  - "Слово"/"термин"/"word"/"term" (or "в термины"/"to my terms") is needed:
+    "чао, добавь тесты", "чао, запомни, что…" or "ciao, add new words to the list"
+    stays dictation. One term per command: for two, say it twice.
+  - The term syncs like one typed in *Settings → Terms*. A term that differs only
+    in case is replaced ("Posthog" becomes "PostHog").
 - **The card stays out of your way.**
   - Moving the pointer over it makes it see-through, so you can read what's
     underneath; scroll it and it turns solid again.
@@ -323,7 +344,8 @@ field, the Ciao icon floats above it. Tap it and speak. The card at the top of t
 screen shows your words live, the same way as on the desktop (bright new words,
 paragraphs and lists). Tap the icon again, or say **"ciao ciao"** ("чао-чао"), and
 the text is typed into the field. It works with any keyboard; Ciao doesn't replace
-yours.
+yours. **"Ciao, remember the word …"** adds a term as on the
+[desktop](#features).
 
 - **Hold** the icon to talk while you hold it; let go to finish.
 - **Drag** it to move it, or throw it. It glides to the nearer side and stays at
@@ -599,7 +621,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
-  `providers.ts` for which models each uses), PCM/WAV helpers, prices and shared types. It is
+  `providers.ts` for which models each uses), voice commands (`voiceCommands.ts`, with
+  `terms.ts` for "ciao, remember the word …"), PCM/WAV helpers, prices and shared types. It is
   meant to be reused as-is by other shells (a T3 Code integration, mobile).
 - `src/main/` — the Electron main process:
   - `dictation.ts` — the hotkey state machine and the pipeline;
@@ -650,6 +673,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `LiveLayout.kt`, `VoiceCommands.kt` — ports of `src/core/liveLayout.ts` and
     `src/core/voiceCommands.ts`. Their unit test holds the TypeScript outputs, so
     change both together;
+  - `Terms.kt` — the port of `src/core/terms.ts` ("ciao, remember the word …"),
+    tested with `takeRememberCommands` in `TermsTest.kt` against the TypeScript outputs;
   - `Sync.kt` — the port of `src/core/sync.ts`, with the same kind of test;
     `GoogleSync.kt` — sign-in and the Drive calls of `src/main/sync.ts`.
 

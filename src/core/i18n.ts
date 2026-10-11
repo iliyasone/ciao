@@ -54,6 +54,11 @@ const ru = {
     saved: "Не распозналось — аудио сохранено в истории",
     recovered: "Запись прервалась при перезапуске — вот что ты сказал",
     recoveredSaved: "Запись прервалась при перезапуске — аудио сохранено в истории",
+    termAdded: (term: string) => `Добавлено в термины: ${term}`,
+    termKnown: (term: string) => `${term} — уже в терминах`,
+    termError: (heard: string, error: string) => `Не удалось добавить «${heard}» в термины: ${error}`,
+    termFailed: (heard: string) =>
+      heard ? `Не получилось разобрать слово «${heard}» — добавь его в Настройках → Термины` : "Слово не расслышано — скажи «чао, запомни слово …» ещё раз",
     close: "Закрыть",
     copy: "Скопировать",
     copied: "Скопировано",
@@ -132,7 +137,7 @@ const ru = {
       context: "Контекст",
       contextHint: "О чём ты обычно говоришь — модель подстраивается.",
       terms: "Термины",
-      termsHint: "Слова, которые надо писать точно так. По одному в строке.",
+      termsHint: "Слова, которые надо писать точно так. По одному в строке. Или скажи во время диктовки «чао, запомни слово PostHog» — можно по буквам.",
       geminiNote: "Gemini сам определяет язык и не берёт контекст — только термины.",
     },
     appearance: {
@@ -317,6 +322,11 @@ const en: Strings = {
     saved: "Couldn't transcribe — the audio is saved in history",
     recovered: "The recording was cut short by a restart — here's what you said",
     recoveredSaved: "The recording was cut short by a restart — the audio is saved in history",
+    termAdded: (term: string) => `Added to your terms: ${term}`,
+    termKnown: (term: string) => `${term} is already in your terms`,
+    termError: (heard: string, error: string) => `Couldn't add “${heard}” to your terms: ${error}`,
+    termFailed: (heard: string) =>
+      heard ? `Couldn't make out “${heard}” — add it in Settings → Terms` : "Didn't catch the word — say “ciao, remember the word …” again",
     close: "Close",
     copy: "Copy",
     copied: "Copied",
@@ -395,7 +405,7 @@ const en: Strings = {
       context: "Context",
       contextHint: "What you usually talk about — the model adapts to it.",
       terms: "Terms",
-      termsHint: "Words to spell exactly as written. One per line.",
+      termsHint: "Words to spell exactly as written. One per line. Or say “ciao, remember the word PostHog” while dictating — spelling it out works too.",
       geminiNote: "Gemini detects the language itself and takes no context, only the terms.",
     },
     appearance: {

@@ -9,7 +9,7 @@ import { WavWriter, type HistoryStore } from "./history";
 import { pasteText } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
-import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
+import { endsWithStopPhrase, stripStopPhrase, stripWakeWord, takeRememberCommands, type RememberCommand } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
 import { revisePauses } from "../core/revision";
@@ -124,8 +124,15 @@ export class DictationController {
       idle: () => void;
       /** A dictation that was kept in history ended; for anonymous usage counts. */
       ended: (report: DictationReport) => void;
+      /** It said "чао, запомни слово …" (cut out of its text): add the terms. Called once its card shows `phase`. */
+      remember: (commands: RememberCommand[], settings: Settings, apiKey: string, phase: OverlayPhase) => void;
     },
   ) {}
+
+  /** The overlay's latest card: a later one than a caller saw means something else is showing. */
+  get lastSeq(): number {
+    return this.seq;
+  }
 
   // ── Keyboard and mouse ──────────────────────────────────────────────────
   // Right Ctrl and the middle mouse button share one state machine:
@@ -398,18 +405,22 @@ export class DictationController {
       entry.transcripts.push(t);
     };
 
-    let live = (a.final ?? a.liveText).trim();
-    if (a.stoppedByPhrase) live = stripStopPhrase(live);
-    if (a.wakeStarted) live = stripWakeWord(live);
+    // Voice commands come out of the text; those of the transcript that ends up used are carried out.
+    let commands: RememberCommand[] = [];
+    const strip = (raw: string) => {
+      const taken = takeRememberCommands(a.stoppedByPhrase ? stripStopPhrase(raw) : raw, a.wakeStarted);
+      commands = taken.commands;
+      // After the commands: a wake-word start begins with "Чао, запомни…".
+      return a.wakeStarted ? stripWakeWord(taken.text) : taken.text;
+    };
+    const live = strip((a.final ?? a.liveText).trim());
     if (live || a.final !== undefined) add("live", model.live, live);
 
     let text: string | null = a.final !== undefined ? live : null;
     if (text === null) {
       // The live transcript never completed: transcribe the saved file instead.
       try {
-        text = (await transcribeFile(a.apiKey, WavWriter.readPcm(this.deps.store.audioPath(entry.id)), settings)).trim();
-        if (a.stoppedByPhrase) text = stripStopPhrase(text);
-        if (a.wakeStarted) text = stripWakeWord(text);
+        text = strip((await transcribeFile(a.apiKey, WavWriter.readPcm(this.deps.store.audioPath(entry.id)), settings)).trim());
         add("retry-file", model.file, text);
       } catch (e) {
         entry.error = t().errors.fileFailed(a.offline ?? t().errors.noFinalText, (e as Error).message);
@@ -451,6 +462,7 @@ export class DictationController {
         this.active = null;
         this.deps.idle();
         this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
+        if (commands.length) this.deps.remember(commands, settings, a.apiKey, "empty");
         return;
       }
       entry.status = entry.error ? "failed" : "done";
@@ -489,6 +501,7 @@ export class DictationController {
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     });
+    if (commands.length) this.deps.remember(commands, settings, a.apiKey, phase);
   }
 
   private ended(a: Active, outcome: DictationOutcome): void {
