@@ -218,7 +218,9 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
  * codes, see core/gemini.ts.
  */
 async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
-  const { vertexProject } = await geminiEndpoint(apiKey);
+  const { vertexProject } = await geminiEndpoint(apiKey).catch(() => {
+    throw new Error(t().errors.cannotReach("Gemini"));
+  });
   if (vertexProject) return transcribeFileVertex(apiKey, vertexProject, pcm, settings);
   const config: Record<string, unknown> = {};
   if (settings.smart) config.mode = "smart";
@@ -296,8 +298,10 @@ async function transcribeFileVertex(apiKey: string, project: string, pcm: Buffer
     if (!res.ok) throw new Error(first?.error?.message ?? t().errors.status("Gemini", res.status));
     const candidate = first?.candidates?.[0];
     // No candidate (a blocked prompt) or one cut short: say so rather than pass for silence.
-    if (!candidate || (candidate.finishReason && candidate.finishReason !== "STOP"))
-      throw new Error(t().errors.status("Gemini", candidate?.finishReason ?? first?.promptFeedback?.blockReason ?? res.status));
+    if (!candidate || (candidate.finishReason && candidate.finishReason !== "STOP")) {
+      const why = candidate?.finishReason ?? first?.promptFeedback?.blockReason;
+      throw new Error(why ? t().errors.status("Gemini", why) : t().errors.noFinalText);
+    }
     const text = (candidate.content?.parts ?? []).map((p) => p.text ?? "").join("");
     texts.push(text.trim());
   }

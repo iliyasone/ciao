@@ -223,8 +223,8 @@ object FileTranscriber {
                     val finish = candidate?.optString("finishReason").orEmpty()
                     // No candidate (a blocked prompt) or one cut short: say so rather than pass for silence.
                     if (candidate == null || (finish.isNotEmpty() && finish != "STOP")) {
-                        val why = finish.ifEmpty { first.optJSONObject("promptFeedback")?.optString("blockReason").orEmpty().ifEmpty { it.code.toString() } }
-                        throw IOException(context.getString(R.string.error_status_text, GeminiSession.NAME, why))
+                        val why = finish.ifEmpty { first.optJSONObject("promptFeedback")?.optString("blockReason").orEmpty() }
+                        throw IOException(if (why.isEmpty()) context.getString(R.string.error_provider, GeminiSession.NAME) else context.getString(R.string.error_status_text, GeminiSession.NAME, why))
                     }
                     val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
                     texts.add((0 until parts.length()).joinToString("") { i -> parts.optJSONObject(i)?.optString("text") ?: "" }.trim())
