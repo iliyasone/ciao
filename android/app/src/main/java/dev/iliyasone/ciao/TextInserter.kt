@@ -21,14 +21,19 @@ object TextInserter {
      * only if that is refused. Either action returning true counts as done: Chrome and WebViews
      * update their accessibility tree later, so reading the text back would look like a miss and
      * insert twice.
+     *
+     * A field whose text may be an unflagged hint gets its cursor moved past the first character or
+     * to the end, and back, first (see [isHint]); [restoreClipboard] off: a paste may leave the transcript on the
+     * clipboard, so a field with text always gets one.
      */
-    /** [restoreClipboard] off: a paste may leave the transcript on the clipboard, so a field with text always gets one. */
     fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String, restoreClipboard: Boolean = true): Boolean {
         if (!node.refresh() || !node.isEditable) return false
-        val (current, before, piece, after) = place(
-            node.text?.toString().orEmpty(), node.hintText?.toString(), node.isShowingHintText,
-            node.textSelectionStart, node.textSelectionEnd, transcript,
-        )
+        val shown = node.text?.toString().orEmpty()
+        val hint = node.hintText?.toString()
+        val start = node.textSelectionStart
+        val end = node.textSelectionEnd
+        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node, shown)
+        val (current, before, piece, after) = place(shown, hint, showingHint, start, end, transcript)
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         // Only plain text can be put back: a copied image or file is a content:// URI whose read
@@ -44,13 +49,7 @@ object TextInserter {
             return paste(context, node, piece, saved)
         }
         val caret = before.length + piece.length
-        node.performAction(
-            AccessibilityNodeInfo.ACTION_SET_SELECTION,
-            Bundle().apply {
-                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, caret)
-                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, caret)
-            },
-        )
+        select(node, caret, caret)
         return true
     }
 
@@ -75,6 +74,45 @@ object TextInserter {
         val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + transcript
         return Placement(current, before, piece, current.substring(end))
     }
+
+    /**
+     * Whether [shown] may be a hint the app reports as the field's text without saying so: the field
+     * doesn't flag it, and its cursor is at the very start, where an empty field has it. Placed as
+     * text, the hint would end up after the dictation.
+     */
+    fun mayBeHint(shown: String, hint: String?, selStart: Int, selEnd: Int): Boolean =
+        shown.isNotEmpty() && shown != hint && selStart == 0 && selEnd == 0
+
+    /**
+     * Asks the field to put its cursor after its first character, then at the end of [shown]. A hint
+     * has nothing behind it, so a TextView refuses both; real text accepts one (a Compose field with a
+     * prefix maps the first into it and refuses), and the cursor goes back to 0. An empty TextView
+     * doesn't even list ACTION_SET_SELECTION, but it still answers it.
+     *
+     * Only text views are asked (Compose and Flutter text fields report themselves as EditText): a
+     * custom editor may refuse for reasons of its own, and taking its text for a hint would replace
+     * it. Chrome's aren't either: it flags its hints, and moves the cursor asynchronously, out of
+     * order with a paste.
+     */
+    private fun isHint(node: AccessibilityNodeInfo, shown: String): Boolean {
+        if (node.className?.toString() !in TEXT_VIEWS || node.extras.containsKey("AccessibilityNodeInfo.chromeRole")) return false
+        if (!select(node, 1, 1) && !select(node, shown.length, shown.length)) return true
+        select(node, 0, 0)
+        return false
+    }
+
+    private val TEXT_VIEWS = setOf(
+        "android.widget.EditText", "android.widget.TextView",
+        "android.widget.AutoCompleteTextView", "android.widget.MultiAutoCompleteTextView",
+    )
+
+    private fun select(node: AccessibilityNodeInfo, start: Int, end: Int) = node.performAction(
+        AccessibilityNodeInfo.ACTION_SET_SELECTION,
+        Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end)
+        },
+    )
 
     /** Pastes [text], then puts back [saved] (what was on the clipboard), if Android let us read it. */
     private fun paste(context: Context, node: AccessibilityNodeInfo, text: String, saved: ClipData?): Boolean {
