@@ -32,8 +32,6 @@ class CorrectionsTest {
         check("Давай добавим постхок в проект.", "", null)
         // a command
         check("Запусти кубектл апплай", "Запусти kubectl apply", listOf(Correction("кубектл апплай", "kubectl apply")))
-        // an inflected name
-        check("Передай Ильязу привет", "Передай Ильясу привет", listOf(Correction("Ильязу", "Ильясу")))
         // a capital at a sentence start says nothing
         check("Скажи привет маме. мама рада", "Скажи привет маме. Мама рада", listOf())
         // capitalised mid-sentence

@@ -816,7 +816,7 @@ class CiaoService : AccessibilityService() {
         val shown = node.text?.toString().orEmpty()
         val text = if (node.isShowingHintText || shown == node.hintText?.toString()) "" else shown
         // null: sent, deleted or rewritten.
-        val found = Corrections.find(w.text, text) ?: return stopAndOfferSent(w)
+        val found = Corrections.find(w.text, text) ?: return stopAndOfferSent(w, text)
         w.sent = null
         val fresh = newFor(w, found)
         val before = w.seen
@@ -837,11 +837,12 @@ class CiaoService : AccessibilityService() {
 
     /**
      * The text left the field. Sent quickly after a fix, its corrections never got a second read: what
-     * the text held just before it went (or, without that, what the last read found) is final.
+     * the text held just before it went (or, without that, what the last read found, if the field is
+     * now empty: other text there means another field, maybe mid-word) is final.
      */
-    private fun stopAndOfferSent(w: Watch) {
+    private fun stopAndOfferSent(w: Watch, now: String) {
         val last = w.sent?.let { Corrections.find(w.text, it) }?.let { newFor(w, it) } ?: emptyList()
-        val waiting = newFor(w, w.seen.values.toList())
+        val waiting = if (now.isBlank()) newFor(w, w.seen.values.toList()) else emptyList()
         stopWatch()
         (last + waiting).firstOrNull()?.let { suggest(it) }
     }

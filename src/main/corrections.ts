@@ -44,6 +44,8 @@ export class CorrectionWatcher {
       input: InputHelper;
       /** Words not to offer: the terms, and suggestions the user turned down. */
       known: () => string[];
+      /** The text on the clipboard now. */
+      clipboard: () => Promise<string>;
       suggest: (c: Correction) => void;
     },
   ) {
@@ -83,9 +85,12 @@ export class CorrectionWatcher {
     const p = this.pending;
     if (p && kind === "paste") {
       if (Date.now() > p.until) return this.stop();
-      void this.deps.input.foreground().then((f) => {
+      void (async () => {
+        // Something else pasted: not our text, not our business.
+        if ((await this.deps.clipboard()) !== p.text) return;
+        const f = await this.deps.input.foreground();
         if (this.pending === p && f) this.pasted(p.text, f.hwnd);
-      });
+      })();
       return;
     }
     const w = this.watch;
@@ -125,8 +130,9 @@ export class CorrectionWatcher {
     const found = findCorrections(w.text, field);
     if (found === null) {
       // Sent, deleted or rewritten. Sent right after a fix (a Send button, no Enter), a correction
-      // seen once had no second read to confirm it: the text it was in is what went out.
-      for (const c of w.seen.values()) this.offer(w, c);
+      // seen once had no second read to confirm it: the text it was in is what went out. Other text
+      // in the field means another field, and the word there may have been half typed.
+      if (!field.trim()) for (const c of w.seen.values()) this.offer(w, c);
       if (this.watch === w) this.stop();
       return;
     }

@@ -251,6 +251,11 @@ export class DictationController {
     this.deps.delivered(text, r?.delivery === "pasted" ? target!.hwnd : null);
   }
 
+  /** The latest dictation's text was edited in History: Paste last pastes that. */
+  setLastText(text: string): void {
+    this.lastText = text;
+  }
+
   /** Test hook: plays a recording through the whole pipeline in real time (no mic, no paste). */
   async replay(pcm: Buffer): Promise<void> {
     if (this.active) return;

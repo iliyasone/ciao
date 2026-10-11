@@ -470,6 +470,7 @@ export function Overlay() {
   const hovered = useRef(false);
   const dragging = useRef(false);
   const card = useRef<HTMLDivElement>(null);
+  const gripPressedAt = useRef(0);
   // Hovering makes the card see-through (to read what's under it); scrolling or dragging it means
   // you want the card itself, so it turns solid again until the pointer leaves.
   const [peek, setPeek] = useState(false);
@@ -490,7 +491,9 @@ export function Overlay() {
       ciao.overlay.onRevise((seq, t, gapMs) => dispatch({ type: "revise", seq, text: t, at: performance.now(), gapMs })),
       ciao.overlay.onFinal((seq, t) => dispatch({ type: "final", seq, text: t })),
       ciao.overlay.onPill(setPill),
-      ciao.overlay.onSuggest((s) => setSuggestions((list) => [...list, s])),
+      ciao.overlay.onSuggest((s) =>
+        setSuggestions((list) => (list.some((x) => x.fixed.toLowerCase() === s.fixed.toLowerCase()) ? list : [...list, s])),
+      ),
       ciao.capture.onStart((seq) => void startCapture(seq)),
       ciao.capture.onStop((seq) => void stopCapture(seq)),
       ciao.wake.onEnable((on) => void setWake(on)),
@@ -685,7 +688,11 @@ export function Overlay() {
 
         {/* The whole card drags; the grip shows that it can, and a double-click on it puts the card back. Corner: width and height. */}
         <div
-          onDoubleClick={() => ciao.overlay.resetPlacement()}
+          // Only a double-click that began here: the pill sat on this spot, and its click starts the card.
+          onPointerDown={() => (gripPressedAt.current = Date.now())}
+          onDoubleClick={() => {
+            if (Date.now() - gripPressedAt.current < 600) ciao.overlay.resetPlacement();
+          }}
           title={tr.gripTitle}
           className="absolute -bottom-2.5 left-1/2 flex h-5 w-16 -translate-x-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
         >

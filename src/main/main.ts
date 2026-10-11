@@ -385,6 +385,8 @@ function registerIpc(): void {
       entry.transcripts.push({ id: `t${entry.transcripts.length + 1}`, source: "edited", model: "you", text, createdAt: new Date().toISOString(), costUsd: 0 });
       store.save(entry);
       notifyChanged(entry);
+      // Paste last pastes the fixed text of the latest dictation.
+      if (store.list()[0]?.id === entry.id) dictation.setLastText(text);
     }
     return { entry, suggestions: newTerms(findCorrections(before, text) ?? [], knownWords()) };
   });
@@ -482,6 +484,7 @@ void app.whenReady().then(() => {
   corrections = new CorrectionWatcher({
     input,
     known: knownWords,
+    clipboard: async () => clipboard.readText(),
     suggest: (c) => {
       if (settings.learnCorrections) overlay.suggest({ id: ++suggestionId, ...c });
     },
