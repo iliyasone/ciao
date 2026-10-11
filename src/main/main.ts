@@ -3,11 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, session, shell, systemPreferences, Tray } from "electron";
-import { DELAYS, type HistoryEntry, type Provider, type RetryMode, type Settings, type UpdateState } from "../core/types";
+import { DELAYS, type HistoryEntry, type Provider, type RetryMode, type Settings, type TermSuggestion, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { models, PROVIDERS } from "../core/providers";
 import { setLang, t } from "../core/i18n";
 import { arrangeTerms, termsOf, type Local } from "../core/sync";
+import { findCorrections, newTerms } from "../core/corrections";
+import { CorrectionWatcher } from "./corrections";
 import { acceleratorParts } from "../core/triggers";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
@@ -132,6 +134,8 @@ let input: InputHelper;
 let overlay: OverlayWindow;
 let dictation: DictationController;
 let sync: GoogleSync;
+let corrections: CorrectionWatcher;
+let suggestionId = 0;
 const wake = new WakeWord();
 const telemetry = new Telemetry(() => Telemetry.allowed() && settings?.telemetry !== false);
 let historyWin: BrowserWindow | null = null;
@@ -203,6 +207,8 @@ function applySettings(next: Settings): void {
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   if (prev.provider !== next.provider) pool.refill();
+  overlay.setPill(next.overlayPill);
+  if (!next.learnCorrections) corrections?.stop();
   // No detector in this build (macOS for now): keep the mic closed rather than listen for nothing.
   const wakeWord = next.wakeWord && WakeWord.available();
   wake.setEnabled(wakeWord);
@@ -260,6 +266,31 @@ function buildTrayMenu(): void {
       { label: s.quit, click: () => app.quit() },
     ]),
   );
+}
+
+/** Adds a corrected word to the terms (first, so it's easy to find), unless it is one already. */
+function addTerm(term: string): void {
+  const t = term.trim();
+  if (!t || settings.keywords.some((k) => k.trim().toLowerCase() === t.toLowerCase())) return;
+  console.log("term added from a correction");
+  applySettings({ ...settings, keywords: [t, ...settings.keywords] });
+  // The Settings page shows the terms as it last read them (and may be saving an edit of them):
+  // it adds the word to its own list.
+  historyWin?.webContents.send("settings:term-added", t);
+}
+
+/** `hwnd` (as the input helper names windows: a pid on macOS) is one of Ciao's windows. */
+function isOwnWindow(hwnd: number): boolean {
+  if (MAC) return hwnd === process.pid;
+  return BrowserWindow.getAllWindows().some((w) => {
+    const h = w.getNativeWindowHandle();
+    return Number(h.length >= 8 ? h.readBigUInt64LE(0) : h.readUInt32LE(0)) === hwnd;
+  });
+}
+
+/** Words the user corrected, before they become suggestions: not terms already, not turned down before. */
+function knownWords(): string[] {
+  return [...settings.keywords, ...settings.dismissedTerms];
 }
 
 /** The key for the provider in use. */
@@ -341,16 +372,41 @@ function registerIpc(): void {
   ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());
   ipcMain.handle("overlay:copy", (_e, text: string) => clipboard.writeText(text));
   ipcMain.on("overlay:open-history", () => openHistory());
+  ipcMain.on("overlay:pill-click", () => dictation.onPillClick());
+  ipcMain.on("overlay:region", (_e, rects: Electron.Rectangle[]) => overlay.setRegion(rects));
+  ipcMain.on("overlay:busy", (_e, on: boolean) => overlay.setBusy(on));
+  ipcMain.on("overlay:answer", (_e, s: TermSuggestion, add: boolean) => {
+    if (add) addTerm(s.fixed);
+    else applySettings({ ...settings, dismissedTerms: [s.fixed.toLowerCase(), ...settings.dismissedTerms.filter((d) => d !== s.fixed.toLowerCase())].slice(0, 200) });
+  });
 
   ipcMain.handle("history:list", () => store.list());
   ipcMain.handle("history:remove", (_e, id: string) => store.delete(id));
   ipcMain.handle("history:retry", (_e, id: string, mode: RetryMode, provider?: Provider) => retry(id, mode, provider));
   ipcMain.handle("history:copy", (_e, text: string) => clipboard.writeText(text));
   ipcMain.handle("history:open-folder", (_e, id?: string) => shell.openPath(id ? path.dirname(store.audioPath(id)) : store.dir));
+  /** `base`: the transcript the user edited (History shows any of them). */
+  ipcMain.handle("history:edit", (_e, id: string, base: string, text: string) => {
+    const entry = store.get(id);
+    if (!entry) throw new Error(t().errors.entryNotFound);
+    const before = entry.transcripts.find((x) => x.id === base)?.text ?? entry.transcripts.at(-1)?.text ?? "";
+    if (text !== before) {
+      entry.transcripts.push({ id: `t${entry.transcripts.length + 1}`, source: "edited", model: "you", text, createdAt: new Date().toISOString(), costUsd: 0 });
+      store.save(entry);
+      notifyChanged(entry);
+      // Paste last pastes the fixed text of the latest dictation.
+      if (store.list()[0]?.id === entry.id) dictation.setLastText(text);
+    }
+    return { entry, suggestions: newTerms(findCorrections(before, text) ?? [], knownWords()) };
+  });
+  ipcMain.handle("history:add-term", (_e, term: string) => addTerm(term));
 
   ipcMain.handle("settings:get", () => settings);
   ipcMain.handle("settings:set", (_e, next: Settings) => {
-    applySettings({ ...settings, ...next });
+    // The page sends everything it read; what changes outside it (dragging the card, answering a
+    // suggestion) is this process's.
+    const { overlayAnchor, overlayWidth, overlayLines, dismissedTerms } = settings;
+    applySettings({ ...settings, ...next, overlayAnchor, overlayWidth, overlayLines, dismissedTerms });
     return settings;
   });
   ipcMain.handle("settings:has-key", (_e, provider: Settings["provider"]) => loadApiKey(provider) !== null);
@@ -429,10 +485,19 @@ void app.whenReady().then(() => {
   overlay = new OverlayWindow(
     PRELOAD,
     RENDERER,
-    () => ({ position: settings.overlayPosition, cardWidth: settings.overlayWidth }),
-    (p) => applySettings({ ...settings, overlayPosition: p.position, overlayWidth: p.cardWidth }),
+    () => ({ anchor: settings.overlayAnchor, cardWidth: settings.overlayWidth, lines: settings.overlayLines }),
+    (p) => applySettings({ ...settings, overlayAnchor: p.anchor, overlayWidth: p.cardWidth, overlayLines: p.lines }),
+    settings.overlayPill,
   );
   input = new InputHelper(settings.triggers);
+  corrections = new CorrectionWatcher({
+    input,
+    known: knownWords,
+    clipboard: async () => clipboard.readText(),
+    suggest: (c) => {
+      if (settings.learnCorrections) overlay.suggest({ id: ++suggestionId, ...c });
+    },
+  });
   dictation = new DictationController({
     store,
     pool,
@@ -443,6 +508,13 @@ void app.whenReady().then(() => {
     changed: notifyChanged,
     idle: () => wake.reset(),
     ended: (report) => telemetry.capture("dictation", { ...report }),
+    delivered: (text, hwnd) => {
+      if (!settings.learnCorrections) return;
+      if (hwnd === null) corrections.onClipboard(text);
+      else corrections.pasted(text, hwnd);
+    },
+    started: () => corrections.stop(),
+    isOwnWindow,
   });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
   input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));

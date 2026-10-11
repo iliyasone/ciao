@@ -12,6 +12,11 @@
 //   drop the ⌘V silently.
 // - The event tap needs the Accessibility permission. Until it is granted the helper reports
 //   {"type":"permission","accessibility":false} and retries every 2 s; then it reports true.
+// - "field" answers "unsupported" without Accessibility. Chromium and Electron apps expose their
+//   fields only to an assistive client that asks, so the first read in such an app turns that on
+//   (AXManualAccessibility) and, if nothing showed yet, tries once more a moment later.
+// - "key" events: "paste" is ⌘V or ⌘⇧V, by the key where QWERTY has V (so it holds in the Russian
+//   layout too); Enter is Return or the keypad's Enter.
 
 import AppKit
 import ApplicationServices
@@ -147,6 +152,9 @@ var captureMods = Set<String>()
 var loneModifier: String?
 var swallowKeyUp: String?
 var swallowMouseUp: String?
+var watching = false
+/// The app whose field Enter reads while watching (0: none).
+var watchPid: pid_t = 0
 
 func setTriggers(_ specs: [String]) {
     triggers = specs.compactMap { spec in
@@ -290,7 +298,32 @@ let tapCallback: CGEventTapCallBack = { _, type, event, _ in
     default:
         break
     }
+    // A key down we pass on is the user's own: triggers, captures and an armed Esc were swallowed above.
+    if watching && type == .keyDown && !swallow { reportKey(event) }
     return swallow ? nil : Unmanaged.passUnretained(event)
+}
+
+/// While watching: what kind of key the user pressed, so src/main/corrections.ts knows they are editing.
+func reportKey(_ event: CGEvent) {
+    if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return }
+    let code = event.getIntegerValueField(.keyboardEventKeycode)
+    let flags = event.flags
+    if code == 36 || code == 76 { // Return, keypad Enter
+        // Read before the app gets the Enter: a chat app sends and clears the field on it. Tightly
+        // bounded, as macOS disables a tap whose callback is slow.
+        // Only the watched app's field: Enter anywhere else is none of Ciao's business.
+        var text: String?
+        if watchPid != 0, let pid = frontmost()?.processIdentifier, pid == watchPid {
+            let reader = AXReader(budget: 0.15)
+            _ = askForAccessibility(pid, reader)
+            text = readField(pid: pid, reader).text
+        }
+        emit(["type": "key", "kind": "enter", "text": text])
+    } else if code == 9 && flags.contains(.maskCommand) && !flags.contains(.maskControl) && !flags.contains(.maskAlternate) {
+        emit(["type": "key", "kind": "paste"])
+    } else {
+        emit(["type": "key", "kind": "other"])
+    }
 }
 
 func installTap() -> Bool {
@@ -344,6 +377,115 @@ func sendPaste() {
     }
 }
 
+// MARK: - Field text ("field", and Enter while watching)
+
+/// Longer than this it is a log or a document rather than a message, and copying it costs too much.
+let maxFieldLength = 100_000
+let textRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox"]
+var manualAccessibilityAsked = Set<pid_t>()
+let manualAccessibilityLock = NSLock()
+/// "field" reads run here, off the main run loop: that one also runs the event tap, and a read that
+/// waits on a slow app there would hold up every key press on the Mac.
+let axQueue = DispatchQueue(label: "ciao.ax")
+
+struct AXTimeout: Error {}
+
+/// Accessibility calls into another app, all sharing one deadline: each call blocks until the app
+/// answers, and a hung app would otherwise hold the helper (and with it the event tap) for seconds.
+struct AXReader {
+    let deadline: Date
+
+    init(budget: TimeInterval) { deadline = Date().addingTimeInterval(budget) }
+
+    func bound(_ element: AXUIElement) throws {
+        let left = deadline.timeIntervalSinceNow
+        if left <= 0 { throw AXTimeout() }
+        AXUIElementSetMessagingTimeout(element, Float(left))
+    }
+
+    /// The attribute's value, nil if the element has none.
+    func get(_ element: AXUIElement, _ name: String) throws -> CFTypeRef? {
+        try bound(element)
+        var value: CFTypeRef?
+        let error = AXUIElementCopyAttributeValue(element, name as CFString, &value)
+        if error == .cannotComplete { throw AXTimeout() }
+        return error == .success ? value : nil
+    }
+}
+
+/// Chromium and Electron apps build their accessibility tree only once an assistive client asks for
+/// it. (AXEnhancedUserInterface does it too, but breaks their window animations.) True when this call
+/// just turned it on in such an app: its fields show up a moment later.
+func askForAccessibility(_ pid: pid_t, _ reader: AXReader) -> Bool {
+    manualAccessibilityLock.lock()
+    let done = manualAccessibilityAsked.contains(pid)
+    manualAccessibilityLock.unlock()
+    guard !done else { return false }
+    let app = AXUIElementCreateApplication(pid)
+    guard (try? reader.bound(app)) != nil else { return false }
+    let error = AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    if error == .cannotComplete { return false } // the app was busy: ask again next time
+    manualAccessibilityLock.lock()
+    manualAccessibilityAsked.insert(pid)
+    manualAccessibilityLock.unlock()
+    return error == .success
+}
+
+/// The text of the focused editable field in the app `pid`, or why there is none (see "field" in Program.cs).
+func readField(pid: pid_t, _ reader: AXReader) -> (text: String?, reason: String?) {
+    guard AXIsProcessTrusted() else { return (nil, "unsupported") }
+    do {
+        // The app's own focused element: the system-wide one often comes back empty for Electron apps.
+        guard let ref = try reader.get(AXUIElementCreateApplication(pid), kAXFocusedUIElementAttribute),
+              CFGetTypeID(ref) == AXUIElementGetTypeID() else { return (nil, "no-field") }
+        let field = ref as! AXUIElement
+        let role = try reader.get(field, kAXRoleAttribute) as? String ?? ""
+        let subrole = try reader.get(field, kAXSubroleAttribute) as? String ?? ""
+        if role == "AXSecureTextField" || subrole == "AXSecureTextField" { return (nil, "no-field") }
+        if !textRoles.contains(role) {
+            // Some other element that holds text (a web page, a list): only if its text can be edited.
+            try reader.bound(field)
+            var settable: DarwinBoolean = false
+            if AXUIElementIsAttributeSettable(field, kAXValueAttribute as CFString, &settable) == .cannotComplete { throw AXTimeout() }
+            if !settable.boolValue { return (nil, "no-field") }
+        }
+        // The length first, so a terminal's scrollback is not copied over just to be dropped.
+        if let count = try reader.get(field, kAXNumberOfCharactersAttribute) as? Int, count > maxFieldLength {
+            return (nil, "too-long")
+        }
+        guard let text = try reader.get(field, kAXValueAttribute) as? String else { return (nil, "no-field") }
+        if text.utf16.count > maxFieldLength { return (nil, "too-long") }
+        return (text, nil)
+    } catch {
+        return (nil, "timeout")
+    }
+}
+
+/// Answers "field" (called on the main thread; the read itself runs on axQueue). In a Chromium or
+/// Electron app seen for the first time the tree may still be building, so an empty answer is
+/// retried once a moment later.
+func answerField(id: Int?, wanted: pid_t, retry: Bool) {
+    let front = frontmost()?.processIdentifier
+    if wanted != 0 && front != wanted {
+        emit(["id": id, "text": nil, "reason": "focus-changed"])
+        return
+    }
+    guard let pid = front else {
+        emit(["id": id, "text": nil, "reason": "no-field"])
+        return
+    }
+    axQueue.async {
+        let reader = AXReader(budget: 0.5)
+        let asked = AXIsProcessTrusted() && askForAccessibility(pid, reader)
+        let result = readField(pid: pid, reader)
+        if retry && asked && result.reason == "no-field" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { answerField(id: id, wanted: wanted, retry: false) }
+            return
+        }
+        if let text = result.text { emit(["id": id, "text": text]) } else { emit(["id": id, "text": nil, "reason": result.reason]) }
+    }
+}
+
 func handle(_ line: String) {
     guard let data = line.data(using: .utf8),
           let msg = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
@@ -375,6 +517,14 @@ func handle(_ line: String) {
         setTriggers(msg["list"] as? [String] ?? [])
     case "capture":
         if msg["on"] as? Bool ?? false { startCapture() } else { capturing = false }
+    case "field":
+        answerField(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
+    case "watch":
+        watching = msg["on"] as? Bool ?? false
+        watchPid = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0
+        // Turn a Chromium or Electron app's accessibility on now: the first Enter read has no time to wait for it.
+        let pid = watchPid
+        if watching && pid != 0 && AXIsProcessTrusted() { axQueue.async { _ = askForAccessibility(pid, AXReader(budget: 0.5)) } }
     default:
         break
     }

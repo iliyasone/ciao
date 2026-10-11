@@ -44,14 +44,46 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     *Settings → Voice*).
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
+- **A pill between dictations.** A small Ciao pill stays at the bottom of the
+  screen; the card unfolds out of it when you start and folds back when the text
+  is in. Click it to dictate hands-free (click the red dot on the card to
+  finish), drag it anywhere. The card then opens where the pill is, on that
+  screen, rather than on the screen under the pointer.
+  Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
+  appears and disappears.
 - **The card stays out of your way.**
   - Moving the pointer over it makes it see-through, so you can read what's
-    underneath; scroll it and it turns solid again.
-  - Drag the grip at its bottom edge to move it, and the corner to change its
-    width. Double-click the grip to put it back at the bottom centre.
-- **Pastes where you started.** The text goes into the window that was active when
-  you pressed the key. If you switched away, nothing is typed anywhere and the text
-  is left on the clipboard. After a successful paste, the clipboard is restored.
+    underneath; scroll it or start dragging it and it turns solid again.
+  - Drag it anywhere, also while you speak, and drag its top-right corner to
+    change its width and how many lines it shows before it scrolls.
+    Double-click the grip at its bottom edge to put it back at the bottom centre.
+- **Pastes where you finish.** The text goes into the window that is active when
+  you stop the dictation, so you can start talking, go to the window the text is
+  for, and stop there. If that window loses focus while the text is being
+  finished, nothing is typed anywhere and the text is left on the clipboard. After
+  a successful paste, the clipboard is restored.
+- **Learns the words you correct.** When you fix a misheard word in the pasted
+  text ("постхок" → "PostHog", "клод код" → "Claude Code"), Ciao offers to add it
+  to the terms, in a small card under its own name; one click and recognition
+  spells it right from then on (and on your other devices, with
+  [sync](#sync)). For that it reads the focused field of the window it pasted
+  into, for two minutes after the paste and only while that window is in front:
+  after you type in it, and as you press Enter (a chat app
+  sends and clears the field then). If the text went to the clipboard instead
+  (the window changed, or *Paste text right away* is off), the field you paste
+  it into yourself with Ctrl+V (⌘V) within a minute is watched the same way.
+  Only words that sound like what was heard and look like a term (Latin letters
+  in Russian speech, capitals, digits) are offered; rewrites, added sentences and
+  typo fixes are not. The text is compared on your computer and never stored or
+  sent. Fixing a dictation in the history (*Edit*) offers the corrected words too.
+  Turn it off in *Settings → Behavior → Suggest new words*.
+  - Reading a field makes a Chromium or Electron app (Chrome, VS Code, T3 Code,
+    Slack) turn its accessibility support on, as a screen reader would; it costs
+    that app some memory, and VS Code may ask once whether you use a screen
+    reader (answer *No*).
+  - Password fields are never read. Apps that don't expose their text to the
+    system's accessibility interface (some terminals, games) simply get no
+    suggestions; on Linux see [below](#linux).
 - **Paste the last transcript again** with **Alt+Shift+Z** (**Option+Shift+Z** on a Mac).
 - **Nothing is lost.**
   - Audio is written to disk while you speak.
@@ -266,7 +298,7 @@ How it differs from Windows:
   pointer. During a dictation Esc is held back from the app in front on X11, but
   on Wayland it gets through.
 - **X11** works fully: Ciao pastes with Ctrl+V (Ctrl+Shift+V in terminals) and
-  only into the window you started in.
+  only into the window that was in front when you finished.
 - **Wayland** gives no app a way to see which window is active, so the text is
   pasted into whatever is in front when you finish, always with Ctrl+V. To type
   it, Ciao needs a virtual keyboard through `/dev/uinput`; allow that once:
@@ -281,6 +313,13 @@ How it differs from Windows:
   bottom of the screen above everything. On a Wayland desktop Ciao restarts
   itself once at launch with `--ozone-platform=x11`; pass `--ozone-platform=…`
   yourself to choose otherwise.
+- **Learning corrected words** reads the field through AT-SPI, the desktop's
+  accessibility bus. GTK and Qt apps answer it; Chromium, Electron and Firefox
+  only once accessibility is switched on, for example with GNOME's
+  `gsettings set org.gnome.desktop.interface toolkit-accessibility true` (or a
+  screen reader running). Where nothing answers, Ciao just offers no words. On
+  Wayland there is no window to go by, so Ciao stays with the app that was in
+  front at its first look and doesn't read Enter.
 - The tray icon needs AppIndicator support (on GNOME, the *AppIndicator and
   KStatusNotifierItem Support* extension). *Start when you sign in* writes
   `~/.config/autostart/ciao.desktop`.
@@ -336,6 +375,10 @@ yours.
   (when it is scrolled to the bottom), so it stays smooth after many minutes; the
   whole text shows once you finish.
 - If the field won't take the text, it is copied to the clipboard instead.
+- If you then correct a misheard word in the field, a small Ciao card at the top
+  offers to add it to the terms, as on the desktop. For two minutes after the
+  insert the accessibility service is told about text changes and reads that
+  field (never a password field); the text is compared on the phone and dropped.
 - If the live connection drops, recording continues and the audio is sent to
   the file model (`gpt-transcribe`, or `gemini-3.5-transcribe`) when you finish.
   If that fails too (still offline), the card keeps the recording with a
@@ -397,7 +440,7 @@ add it once (pull the shade down twice, then the pencil); tapping it closes the
 shade and puts the last dictation into the field you were typing in, or onto the
 clipboard. What the desktop has and Android doesn't: the wake word, and what a
 phone has no use for (hotkeys, the card going see-through under the pointer,
-starting at sign-in: the service starts by itself).
+the pill between dictations, starting at sign-in: the service starts by itself).
 
 ### Updates on Android
 
@@ -486,7 +529,7 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `transcribed_by` (`live`; `file` when the live transcript failed and the saved
     audio was sent instead; `none` when nothing was transcribed, as on Esc);
   - how it was driven: `trigger` (the key or button that started it, such as
-    `RControlKey` or `MButton`, or `wake_word`), `ended_by` (release, press,
+    `RControlKey` or `MButton`, `wake_word`, or `pill` for a click on it), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
   - who transcribed it: `provider` (`openai` or `gemini`) and, with Gemini, `smart`
     (whether spoken corrections were applied);
@@ -501,7 +544,9 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `no-helper` / `timeout` / `unknown` when the input helper failed. On
     `focus-changed` there are also `switched_to_app` (the app in front instead, same list),
     `target_closed`, and `target_on_other_desktop` (true when you switched to another
-    virtual desktop; absent when Windows can't tell).
+    virtual desktop; absent when Windows can't tell). `target_moved` is true when
+    the window in front at the end was another one than at the start (the text
+    then goes to the one at the end).
 
 Each event carries a random install id from `telemetry-id` in the [data folder](#where-things-are-stored). It is
 not derived from your machine or accounts. No text, audio, window titles, prompts,
@@ -599,7 +644,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
-  `providers.ts` for which models each uses), PCM/WAV helpers, prices and shared types. It is
+  `providers.ts` for which models each uses), PCM/WAV helpers, prices, shared types,
+  and `corrections.ts`, which finds the words worth learning in a corrected text. It is
   meant to be reused as-is by other shells (a T3 Code integration, mobile).
 - `src/main/` — the Electron main process:
   - `dictation.ts` — the hotkey state machine and the pipeline;
@@ -607,19 +653,22 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `transcribe.ts` — live and file transcription;
   - `paste.ts` — clipboard-preserving paste;
   - `input.ts` — talks to the keyboard and paste helper of the system;
+  - `corrections.ts` — watches the field a dictation went into for corrections;
+  - `overlayWindow.ts` — the window of the pill and the card;
   - `updater.ts` — updates from GitHub Releases;
   - `sync.ts` — Google sign-in and syncing through Drive; the merging is in
     `src/core/sync.ts`.
 - `src/renderer/` — React 19 + Tailwind 4:
-  - `overlay/` — the live card and microphone capture;
+  - `overlay/` — the pill, the live card, the word suggestions and microphone capture;
   - `history/` — the history and settings window.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
-- `native/win-input/` — the Windows keyboard and paste helper (C#).
+- `native/win-input/` — the Windows keyboard and paste helper (C#); it also reads
+  the focused field through UI Automation (`FieldReader.cs`).
 - `src/linux-input/` — the Linux one, with the same protocol: evdev for the keys,
   X11 (libX11/libXtst through koffi) for the active window and Ctrl+V, uinput for
-  Ctrl+V on Wayland. Electron runs it as plain Node.
+  Ctrl+V on Wayland, and AT-SPI (libatspi) for the focused field. Electron runs it as plain Node.
 - `native/mac-input/` — the macOS one (Swift), same protocol: an event tap for
-  the keys, the frontmost app and ⌘V.
+  the keys, the frontmost app, ⌘V, and the Accessibility API for the focused field.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.
 - `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app), and
@@ -651,7 +700,9 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     `src/core/voiceCommands.ts`. Their unit test holds the TypeScript outputs, so
     change both together;
   - `Sync.kt` — the port of `src/core/sync.ts`, with the same kind of test;
-    `GoogleSync.kt` — sign-in and the Drive calls of `src/main/sync.ts`.
+    `GoogleSync.kt` — sign-in and the Drive calls of `src/main/sync.ts`;
+  - `Corrections.kt` — the port of `src/core/corrections.ts`, with the same kind
+    of test; `SuggestionView.kt` — the card offering a corrected word for the terms.
 
 `npm run typecheck` checks the desktop app. For Android you need JDK 17 and the
 Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds

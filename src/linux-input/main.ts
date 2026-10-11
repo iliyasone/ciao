@@ -9,11 +9,21 @@
 // - The active window, and the check that it is still in front before pasting, need X11. On a
 //   Wayland desktop "foreground" reports id 0 and the paste goes to whatever is in front.
 // - Ctrl+V is typed with XTest on X11 and with a uinput virtual keyboard on Wayland.
+// - "field" reads through AT-SPI (atspi.ts): "unsupported" without an accessibility bus. The app in
+//   front is the one owning the active X11 window, or on Wayland the one whose window says it is
+//   active. Chromium and Electron apps show their fields only with accessibility turned on for
+//   the desktop (GNOME: toolkit-accessibility, or a screen reader running); otherwise "no-field".
+// - "key" events: since keys come from evdev, the app gets them at the same time, so the text read
+//   on Enter may already be gone (null). "paste" goes by the key's position (where QWERTY has V).
+//   On Wayland the watched window has no id, so Enter reads nothing, and "field" sticks with the app
+//   its first read in a watch found in front: in any other app it answers "focus-changed".
+// - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
 //
 // Extra event: {"type":"status","reading":N,"denied":M} after every device scan.
 import readline from "node:readline";
+import { Atspi, type FieldResult } from "./atspi";
 import { Devices } from "./evdev";
-import { isLoneModifier, isModifier, KEY_ESC, keyName, modifierPrefix, modifiersMatch, modifiersOf, MOUSE_BUTTONS, parseTrigger, type Trigger } from "./keys";
+import { isLoneModifier, isModifier, KEY_ESC, keyName, modifierPrefix, modifiersMatch, modifiersOf, MOUSE_BUTTONS, parseTrigger, type Modifiers, type Trigger } from "./keys";
 import { DEVICE_NAME, Uinput } from "./uinput";
 import { X11 } from "./x11";
 
@@ -29,6 +39,9 @@ let capturing = false;
 const held = new Set<number>();
 const captureMods = new Set<number>();
 let loneModifier: number | null = null;
+let watching = false;
+/** The window whose field Enter reads while watching (0: none). */
+let watchWindow = 0;
 
 function setTriggers(specs: string[]): void {
   triggers = [];
@@ -61,7 +74,27 @@ function onKey(code: number, value: number): void {
   }
   if (!down || triggers.some((t) => t.key === code)) return;
   if (armed && code === KEY_ESC) return emit({ type: "escape" });
+  if (watching && !isModifier(code)) reportKey(code, mods);
   if (triggers.some((t) => t.active && isLoneModifier(t) && t.key !== code)) emit({ type: "other" });
+}
+
+// evdev codes are positions: Ctrl+V is the key where QWERTY has V, so it holds in the Russian layout too.
+const KEY_V = 47;
+const KEY_INSERT = 110;
+const KEY_ENTER = 28;
+const KEY_KPENTER = 96;
+
+/** While watching: what kind of key the user pressed, so src/main/corrections.ts knows they are editing. */
+function reportKey(code: number, m: Modifiers): void {
+  if (code === KEY_ENTER || code === KEY_KPENTER) {
+    // The app gets the Enter at the same time as we do and a chat app sends and clears the field on
+    // it, so this read races it: kept short, and null when it lost.
+    // Only the watched window's field: Enter in any other app is none of Ciao's business.
+    const text = watchWindow !== 0 ? readField(watchWindow, 150).text : null;
+    return emit({ type: "key", kind: "enter", text });
+  }
+  const paste = (code === KEY_V && m.ctrl && !m.alt && !m.win) || (code === KEY_INSERT && m.shift && !m.ctrl && !m.alt && !m.win);
+  emit({ type: "key", kind: paste ? "paste" : "other" });
 }
 
 function onMouse(button: string, down: boolean): void {
@@ -130,6 +163,51 @@ try {
 const uinput = wayland || !x11 ? Uinput.open(koffi) : null;
 if (wayland && !uinput) log("no write access to /dev/uinput: dictations stay on the clipboard");
 
+// ── The focused field ─────────────────────────────────────────────────────
+
+let atspi: Atspi | null | undefined; // connected on the first read, so a user who never needs it never connects
+/** Wayland: the app the first read of this watch found in front; a read in another app is "focus-changed". */
+let watchApp: number | null = null;
+
+/** See "field" in Program.cs; `budget` in ms. */
+function readField(hwnd: number, budget: number): FieldResult | { text: null; reason: "focus-changed" } {
+  let pid: number | null = null;
+  if (!wayland && x11) {
+    const front = x11.activeWindow();
+    if (hwnd !== 0 && front !== hwnd) return { text: null, reason: "focus-changed" };
+    pid = x11.pid(front);
+  }
+  connectAtspi();
+  if (!atspi) return { text: null, reason: "unsupported" };
+  let r: FieldResult;
+  try {
+    r = atspi.focusedText(pid, budget);
+  } catch (e) {
+    // Not one of the expected misses (a decoding error, say): answer rather than die.
+    log(`reading the field: ${(e as Error).message}`);
+    return { text: null, reason: "no-field" };
+  }
+  // Wayland names no window: stay with the app the watch began in, never read on in another one.
+  if (wayland && watching) {
+    watchApp ??= atspi.appPid;
+    if (atspi.appPid !== watchApp) return { text: null, reason: "focus-changed" };
+  }
+  return r;
+}
+
+/** Connects once, at the first watch or read: an Enter read can't wait for the accessibility bus. */
+function connectAtspi(): void {
+  if (atspi === undefined) {
+    try {
+      atspi = Atspi.open(koffi);
+      if (!atspi) log("no accessibility bus: Ciao can't read text fields");
+    } catch (e) {
+      atspi = null;
+      log(`AT-SPI unavailable: ${(e as Error).message}`);
+    }
+  }
+}
+
 // Terminals paste with Ctrl+Shift+V; Ctrl+V there is a control character.
 const TERMINALS = new Set([
   "gnome-terminal-server", "kgx", "ptyxis", "konsole", "yakuake", "kitty", "alacritty", "wezterm-gui", "foot", "ghostty",
@@ -172,6 +250,14 @@ function handle(msg: Record<string, unknown>): void {
     case "capture":
       if (msg.on === true) startCapture();
       else capturing = false;
+      return;
+    case "field":
+      return emit({ id, ...readField(typeof msg.hwnd === "number" ? msg.hwnd : 0, 700) });
+    case "watch":
+      watching = msg.on === true;
+      watchWindow = typeof msg.hwnd === "number" ? msg.hwnd : 0;
+      watchApp = null;
+      if (watching) connectAtspi();
       return;
   }
 }

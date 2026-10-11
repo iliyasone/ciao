@@ -36,11 +36,22 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     });
     void ciao.settings.wakeAvailable().then(setWakeAvailable);
     // Terms and context merged from another device replace what's shown here.
-    return ciao.settings.onSynced((synced) => {
+    const offSynced = ciao.settings.onSynced((synced) => {
       if (!latest.current) return;
       latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt, syncKeys: synced.syncKeys };
       setS(latest.current);
     });
+    // A word added from a suggestion joins the list as shown, so terms being typed aren't lost.
+    const offAdded = ciao.settings.onTermAdded((term) => {
+      const cur = latest.current;
+      if (!cur || cur.keywords.some((k) => k.trim().toLowerCase() === term.toLowerCase())) return;
+      latest.current = { ...cur, keywords: [term, ...cur.keywords] };
+      setS(latest.current);
+    });
+    return () => {
+      offSynced();
+      offAdded();
+    };
   }, []);
 
   const update = (patch: Partial<Settings>, debounce = false) => {
@@ -123,6 +134,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           <Toggle label={tr.behaviour.autoPaste} hint={tr.behaviour.autoPasteHint} value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
           <Toggle label={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
           <Toggle label={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
+          <Toggle label={tr.behaviour.pill} hint={tr.behaviour.pillHint} value={s.overlayPill} onChange={(v) => update({ overlayPill: v })} />
+          <Toggle label={tr.behaviour.learn} hint={tr.behaviour.learnHint} value={s.learnCorrections} onChange={(v) => update({ learnCorrections: v })} />
           <Toggle label={tr.behaviour.openAtLogin} value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
           <Toggle label={tr.behaviour.telemetry} hint={tr.behaviour.telemetryHint} value={s.telemetry} onChange={(v) => update({ telemetry: v })} />
         </Card>

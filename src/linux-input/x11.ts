@@ -96,9 +96,14 @@ export class X11 {
     return this.number(this.root, "_NET_ACTIVE_WINDOW") ?? 0;
   }
 
+  /** The process that owns the window, as it says itself; null if it doesn't. */
+  pid(window: number): number | null {
+    return window ? this.number(window, "_NET_WM_PID") : null;
+  }
+
   describe(window: number): WindowInfo {
     const title = this.property(window, "_NET_WM_NAME") ?? this.property(window, "WM_NAME");
-    const pid = this.number(window, "_NET_WM_PID");
+    const pid = this.pid(window);
     return { id: window, title: typeof title === "string" ? title : "", process: pid ? processName(pid) : "" };
   }
 

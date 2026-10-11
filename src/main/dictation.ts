@@ -39,7 +39,7 @@ const VOICE_LEVEL = 600;
 export interface DictationReport {
   outcome: DictationOutcome;
   duration_s: number;
-  /** The trigger spec that started it ("RControlKey", "MButton", "Ctrl+Alt+Space") or "wake_word". */
+  /** The trigger spec that started it ("RControlKey", "MButton", "Ctrl+Alt+Space"), "wake_word" or "pill" (a click on it). */
   trigger: string;
   ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
   hands_free: boolean;
@@ -59,6 +59,8 @@ export interface DictationReport {
   paste_miss?: string;
   /** focus-changed: the app in front instead, whether the target window was closed or left on another desktop. */
   switched_to_app?: string;
+  /** The text went to the window in front when the dictation was stopped, not the one it was started in. */
+  target_moved?: boolean;
   target_closed?: boolean;
   target_on_other_desktop?: boolean;
 }
@@ -73,6 +75,9 @@ interface Active {
   startedAt: number;
   releasedAt?: number;
   target: Promise<ForegroundWindow | null>;
+  /** The window in front when the dictation was stopped: where the text goes (see stop()). */
+  stopTarget?: Promise<ForegroundWindow | null>;
+  targetMoved?: boolean;
   phase: "recording" | "finishing";
   shown: boolean;
   liveText: string;
@@ -124,6 +129,12 @@ export class DictationController {
       idle: () => void;
       /** A dictation that was kept in history ended; for anonymous usage counts. */
       ended: (report: DictationReport) => void;
+      /** The text was pasted into `hwnd`, or (null) left on the clipboard: watch for the user's corrections. */
+      delivered: (text: string, hwnd: number | null) => void;
+      /** A dictation started (whatever was being watched is done). */
+      started: () => void;
+      /** The window is one of Ciao's own (History, Settings). */
+      isOwnWindow: (hwnd: number) => boolean;
     },
   ) {}
 
@@ -148,6 +159,21 @@ export class DictationController {
       this.handsFree = true;
       this.push(a);
     } else {
+      this.stop();
+    }
+  }
+
+  /** A click on the pill: start a hands-free dictation, or finish the one running. */
+  onPillClick(): void {
+    const a = this.active;
+    if (!a) {
+      this.start(false, "pill");
+      const b = this.current();
+      if (!b) return;
+      this.handsFree = true;
+      b.shown = true; // a click is no shortcut to rule out
+      this.push(b);
+    } else if (a.phase === "recording") {
       this.stop();
     }
   }
@@ -224,6 +250,12 @@ export class DictationController {
     const target = await this.deps.input.foreground();
     const r = target ? await pasteText(this.deps.input, text, target.hwnd, this.deps.settings().restoreClipboard) : null;
     if (r?.delivery !== "pasted") await clipboard.writeText(text);
+    this.deps.delivered(text, r?.delivery === "pasted" ? target!.hwnd : null);
+  }
+
+  /** The latest dictation's text was edited in History: Paste last pastes that. */
+  setLastText(text: string): void {
+    this.lastText = text;
   }
 
   /** Test hook: plays a recording through the whole pipeline in real time (no mic, no paste). */
@@ -263,6 +295,7 @@ export class DictationController {
       this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint(PROVIDERS[settings.provider].name) });
       return;
     }
+    this.deps.started();
     const session = this.deps.pool.take()!;
     const { entry, wav } = this.deps.store.create();
     const a: Active = {
@@ -341,6 +374,9 @@ export class DictationController {
     a.handsFree = this.handsFree;
     a.endedBy = a.stoppedByPhrase ? "stop_phrase" : this.handsFree ? "press" : "release";
     a.shown = true;
+    // The text goes where you are when you stop, not where you started: people start talking, go to
+    // the window the text is for, and stop there (mostly across virtual desktops, by the usage counts).
+    a.stopTarget = this.deps.input.foreground();
     this.deps.input.arm(false);
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
     this.push(a);
@@ -458,17 +494,19 @@ export class DictationController {
     } else {
       this.lastText = text;
       this.deps.overlay.final(a.seq, text);
-      const target = await a.target;
+      const target = await this.target(a);
       if (a.replay) {
         delivery = "none";
       } else if (settings.autoPaste && target) {
         const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
         delivery = r.delivery;
         if (r.delivery === "clipboard") a.miss = r.miss;
+        this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
         await clipboard.writeText(text);
         delivery = "clipboard";
         a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };
+        this.deps.delivered(text, null);
       }
       entry.status = "done";
       phase = delivery === "clipboard" ? "clipboard" : "done";
@@ -489,6 +527,21 @@ export class DictationController {
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     });
+  }
+
+  /**
+   * The window in front when the dictation was stopped, else the one it was started in (when there
+   * was none to tell, see InputHelper.foreground, or it is Ciao's own: opening Settings mid-dictation
+   * must not paste it all into the terms). Recorded in history as the dictation's window.
+   */
+  private async target(a: Active): Promise<ForegroundWindow | null> {
+    const start = await a.target;
+    let stop = a.stopTarget ? await a.stopTarget : null;
+    if (stop && this.deps.isOwnWindow(stop.hwnd)) stop = null;
+    if (!stop || !start || stop.hwnd === start.hwnd) return stop ?? start;
+    a.targetMoved = true;
+    a.entry.target = { title: stop.title, process: stop.process };
+    return stop;
   }
 
   private ended(a: Active, outcome: DictationOutcome): void {
@@ -515,6 +568,7 @@ export class DictationController {
       switched_to_app: miss?.foregroundProcess ? appLabel(miss.foregroundProcess) : undefined,
       target_closed: miss?.targetExists === undefined ? undefined : !miss.targetExists,
       target_on_other_desktop: miss?.targetOnCurrentDesktop === undefined ? undefined : !miss.targetOnCurrentDesktop,
+      target_moved: a.targetMoved,
     });
   }
 

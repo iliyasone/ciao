@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, Check, ClipboardCheck, Copy, FolderOpen, Loader2, Pause, Play, RotateCcw, Search, Sparkles, Trash2, X,
+  AlertTriangle, Check, ClipboardCheck, Copy, FolderOpen, Loader2, Pause, PencilLine, Play, Plus, RotateCcw, Search, Sparkles, Trash2, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCost } from "../../core/cost";
@@ -231,6 +231,10 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
   const via = picked && keyed.includes(picked) ? picked : inSettings && !keyed.includes(inSettings) && keyed.length ? keyed[0]! : inSettings;
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** The text being edited; null when not editing. */
+  const [draft, setDraft] = useState<{ base: string; text: string } | null>(null);
+  /** Words corrected in the last edit, offered for the terms; added ones are marked. */
+  const [offered, setOffered] = useState<{ heard: string; fixed: string; added?: boolean }[]>([]);
   const strings = useStrings();
   const tr = strings.history;
 
@@ -262,7 +266,36 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
         <span className="ml-auto tabular-nums text-ghost">{formatCost(entryCost(entry))}</span>
       </div>
 
-      {current?.text ? (
+      {draft !== null ? (
+        <div>
+          <textarea
+            autoFocus
+            value={draft.text}
+            onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setDraft(null);
+            }}
+            rows={Math.min(12, Math.max(3, draft.text.split("\n").length + 1))}
+            className="selectable w-full resize-y rounded-xl bg-tint/5 px-3 py-2 text-[14.5px] leading-[1.55] text-fg outline-none ring-1 ring-tint/10 focus:ring-tint/25"
+          />
+          <div className="mt-1 flex gap-1">
+            <button
+              onClick={async () => {
+                const { entry: updated, suggestions } = await ciao.history.edit(entry.id, draft.base, draft.text);
+                setDraft(null);
+                setShown(updated.transcripts.at(-1)?.id ?? null);
+                setOffered(suggestions);
+              }}
+              className="rounded-lg bg-tint/10 px-2.5 py-1 text-[12.5px] font-medium text-fg hover:bg-tint/15"
+            >
+              {tr.save}
+            </button>
+            <button onClick={() => setDraft(null)} className="rounded-lg px-2.5 py-1 text-[12.5px] text-muted hover:bg-tint/8 hover:text-fg">
+              {tr.cancel}
+            </button>
+          </div>
+        </div>
+      ) : current?.text ? (
         <p
           onClick={() => setExpanded((x) => !x)}
           className={`selectable cursor-text text-[14.5px] leading-[1.55] whitespace-pre-wrap text-fg ${expanded ? "" : "line-clamp-4"}`}
@@ -271,6 +304,27 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
         </p>
       ) : (
         <p className="text-[13.5px] text-faint italic">{tr.noText}</p>
+      )}
+
+      {offered.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]">
+          <span className="text-faint">{tr.addTerms}</span>
+          {offered.map((o) => (
+            <button
+              key={o.fixed}
+              disabled={o.added}
+              title={`${o.heard} → ${o.fixed}`}
+              onClick={async () => {
+                await ciao.history.addTerm(o.fixed);
+                setOffered((list) => list.map((x) => (x.fixed === o.fixed ? { ...x, added: true } : x)));
+              }}
+              className="inline-flex items-center gap-1 rounded-md bg-tint/8 px-2 py-0.5 font-medium text-fg hover:bg-tint/12 disabled:bg-emerald-400/10 disabled:text-emerald-700 dark:disabled:text-emerald-300"
+            >
+              {o.added ? <Check className="size-3" /> : <Plus className="size-3" />}
+              {o.fixed}
+            </button>
+          ))}
+        </div>
       )}
 
       {(entry.error || error) && <p className="mt-1.5 text-[12px] text-amber-700 dark:text-amber-300/90">{error?.message ?? entry.error}</p>}
@@ -316,6 +370,16 @@ function EntryCard({ entry, services, onRemoved }: { entry: HistoryEntry; servic
             await ciao.history.copy(current!.text);
             setCopied(true);
             setTimeout(() => setCopied(false), 1200);
+          }}
+        />
+        <Action
+          icon={PencilLine}
+          label={tr.edit}
+          title={tr.editTitle}
+          disabled={!current?.text || draft !== null}
+          onClick={() => {
+            setOffered([]);
+            setDraft({ base: current!.id, text: current!.text });
           }}
         />
         <Action icon={busy === "file" ? Loader2 : Sparkles} spin={busy === "file"} label={tr.retryFile} title={tr.retryFileTitle} disabled={busy !== null || !via} onClick={() => retry("file")} />

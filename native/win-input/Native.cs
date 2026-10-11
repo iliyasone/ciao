@@ -119,7 +119,21 @@ static class Native
         public void Dispose() => UnhookWindowsHookEx(_hook);
     }
 
-    static bool Down(Keys k) => (GetAsyncKeyState((int)k) & 0x8000) != 0;
+    public static bool Down(Keys k) => (GetAsyncKeyState((int)k) & 0x8000) != 0;
+
+    [DllImport("kernel32.dll")]
+    static extern uint WaitForSingleObject(IntPtr handle, uint ms);
+
+    /// <summary>
+    /// Waits up to <paramref name="ms"/> for the task without pumping messages. A managed wait on the STA hook
+    /// thread would pump, and a pumped hook call would re-enter the handler halfway through.
+    /// </summary>
+    public static void WaitBriefly(Task task, int ms)
+    {
+        if (task.IsCompleted) return;
+        var handle = ((IAsyncResult)task).AsyncWaitHandle;
+        WaitForSingleObject(handle.SafeWaitHandle.DangerousGetHandle(), (uint)ms);
+    }
 
     /// <summary>Modifier state as the system sees it (keys we swallowed are not included).</summary>
     public static Modifiers CurrentModifiers() =>
