@@ -42,7 +42,7 @@ class TextInserterTest {
     @Test
     fun suspectsAnUnflaggedHintOnlyWithTheCursorAtTheStart() {
         assertEquals(true, TextInserter.mayBeHint("Message", null, 0, 0))
-        assertEquals(true, TextInserter.mayBeHint("Message", null, -1, -1))
+        assertEquals(false, TextInserter.mayBeHint("Message", null, -1, -1))
         assertEquals(true, TextInserter.mayBeHint("Сообщение", "Message", 0, 0))
         assertEquals(false, TextInserter.mayBeHint("Message", "Message", 0, 0))
         assertEquals(false, TextInserter.mayBeHint("Hello", null, 5, 5))
@@ -56,11 +56,13 @@ class TextInserterTest {
     /**
      * What insert() hands the app: the text it sets, or the clipboard at the moment it pastes. The field
      * really holds [holds] characters: like a TextView, it refuses a selection past them, or one it
-     * already has.
+     * already has, and lists ACTION_SET_SELECTION only while it holds some. [canSelect] off: a custom
+     * view that doesn't move its cursor.
      */
     private fun insert(
         shown: String, hint: String?, start: Int, end: Int, transcript: String,
         holds: Int = shown.length, canSelect: Boolean = true, chrome: Boolean = false,
+        className: String = "android.widget.EditText",
     ): String? {
         var real = holds
         var selection = start to end
@@ -74,7 +76,8 @@ class TextInserterTest {
             text = shown
             hintText = hint
             setTextSelection(start, end)
-            if (canSelect) addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION)
+            this.className = className
+            if (canSelect && holds > 0) addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION)
             if (chrome) extras.putString("AccessibilityNodeInfo.chromeRole", "textField")
         }
         shadowOf(node).setOnPerformActionListener { action, args ->
@@ -110,22 +113,29 @@ class TextInserterTest {
 
     @Test
     fun aHintTheAppDoesNotFlagStaysOut() {
-        // The field shows "Message" as its text, with no hint and the cursor at 0, but holds nothing.
+        // The field shows "Message" as its text, with no hint and the cursor at 0, but holds nothing,
+        // so (as a TextView does) it doesn't even list ACTION_SET_SELECTION.
         assertEquals("Привет", insert("Message", null, 0, 0, "Привет", holds = 0))
-        assertEquals("Привет", insert("Message", null, -1, -1, "Привет", holds = 0))
         assertEquals("Привет", insert("Сообщение", "Message", 0, 0, "Привет", holds = 0))
     }
 
     @Test
     fun realTextWithTheCursorAtTheStartStays() {
         assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, "))
-        // The probe selected the first character and put the cursor back, then it went after the dictation.
-        assertEquals(listOf(0 to 1, 0 to 0, 6 to 6), selections)
+        // The probe moved the cursor past the first character and back, then after the dictation.
+        assertEquals(listOf(1 to 1, 0 to 0, 6 to 6), selections)
         // Shown text longer than what the field holds (a chip, say) is still real text.
         assertEquals("Well, Hello @Ann", insert("Hello @Ann", null, 0, 0, "Well, ", holds = 7))
         assertEquals("Hello world", insert("Hello", null, -1, -1, "world"))
-        // A field that can't move its cursor tells us nothing: its text is kept.
-        assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, ", canSelect = false))
+        // A custom field that can't move its cursor tells us nothing: its text is kept.
+        assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, ", canSelect = false, className = "com.example.Editor"))
+        // With the cursor unknown it isn't probed, and a paste can't replace a probe's selection.
+        val clipboard = RuntimeEnvironment.getApplication().getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText("user", "copied"))
+        assertEquals("paste: world", insert("Hello", null, -1, -1, "world"))
+        assertEquals(listOf<Pair<Int, Int>>(), selections)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+        clipboard.clearPrimaryClip()
         // Nor is Chrome's text probed: it flags its hints.
         assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, ", chrome = true))
         assertEquals(listOf(6 to 6), selections)

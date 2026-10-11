@@ -22,8 +22,8 @@ object TextInserter {
      * update their accessibility tree later, so reading the text back would look like a miss and
      * insert twice.
      *
-     * A field whose text may be an unflagged hint gets its first character selected and the cursor
-     * put back first (see [isHint]); [restoreClipboard] off: a paste may leave the transcript on the
+     * A field whose text may be an unflagged hint gets its cursor moved past the first character and
+     * back first (see [isHint]); [restoreClipboard] off: a paste may leave the transcript on the
      * clipboard, so a field with text always gets one.
      */
     fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String, restoreClipboard: Boolean = true): Boolean {
@@ -32,7 +32,7 @@ object TextInserter {
         val hint = node.hintText?.toString()
         val start = node.textSelectionStart
         val end = node.textSelectionEnd
-        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node, start, end)
+        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node)
         val (current, before, piece, after) = place(shown, hint, showingHint, start, end, transcript)
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
@@ -77,26 +77,31 @@ object TextInserter {
 
     /**
      * Whether [shown] may be a hint the app reports as the field's text without saying so: the field
-     * doesn't flag it, and its cursor is at the very start (an empty field's) or unknown. Placed as
-     * text, the hint would end up after the dictation, or before it.
+     * doesn't flag it, and its cursor is at the very start, where an empty field has it. Placed as
+     * text, the hint would end up after the dictation.
      */
     fun mayBeHint(shown: String, hint: String?, selStart: Int, selEnd: Int): Boolean =
-        shown.isNotEmpty() && shown != hint && selStart == selEnd && selStart <= 0
+        shown.isNotEmpty() && shown != hint && selStart == 0 && selEnd == 0
 
     /**
-     * Asks the field to select its first character. A hint has nothing behind it, so a text view (or
-     * a Compose field) refuses a selection past its real, empty text; real text accepts, and the
-     * cursor goes back where it was. A field that can't move its cursor tells us nothing, so its
-     * text stays text; so does Chrome's, which flags its hints and moves the cursor asynchronously,
-     * out of order with a paste.
+     * Asks the field to put its cursor after its first character. A hint has nothing behind it, so a
+     * text view (or a Compose field) refuses; real text accepts, and the cursor goes back to 0.
+     *
+     * An empty TextView doesn't list ACTION_SET_SELECTION but still answers it, so a plain EditText
+     * (Telegram's, for one) is asked either way. Another field that doesn't list it may not answer
+     * at all, which tells us nothing, so its text stays text; so does Chrome's, which flags its hints
+     * and moves the cursor asynchronously, out of order with a paste.
      */
-    private fun isHint(node: AccessibilityNodeInfo, selStart: Int, selEnd: Int): Boolean {
-        if (AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION !in node.actionList) return false
+    private fun isHint(node: AccessibilityNodeInfo): Boolean {
         if (node.extras.containsKey("AccessibilityNodeInfo.chromeRole")) return false
-        if (!select(node, 0, 1)) return true
-        if (selStart >= 0 && selEnd >= 0) select(node, selStart, selEnd)
+        val listed = AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION in node.actionList
+        if (!listed && node.className?.toString() !in TEXT_VIEWS) return false
+        if (!select(node, 1, 1)) return true
+        select(node, 0, 0)
         return false
     }
+
+    private val TEXT_VIEWS = setOf("android.widget.EditText", "android.widget.TextView")
 
     private fun select(node: AccessibilityNodeInfo, start: Int, end: Int) = node.performAction(
         AccessibilityNodeInfo.ACTION_SET_SELECTION,
