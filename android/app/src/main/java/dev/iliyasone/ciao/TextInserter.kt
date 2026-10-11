@@ -32,7 +32,7 @@ object TextInserter {
         val hint = node.hintText?.toString()
         val start = node.textSelectionStart
         val end = node.textSelectionEnd
-        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node)
+        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node, shown)
         val (current, before, piece, after) = place(shown, hint, showingHint, start, end, transcript)
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
@@ -84,24 +84,27 @@ object TextInserter {
         shown.isNotEmpty() && shown != hint && selStart == 0 && selEnd == 0
 
     /**
-     * Asks the field to put its cursor after its first character. A hint has nothing behind it, so a
-     * text view (or a Compose field) refuses; real text accepts, and the cursor goes back to 0.
+     * Asks the field to put its cursor after its first character, then at the end of [shown]. A hint
+     * has nothing behind it, so a TextView refuses both; real text accepts one (a Compose field with a
+     * prefix maps the first into it and refuses), and the cursor goes back to 0. An empty TextView
+     * doesn't even list ACTION_SET_SELECTION, but it still answers it.
      *
-     * An empty TextView doesn't list ACTION_SET_SELECTION but still answers it, so a plain EditText
-     * (Telegram's, for one) is asked either way. Another field that doesn't list it may not answer
-     * at all, which tells us nothing, so its text stays text; so does Chrome's, which flags its hints
-     * and moves the cursor asynchronously, out of order with a paste.
+     * Only text views are asked (Compose and Flutter text fields report themselves as EditText): a
+     * custom editor may refuse for reasons of its own, and taking its text for a hint would replace
+     * it. Chrome's aren't either: it flags its hints, and moves the cursor asynchronously, out of
+     * order with a paste.
      */
-    private fun isHint(node: AccessibilityNodeInfo): Boolean {
-        if (node.extras.containsKey("AccessibilityNodeInfo.chromeRole")) return false
-        val listed = AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION in node.actionList
-        if (!listed && node.className?.toString() !in TEXT_VIEWS) return false
-        if (!select(node, 1, 1)) return true
+    private fun isHint(node: AccessibilityNodeInfo, shown: String): Boolean {
+        if (node.className?.toString() !in TEXT_VIEWS || node.extras.containsKey("AccessibilityNodeInfo.chromeRole")) return false
+        if (!select(node, 1, 1) && !select(node, shown.length, shown.length)) return true
         select(node, 0, 0)
         return false
     }
 
-    private val TEXT_VIEWS = setOf("android.widget.EditText", "android.widget.TextView")
+    private val TEXT_VIEWS = setOf(
+        "android.widget.EditText", "android.widget.TextView",
+        "android.widget.AutoCompleteTextView", "android.widget.MultiAutoCompleteTextView",
+    )
 
     private fun select(node: AccessibilityNodeInfo, start: Int, end: Int) = node.performAction(
         AccessibilityNodeInfo.ACTION_SET_SELECTION,

@@ -62,7 +62,7 @@ class TextInserterTest {
     private fun insert(
         shown: String, hint: String?, start: Int, end: Int, transcript: String,
         holds: Int = shown.length, canSelect: Boolean = true, chrome: Boolean = false,
-        className: String = "android.widget.EditText",
+        className: String = "android.widget.EditText", prefix: Int = 0,
     ): String? {
         var real = holds
         var selection = start to end
@@ -91,6 +91,8 @@ class TextInserterTest {
                     caret = args.getInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT)
                     val to = args.getInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT)
                     if (!canSelect || caret > real || to > real || selection == caret to to) return@setOnPerformActionListener false
+                    // A Compose field showing a [prefix] before its text maps a cursor inside it to 0.
+                    if (caret in 1..prefix && selection == 0 to 0) return@setOnPerformActionListener false
                     selection = caret to to
                     selections += selection
                 }
@@ -127,11 +129,17 @@ class TextInserterTest {
         // Shown text longer than what the field holds (a chip, say) is still real text.
         assertEquals("Well, Hello @Ann", insert("Hello @Ann", null, 0, 0, "Well, ", holds = 7))
         assertEquals("Hello world", insert("Hello", null, -1, -1, "world"))
-        // A custom field that can't move its cursor tells us nothing: its text is kept.
+        // A field with a prefix refuses the first cursor, not the one at the end.
+        assertEquals("Well, +7 900", insert("+7 900", null, 0, 0, "Well, ", prefix = 3))
+        assertEquals(listOf(6 to 6, 0 to 0, 6 to 6), selections)
+        // A custom editor isn't asked, even one that would refuse: its text is kept.
         assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, ", canSelect = false, className = "com.example.Editor"))
-        // With the cursor unknown it isn't probed, and a paste can't replace a probe's selection.
+        // With the clipboard to put back, the dictation is pasted where the probe left the cursor: at 0.
         val clipboard = RuntimeEnvironment.getApplication().getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newPlainText("user", "copied"))
+        assertEquals("paste:Well, ", insert("Hello", null, 0, 0, "Well, "))
+        assertEquals(listOf(1 to 1, 0 to 0), selections)
+        // With the cursor unknown there's no probe.
         assertEquals("paste: world", insert("Hello", null, -1, -1, "world"))
         assertEquals(listOf<Pair<Int, Int>>(), selections)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
