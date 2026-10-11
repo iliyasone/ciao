@@ -336,10 +336,11 @@ const READ_FIRST_MS: Partial<Record<OverlayPhase, number>> = { clipboard: 3800, 
 /**
  * "Чао, запомни слово …": adds each term the way an edit in Settings does (so Google sync sends
  * it) and says so on a card of its own, after the dictation's card (`phase`) has said its part,
- * unless the next dictation has started by then.
+ * unless another card (the next dictation) has come up by then.
  */
 async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: string, phase: OverlayPhase): Promise<void> {
   const shownAt = Date.now();
+  const seq = dictation.lastSeq;
   const terms = await Promise.all(commands.map(async (c) => ({ heard: c.heard, term: await resolveTerm(s.provider, apiKey, c) })));
   const messages: string[] = [];
   for (const { heard, term } of terms) {
@@ -351,13 +352,15 @@ async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: s
     const keywords = addTerm(settings.keywords, term);
     const known = keywords === settings.keywords;
     console.log("remember:", JSON.stringify(heard), "->", JSON.stringify(term), known ? "(known)" : "");
-    if (!known) applySettings({ ...settings, keywords });
+    if (!known) {
+      applySettings({ ...settings, keywords });
+      historyWin?.webContents.send("settings:synced", settings);
+    }
     messages.push(known ? t().overlay.termKnown(term) : t().overlay.termAdded(term));
   }
-  historyWin?.webContents.send("settings:synced", settings);
   const wait = shownAt + (READ_FIRST_MS[phase] ?? 0) - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  if (dictation.busy) return;
+  if (dictation.lastSeq !== seq) return;
   const now = Date.now();
   overlay.state({
     seq: dictation.nextSeq(),

@@ -8,7 +8,7 @@ import type { RememberCommand } from "./voiceCommands";
 // meant in Latin, or spelled letter by letter; a small text model of the same provider, with the
 // same key, writes it the usual way. Only the words of the command are sent.
 
-/** Fast and cheap text models: ~0.5 s, and both got every case of terms.test right (measured). */
+/** Fast and cheap text models: ~0.5 s, and both resolved every spelled and misheard case tried (PostHog, npm, WSL, Kubernetes). */
 export const TERM_MODELS: Record<Provider, string> = {
   openai: "gpt-5.4-mini",
   gemini: "gemini-3.5-flash-lite",
@@ -44,8 +44,10 @@ export function fallbackTerm(c: RememberCommand): string | null {
 
 /** The model's answer as a term: one line, without quotes or a final period ("A.I." keeps it); null if none. */
 export function cleanTerm(answer: string): string | null {
-  let term = answer.replace(/^[\s"'«“`]+|[\s"'»”`]+$/gu, "");
-  if (!/^(?:\p{L}\.)+$/u.test(term)) term = term.replace(/\.$/, "");
+  const unquote = (s: string) => s.replace(/^[\s"'«“`]+|[\s"'»”`]+$/gu, "");
+  let term = unquote(answer);
+  // «PostHog». → PostHog
+  if (!/^(?:\p{L}\.)+$/u.test(term)) term = unquote(term.replace(/\.$/, ""));
   return term && term.length <= MAX_TERM && !/[\r\n<>]/.test(term) ? term : null;
 }
 

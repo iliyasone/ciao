@@ -129,9 +129,9 @@ export class DictationController {
     },
   ) {}
 
-  /** A dictation is running (a card for something else would cover it). */
-  get busy(): boolean {
-    return this.active !== null;
+  /** The overlay's latest card: a later one than a caller saw means something else is showing. */
+  get lastSeq(): number {
+    return this.seq;
   }
 
   // ── Keyboard and mouse ──────────────────────────────────────────────────
@@ -408,7 +408,7 @@ export class DictationController {
     // Voice commands come out of the text; those of the transcript that ends up used are carried out.
     let commands: RememberCommand[] = [];
     const strip = (raw: string) => {
-      const taken = takeRememberCommands(a.stoppedByPhrase ? stripStopPhrase(raw) : raw);
+      const taken = takeRememberCommands(a.stoppedByPhrase ? stripStopPhrase(raw) : raw, a.wakeStarted);
       commands = taken.commands;
       // After the commands: a wake-word start begins with "Чао, запомни…".
       return a.wakeStarted ? stripWakeWord(taken.text) : taken.text;

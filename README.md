@@ -60,7 +60,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     nothing is added; without a network it keeps the word as heard, or says it
     couldn't make it out.
   - "Слово"/"термин"/"word"/"term" is needed: "чао, добавь тесты" or "чао,
-    запомни, что…" stays dictation.
+    запомни, что…" stays dictation. One term per command: for two, say it twice.
   - The term syncs like one typed in *Settings → Terms*. A term that differs only
     in case is replaced ("Posthog" becomes "PostHog").
 - **The card stays out of your way.**

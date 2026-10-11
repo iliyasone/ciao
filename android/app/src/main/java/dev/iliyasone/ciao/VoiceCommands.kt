@@ -19,14 +19,18 @@ object VoiceCommands {
     // into the term. (?U): \s takes Unicode spaces too, as in JS.
 
     // The noun is required: "Чао, добавь тесты" is dictation, not a command.
-    private val REMEMBER = Regex(
-        // "ао": a wake-word start may begin with the tail of "чао".
-        "(?iU)(?:^\\s*ао|(?<!\\p{L})$WORD)$SEP" +
-            "(?:запомни|запиши|добавь|remember|add)(?!\\p{L})" +
+    private const val VERB_AND_NOUN =
+        "(?:запомни|запиши|добавь|remember|add)(?!\\p{L})" +
             "(?:$SEP(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?" +
             "$SEP(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})" +
-            "(?:$SEP(?:по буквам|spelled|spelt))?",
-    )
+            // "добавь в словарь слово …"
+            "(?:$SEP(?:слово|термин|word|term)(?!\\p{L}))?" +
+            "(?:$SEP(?:по буквам|spelled|spelt))?"
+    // "ао": a wake-word start may begin with the tail of "чао", or with none of it.
+    private val REMEMBER = Regex("(?iU)(?:^\\s*ао|(?<!\\p{L})$WORD)$SEP$VERB_AND_NOUN")
+    private val REMEMBER_AFTER_WAKE = Regex("(?iU)(?:^\\s*(?:ао)?|(?<!\\p{L})$WORD)$SEP$VERB_AND_NOUN")
+    /** Where the term goes, said after it: "…слово PostHog в словарь", "…PostHog to my dictionary". */
+    private val DESTINATION = Regex("(?iU)^[\\s,]*(?:в|to)\\s+(?:(?:my|the)\\s+)?(?:словарь|термины|dictionary|vocabulary|terms|words)(?!\\p{L})")
 
     /** A word, a number or an identifier such as "Next.js", "C++" or "gpt-5". */
     private val TOKEN = Regex("[\\p{L}\\p{N}]+(?:[.+#_'’][\\p{L}\\p{N}]+)*[+#]*")
@@ -45,12 +49,12 @@ object VoiceCommands {
 
     /** Gaps between words in a spoken spelling; a sentence end anywhere else ends the term. */
     private val SPELLING_GAP = Regex("(?U)[\\s,.\\-–—:;]*")
-    private val SENTENCE_GAP = Regex("[,.!?…;:\\n]")
+    private val SENTENCE_GAP = Regex("[,.!?…;:\\n»\"”’)]")
     private val TRAILING = Regex("(?U)^[\\s,.!?…;:»\"”’)\\]]*")
     /** Words of a written-out term, at most this many: the rest of the sentence is dictation again. */
     private const val MAX_WORDS = 3
     /** Dictation goes on after the term ("…слово PostHog и запушь"). */
-    private val GOES_ON = "и а но или потом дальше это теперь and but or then now this".split(" ").toSet()
+    private val GOES_ON = "и а но или в потом дальше это теперь and but or to then now this".split(" ").toSet()
 
     /** "latin", "other" (Cyrillic), or null for a number. */
     private fun script(word: String): String? = when {
@@ -65,26 +69,30 @@ object VoiceCommands {
     /**
      * Finds "чао, запомни слово …" commands and removes them (with the term after each) from the
      * text. A command with nothing after it is removed too, and comes back with heard = "".
+     * [wakeStarted]: the text may begin with the command without the "чао" (Android has no wake
+     * word yet; kept for parity with the desktop).
      */
-    fun takeRememberCommands(text: String): Pair<String, List<RememberCommand>> {
+    fun takeRememberCommands(text: String, wakeStarted: Boolean = false): Pair<String, List<RememberCommand>> {
+        val re = if (wakeStarted) REMEMBER_AFTER_WAKE else REMEMBER
         val commands = mutableListOf<RememberCommand>()
         val out = StringBuilder()
         var from = 0
-        var m = REMEMBER.find(text)
+        var m = re.find(text)
         while (m != null) {
-            val (end, command) = readTerm(text, m.range.last + 1)
+            val (termEnd, command) = readTerm(text, m.range.last + 1)
             commands.add(command)
             out.append(text, from, m.range.first)
+            val end = termEnd + (DESTINATION.find(text.substring(termEnd))?.value?.length ?: 0)
             // The punctuation after the term goes with it.
             from = end + TRAILING.find(text.substring(end))!!.value.length
-            m = if (from < text.length) REMEMBER.find(text, from) else null
+            m = if (from < text.length) re.find(text, from) else null
         }
         if (commands.isEmpty()) return text to commands
         // The text went on after a command at its start: begin it with a capital.
         val capital = out.isBlank()
         val rest = out.append(text.substring(from)).toString()
             .replace(Regex("[ \\t]{2,}"), " ")
-            .replace(Regex("(?U)[\\s,;:—–-]+$"), "")
+            .replace(Regex("(?U)[\\s,;:—–\\-«\"„“(]+$"), "")
             .trim()
         return (if (capital) rest.replaceFirstChar { it.uppercaseChar() } else rest) to commands
     }

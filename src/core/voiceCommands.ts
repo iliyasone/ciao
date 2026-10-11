@@ -34,15 +34,18 @@ export function stripStopPhrase(text: string): string {
 
 // The noun is required: "Чао, добавь тесты" or "Чао, запомни: мы на pnpm" is dictation, not a command
 // (a wake-word start always begins with "Чао").
-const REMEMBER = new RegExp(
-  // "ао": a wake-word start may begin with the tail of "чао" (see stripWakeWord).
-  `(?:^\\s*ао|(?<!\\p{L})${WORD})${SEP}` +
-    `(?:запомни|запиши|добавь|remember|add)(?!\\p{L})` +
-    `(?:${SEP}(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?` +
-    `${SEP}(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})` +
-    `(?:${SEP}(?:по буквам|spelled|spelt))?`,
-  "iu",
-);
+const VERB_AND_NOUN =
+  `(?:запомни|запиши|добавь|remember|add)(?!\\p{L})` +
+  `(?:${SEP}(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?` +
+  `${SEP}(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})` +
+  // "добавь в словарь слово …"
+  `(?:${SEP}(?:слово|термин|word|term)(?!\\p{L}))?` +
+  `(?:${SEP}(?:по буквам|spelled|spelt))?`;
+// "ао": a wake-word start may begin with the tail of "чао" (see stripWakeWord), or with none of it.
+const REMEMBER = `(?:^\\s*ао|(?<!\\p{L})${WORD})${SEP}${VERB_AND_NOUN}`;
+const REMEMBER_AFTER_WAKE = `(?:^\\s*(?:ао)?|(?<!\\p{L})${WORD})${SEP}${VERB_AND_NOUN}`;
+/** Where the term goes, said after it: "…слово PostHog в словарь", "…PostHog to my dictionary". */
+const DESTINATION = /^[\s,]*(?:в|to)\s+(?:(?:my|the)\s+)?(?:словарь|термины|dictionary|vocabulary|terms|words)(?!\p{L})/iu;
 
 /** A word, a number or an identifier such as "Next.js", "C++" or "gpt-5". */
 const TOKEN = /[\p{L}\p{N}]+(?:[.+#_'’][\p{L}\p{N}]+)*[+#]*/gu;
@@ -68,7 +71,7 @@ const SPELLING_GAP = /^[\s,.\-–—:;]*$/u;
 /** Words of a written-out term, at most this many: the rest of the sentence is dictation again. */
 const MAX_WORDS = 3;
 /** Dictation goes on after the term ("…слово PostHog и запушь"). */
-const GOES_ON = new Set("и а но или потом дальше это теперь and but or then now this".split(" "));
+const GOES_ON = new Set("и а но или в потом дальше это теперь and but or to then now this".split(" "));
 /** "latin", "other" (Cyrillic), or null for a number. */
 const script = (word: string) => (/\p{Script=Latin}/u.test(word) ? "latin" : /\p{L}/u.test(word) ? "other" : null);
 
@@ -82,16 +85,19 @@ export interface RememberCommand {
 /**
  * Finds "чао, запомни слово …" commands and removes them (with the term after each) from the
  * text. A command with nothing after it is removed too, and comes back with heard = "".
+ * wakeStarted: the dictation was started by the wake word, so its text may begin with the command
+ * without the "чао" (the detector's audio can start after the word).
  */
-export function takeRememberCommands(text: string): { text: string; commands: RememberCommand[] } {
+export function takeRememberCommands(text: string, wakeStarted = false): { text: string; commands: RememberCommand[] } {
   const commands: RememberCommand[] = [];
   let out = "";
   let from = 0;
-  const re = new RegExp(REMEMBER.source, "giu");
+  const re = new RegExp(wakeStarted ? REMEMBER_AFTER_WAKE : REMEMBER, "giu");
   for (let m = re.exec(text); m; m = re.exec(text)) {
-    const { end, command } = readTerm(text, m.index + m[0].length);
-    commands.push(command);
+    const term = readTerm(text, m.index + m[0].length);
+    commands.push(term.command);
     out += text.slice(from, m.index);
+    const end = term.end + (DESTINATION.exec(text.slice(term.end))?.[0].length ?? 0);
     // The punctuation after the term goes with it.
     from = end + (/^[\s,.!?…;:»"”’)\]]*/u.exec(text.slice(end))?.[0].length ?? 0);
     re.lastIndex = from;
@@ -101,7 +107,7 @@ export function takeRememberCommands(text: string): { text: string; commands: Re
   const capital = !out.trim();
   out = (out + text.slice(from))
     .replace(/[ \t]{2,}/g, " ")
-    .replace(/[\s,;:—–-]+$/u, "")
+    .replace(/[\s,;:—–\-«"„“(]+$/u, "")
     .trim();
   return { text: capital ? out.charAt(0).toLocaleUpperCase("ru-RU") + out.slice(1) : out, commands };
 }
@@ -130,7 +136,7 @@ function readTerm(text: string, start: number): { end: number; command: Remember
     // Written out: the words up to a punctuation mark or the dictation going on…
     const first = script(word(0));
     const switches = (i: number) => script(word(i)) !== null && script(word(i)) !== first;
-    const goesOn = (i: number) => /[,.!?…;:\n]/u.test(gap(i)) || GOES_ON.has(word(i)) || switches(i);
+    const goesOn = (i: number) => /[,.!?…;:\n»"”’)]/u.test(gap(i)) || GOES_ON.has(word(i)) || switches(i);
     end = 1;
     while (end < tokens.length && end < MAX_WORDS && !goesOn(end)) end++;
     // …and maybe spelled right after ("PostHog, по буквам: пэ, о, эс, тэ…").

@@ -49,8 +49,10 @@ Answer with the term only, written the way it is normally written: the script, c
 
     /** The model's answer as a term: one line, without quotes or a final period ("A.I." keeps it); null if none. */
     fun clean(answer: String): String? {
-        var term = answer.replace(Regex("(?U)^[\\s\"'«“`]+|[\\s\"'»”`]+$"), "")
-        if (!Regex("(?:\\p{L}\\.)+").matches(term)) term = term.removeSuffix(".")
+        val quotes = Regex("(?U)^[\\s\"'«“`]+|[\\s\"'»”`]+$")
+        var term = answer.replace(quotes, "")
+        // «PostHog». → PostHog
+        if (!Regex("(?:\\p{L}\\.)+").matches(term)) term = term.removeSuffix(".").replace(quotes, "")
         return term.takeIf { it.isNotEmpty() && it.length <= MAX_TERM && it.none { ch -> ch in "\r\n<>" } }
     }
 

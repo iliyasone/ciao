@@ -12,6 +12,10 @@ class TermsTest {
     private fun check(text: String, rest: String, vararg commands: VoiceCommands.RememberCommand) =
         assertEquals(rest to commands.toList(), VoiceCommands.takeRememberCommands(text))
 
+    /** A dictation the wake word started: the command may come without its "чао". */
+    private fun checkWake(text: String, rest: String, vararg commands: VoiceCommands.RememberCommand) =
+        assertEquals(rest to commands.toList(), VoiceCommands.takeRememberCommands(text, wakeStarted = true))
+
     private fun terms(c: VoiceCommands.RememberCommand, plain: String?, fallback: String?) {
         assertEquals(plain, Terms.plain(c))
         assertEquals(fallback, Terms.fallback(c))
@@ -70,16 +74,38 @@ class TermsTest {
         terms(cmd("эн пэ эм", true), plain = null, fallback = null)
         check("Чао, добавь в термины Supabase", "", cmd("Supabase", false))
         terms(cmd("Supabase", false), plain = null, fallback = "Supabase")
+        check("Чао, добавь в словарь слово PostHog.", "", cmd("PostHog", false))
+        terms(cmd("PostHog", false), plain = "PostHog", fallback = "PostHog")
+        check("Чао, добавь в термины слово постхог", "", cmd("постхог", false))
+        terms(cmd("постхог", false), plain = null, fallback = "постхог")
+        check("Чао, добавь слово PostHog в словарь. Дальше.", "Дальше.", cmd("PostHog", false))
+        terms(cmd("PostHog", false), plain = "PostHog", fallback = "PostHog")
+        check("Ciao, add the word PostHog to my dictionary.", "", cmd("PostHog", false))
+        terms(cmd("PostHog", false), plain = "PostHog", fallback = "PostHog")
+        check("Ciao, add the term Kubernetes to the list and deploy", "To the list and deploy", cmd("Kubernetes", false))
+        terms(cmd("Kubernetes", false), plain = null, fallback = "Kubernetes")
+        check("Чао, добавь слово «срочно» в заголовок письма.", "В заголовок письма.", cmd("срочно", false))
+        terms(cmd("срочно", false), plain = null, fallback = "срочно")
+        check("Он сказал: «Чао, запомни слово мама»", "Он сказал", cmd("мама", false))
+        terms(cmd("мама", false), plain = null, fallback = "мама")
         check("Чао,\u00A0запомни слово\u00A0Posthog", "", cmd("Posthog", false))
         terms(cmd("Posthog", false), plain = null, fallback = "Posthog")
+        checkWake("Запомни слово PostHog.", "", cmd("PostHog", false))
+        check("Запомни слово PostHog.", "Запомни слово PostHog.")
+        checkWake("ао, запомни слово PostHog. Дальше", "Дальше", cmd("PostHog", false))
+        check("ао, запомни слово PostHog. Дальше", "Дальше", cmd("PostHog", false))
+        checkWake("Запомни слово PostHog, и дальше", "И дальше", cmd("PostHog", false))
+        check("Запомни слово PostHog, и дальше", "Запомни слово PostHog, и дальше")
     }
 
     @Test
     fun cleansAnswers() {
+        assertEquals("PostHog", Terms.clean("«PostHog»."))
+        assertEquals("PostHog", Terms.clean("“PostHog”."))
         assertEquals("A.I.", Terms.clean("A.I."))
         assertEquals("Next.js", Terms.clean("Next.js."))
         assertEquals("PostHog", Terms.clean("PostHog"))
-        assertEquals("PostHog»", Terms.clean(" «PostHog». "))
+        assertEquals("PostHog", Terms.clean(" «PostHog». "))
         assertEquals("npm", Terms.clean("\"npm\""))
         assertEquals(null, Terms.clean(""))
         assertEquals(null, Terms.clean("line\nbreak"))
