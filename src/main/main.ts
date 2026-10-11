@@ -8,6 +8,8 @@ import { costUsd } from "../core/cost";
 import { models, PROVIDERS } from "../core/providers";
 import { setLang, t } from "../core/i18n";
 import { arrangeTerms, termsOf, type Local } from "../core/sync";
+import { addTerm, resolveTerm } from "../core/terms";
+import type { RememberCommand } from "../core/voiceCommands";
 import { acceleratorParts } from "../core/triggers";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
@@ -328,6 +330,32 @@ async function showRecovered(entries: HistoryEntry[]): Promise<void> {
   }
 }
 
+/**
+ * "Чао, запомни слово …": adds each term the way an edit in Settings does (so Google sync sends
+ * it) and says so on a card of its own, unless the next dictation has started by then.
+ */
+async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: string): Promise<void> {
+  const terms = await Promise.all(commands.map(async (c) => ({ heard: c.heard, term: await resolveTerm(s.provider, apiKey, c) })));
+  const messages: string[] = [];
+  for (const { heard, term } of terms) {
+    if (term === null) {
+      console.warn("remember: no term in", JSON.stringify(heard));
+      messages.push(t().overlay.termFailed(heard));
+      continue;
+    }
+    const keywords = addTerm(settings.keywords, term);
+    const known = keywords === settings.keywords;
+    console.log("remember:", JSON.stringify(heard), "->", JSON.stringify(term), known ? "(known)" : "");
+    if (!known) applySettings({ ...settings, keywords });
+    messages.push(known ? t().overlay.termKnown(term) : t().overlay.termAdded(term));
+  }
+  historyWin?.webContents.send("settings:synced", settings);
+  if (dictation.busy) return;
+  const now = Date.now();
+  const phase = terms.some((x) => x.term !== null) ? "term" : "termFailed";
+  overlay.state({ seq: dictation.nextSeq(), phase, handsFree: false, startedAt: now, endedAt: now, showCost: false, costPerMinuteUsd: 0, offline: false, message: messages.join(" · ") });
+}
+
 function registerIpc(): void {
   ipcMain.on("wake:chunk", (_e, pcm: ArrayBuffer) => wake.feed(new Uint8Array(pcm)));
   ipcMain.on("capture:chunk", (_e, seq: number, pcm: ArrayBuffer) => dictation.onChunk(seq, new Uint8Array(pcm)));
@@ -443,6 +471,7 @@ void app.whenReady().then(() => {
     changed: notifyChanged,
     idle: () => wake.reset(),
     ended: (report) => telemetry.capture("dictation", { ...report }),
+    remember: (commands, s, apiKey) => void rememberTerms(commands, s, apiKey),
   });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
   input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));

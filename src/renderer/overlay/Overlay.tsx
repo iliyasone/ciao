@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { BookPlus, Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
@@ -201,7 +201,7 @@ function clock(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-const HIDE_AFTER: Partial<Record<OverlayState["phase"], number>> = { done: 450, clipboard: 3500, saved: 6000, empty: 0 };
+const HIDE_AFTER: Partial<Record<OverlayState["phase"], number>> = { done: 450, clipboard: 3500, saved: 6000, empty: 0, term: 3000, termFailed: 6000 };
 
 /**
  * Pointer drag on the grip (move) or the corner (resize). Offsets are sent relative to where the
@@ -321,6 +321,12 @@ export function Overlay() {
     case "recovered":
       icon = <RotateCcw className="size-4 text-amber-700 dark:text-amber-300" />;
       break;
+    case "term":
+      icon = <BookPlus className="size-4 text-emerald-700 dark:text-emerald-400" />;
+      break;
+    case "termFailed":
+      icon = <TriangleAlert className="size-4 text-amber-700 dark:text-amber-300" />;
+      break;
     default:
       icon = null;
   }
@@ -334,7 +340,9 @@ export function Overlay() {
       <span className="animate-pulse text-ghost">…</span>
     );
 
-  const showText = state.phase !== "empty" || text.final || text.settled || text.fresh.length;
+  // A card that only says something ("чао, запомни слово …"): no text, no clock.
+  const notice = state.phase === "term" || state.phase === "termFailed";
+  const showText = notice ? false : state.phase !== "empty" || text.final || text.settled || text.fresh.length;
 
   const withActions = state.phase === "recovered" || state.phase === "saved";
   const dismiss = () => {
@@ -378,7 +386,7 @@ export function Overlay() {
             {state.handsFree && state.phase === "recording" && <Lock className="size-3.5 text-faint" />}
             {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-700 dark:text-amber-300/80" />}
           </div>
-          <div className={`text-[13px] font-medium tracking-wide tabular-nums ${busy ? "text-faint" : "text-fg2"}`}>{clock(elapsed)}</div>
+          <div className={`text-[13px] font-medium tracking-wide tabular-nums ${busy ? "text-faint" : "text-fg2"}`}>{notice ? null : clock(elapsed)}</div>
           <div className="flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">
             {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
             {withActions && (
@@ -389,7 +397,9 @@ export function Overlay() {
           </div>
         </header>
         {showText ? <Scroller>{content}</Scroller> : null}
-        {state.message && <div className="mt-2 text-[12.5px] text-amber-700 dark:text-amber-200/90">{state.message}</div>}
+        {state.message && (
+          <div className={`mt-2 text-[12.5px] ${state.phase === "term" ? "text-fg2" : "text-amber-700 dark:text-amber-200/90"}`}>{state.message}</div>
+        )}
         {withActions && (
           <div className="mt-2.5 -ml-2 flex gap-1">
             {state.phase === "recovered" && text.final && (

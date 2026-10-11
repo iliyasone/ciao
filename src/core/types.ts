@@ -93,7 +93,9 @@ export type OverlayPhase =
   | "clipboard" // could not paste, text is on the clipboard
   | "saved" // could not transcribe, audio kept in history
   | "empty" // nothing was said
-  | "recovered"; // a dictation cut short by a restart, transcribed from its saved audio
+  | "recovered" // a dictation cut short by a restart, transcribed from its saved audio
+  | "term" // "чао, запомни слово …": the term was added (message says which)
+  | "termFailed"; // …or could not be made out
 
 export interface OverlayState {
   /** Increments per dictation, so stale renderer messages can be ignored. */

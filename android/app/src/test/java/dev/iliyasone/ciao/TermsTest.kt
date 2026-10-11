@@ -1,0 +1,81 @@
+package dev.iliyasone.ciao
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+// "Чао, запомни слово …": expected values are the output of takeRememberCommands in
+// src/core/voiceCommands.ts and of src/core/terms.ts on the same input, so the phone cuts the same
+// command out and adds the same term as the desktop app.
+class TermsTest {
+    private fun cmd(heard: String, spelled: Boolean) = VoiceCommands.RememberCommand(heard, spelled)
+
+    private fun check(text: String, rest: String, vararg commands: VoiceCommands.RememberCommand) =
+        assertEquals(rest to commands.toList(), VoiceCommands.takeRememberCommands(text))
+
+    private fun terms(c: VoiceCommands.RememberCommand, plain: String?, fallback: String?) {
+        assertEquals(plain, Terms.plain(c))
+        assertEquals(fallback, Terms.fallback(c))
+    }
+
+    @Test
+    fun matchesDesktop() {
+        check("Чао, запомни слово PostHog.", "", cmd("PostHog", false))
+        terms(cmd("PostHog", false), plain = "PostHog", fallback = "PostHog")
+        check("Сделай коммит. Чао, запомни слово PostHog. И запушь.", "Сделай коммит. И запушь.", cmd("PostHog", false))
+        terms(cmd("PostHog", false), plain = "PostHog", fallback = "PostHog")
+        check("Чао, запомни слово: пэ, о, эс, тэ, эйч, о, джи. Дальше текст.", "Дальше текст.", cmd("пэ, о, эс, тэ, эйч, о, джи", true))
+        terms(cmd("пэ, о, эс, тэ, эйч, о, джи", true), plain = null, fallback = null)
+        check("Ciao, remember the word P-O-S-T-H-O-G", "", cmd("P-O-S-T-H-O-G", true))
+        terms(cmd("P-O-S-T-H-O-G", true), plain = null, fallback = "POSTHOG")
+        check("ао, запомни слово Кубернетес", "", cmd("Кубернетес", false))
+        terms(cmd("Кубернетес", false), plain = null, fallback = "Кубернетес")
+        check("Открой файл, чао, добавь в термины Next.js, и сохрани", "Открой файл, и сохрани", cmd("Next.js", false))
+        terms(cmd("Next.js", false), plain = "Next.js", fallback = "Next.js")
+        check("Чао запомни слово пост хог, по буквам: P, O, S, T, H, O, G. Готово.", "Готово.", cmd("пост хог, по буквам: P, O, S, T, H, O, G", true))
+        terms(cmd("пост хог, по буквам: P, O, S, T, H, O, G", true), plain = null, fallback = null)
+        check("Чао, запомни.", "", cmd("", false))
+        terms(cmd("", false), plain = null, fallback = null)
+        check("Я сказал ей: запомни слово PostHog.", "Я сказал ей: запомни слово PostHog.")
+        check("Чао, запомни слово Claude Code и ещё что-то длинное потом", "И ещё что-то длинное потом", cmd("Claude Code", false))
+        terms(cmd("Claude Code", false), plain = null, fallback = "Claude Code")
+        check("Чао, запомни термин эн, пэ, эм. Чао, запомни слово Supabase.", "", cmd("эн, пэ, эм", true), cmd("Supabase", false))
+        terms(cmd("эн, пэ, эм", true), plain = null, fallback = null)
+        terms(cmd("Supabase", false), plain = null, fallback = "Supabase")
+        check("Чао, запомни слово P. O. S. T. Да.", "Да.", cmd("P. O. S. T", true))
+        terms(cmd("P. O. S. T", true), plain = null, fallback = "POST")
+        check("Чао, запомни слово PostHog это важно", "Это важно", cmd("PostHog", false))
+        terms(cmd("PostHog", false), plain = "PostHog", fallback = "PostHog")
+        check("Чао, запомни слово gpt-5 mini.", "", cmd("gpt-5 mini", false))
+        terms(cmd("gpt-5 mini", false), plain = null, fallback = "gpt-5 mini")
+        check("iPhone тоже, чао, запомни слово Expo.", "iPhone тоже", cmd("Expo", false))
+        terms(cmd("Expo", false), plain = null, fallback = "Expo")
+        check("Чао, запомни слово по буквам: N P M. А потом проверь сборку.", "А потом проверь сборку.", cmd("N P M", true))
+        terms(cmd("N P M", true), plain = null, fallback = "NPM")
+        check("Чао, запомни слово: эн. пэ. эм.", "", cmd("эн. пэ. эм", true))
+        terms(cmd("эн. пэ. эм", true), plain = null, fallback = null)
+        check("Чао, запомни слово по буквам: N P M, а потом проверь сборку.", "А потом проверь сборку.", cmd("N P M", true))
+        terms(cmd("N P M", true), plain = null, fallback = "NPM")
+        check("Чао, запомни: пэ, о, эс, тэ, эйч, о, джи и всё", "И всё", cmd("пэ, о, эс, тэ, эйч, о, джи", true))
+        terms(cmd("пэ, о, эс, тэ, эйч, о, джи", true), plain = null, fallback = null)
+        check("Чао, add term Claude Code then go", "Then go", cmd("Claude Code", false))
+        terms(cmd("Claude Code", false), plain = null, fallback = "Claude Code")
+        check("Чао,\u00A0запомни слово\u00A0Posthog", "", cmd("Posthog", false))
+        terms(cmd("Posthog", false), plain = null, fallback = "Posthog")
+    }
+
+    @Test
+    fun cleansAnswers() {
+        assertEquals("PostHog", Terms.clean("PostHog"))
+        assertEquals("PostHog", Terms.clean(" «PostHog». "))
+        assertEquals("npm", Terms.clean("\"npm\""))
+        assertEquals(null, Terms.clean(""))
+        assertEquals(null, Terms.clean("line\nbreak"))
+        assertEquals(null, Terms.clean("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"))
+    }
+
+    @Test
+    fun addsTerms() {
+        assertEquals(listOf("API", "PostHog"), Terms.add(listOf("API", "Posthog"), "PostHog"))
+        assertEquals(null, Terms.add(listOf("PostHog"), "PostHog"))
+    }
+}

@@ -572,6 +572,8 @@ class CiaoService : AccessibilityService() {
     private fun deliver(d: Dictation, raw: String, source: History.Source = History.Source.LIVE) {
         var text = raw.trim()
         if (d.stoppedByPhrase) text = VoiceCommands.stripStopPhrase(text)
+        val (rest, commands) = VoiceCommands.takeRememberCommands(text)
+        text = rest
         val heard = text
         // Gemini's smart mode often lays out paragraphs itself; leave its layout alone when it did.
         val laidOutByModel = d.provider == Provider.GEMINI && d.smart && text.contains('\n')
@@ -584,6 +586,15 @@ class CiaoService : AccessibilityService() {
             text = LiveLayout.apply(text, LiveLayout.layout(text, pauses))
         }
         val c = card
+        val model = if (source == History.Source.LIVE) d.provider.liveModel else d.provider.fileModel
+        if (text.isEmpty() && commands.isNotEmpty()) {
+            // Only "чао, запомни слово …": nothing to type, the term is the result.
+            record(d, History.Status.DONE, listOf(History.Transcript(source, model, "", System.currentTimeMillis())))
+            c?.final("")
+            c?.setPhase(CardView.Phase.DONE)
+            finish(REMEMBER_WAIT_MS)
+            return remember(commands, d.provider)
+        }
         if (text.isEmpty()) {
             if (d.endedAt - d.startedAt < 1500) {
                 forget(d)
@@ -599,18 +610,47 @@ class CiaoService : AccessibilityService() {
         val inserted = prefs.autoPaste && d.target != null && runCatching { TextInserter.insert(this, d.target, text, prefs.restoreClipboard) }.getOrDefault(false)
         // As on the desktop: what the model heard, then the laid-out text if the layout changed it.
         val now = System.currentTimeMillis()
-        val model = if (source == History.Source.LIVE) d.provider.liveModel else d.provider.fileModel
         val transcripts = listOf(History.Transcript(source, model, heard, now)) +
             (if (text != heard) listOf(History.Transcript(History.Source.FORMATTED, model, text, now)) else emptyList())
         record(d, History.Status.DONE, transcripts, if (inserted) History.Delivery.PASTED else History.Delivery.CLIPBOARD)
         if (inserted) {
             c?.setPhase(CardView.Phase.DONE)
-            finish(600)
+            finish(if (commands.isEmpty()) 600 else REMEMBER_WAIT_MS)
         } else {
             TextInserter.copy(this, text)
             c?.setPhase(CardView.Phase.CLIPBOARD, getString(R.string.copied))
-            finish(3500)
+            finish(if (commands.isEmpty()) 3500 else REMEMBER_WAIT_MS)
         }
+        if (commands.isNotEmpty()) remember(commands, d.provider)
+    }
+
+    /**
+     * "Чао, запомни слово …" (cut out of the text): adds each term as an edit in Settings does, so
+     * Google sync sends it, and says so on the card, unless the next dictation has started by then.
+     * As rememberTerms in src/main/main.ts.
+     */
+    private fun remember(commands: List<VoiceCommands.RememberCommand>, provider: Provider) {
+        val key = prefs.keyOf(provider)
+        val shown = card
+        Thread {
+            val terms = commands.map { it.heard to Terms.resolve(provider, key, it) }
+            main.post {
+                val messages = terms.map { (heard, term) ->
+                    when {
+                        term == null -> if (heard.isEmpty()) getString(R.string.term_not_heard) else getString(R.string.term_failed, heard)
+                        Terms.add(prefs.keywords, term) == null -> getString(R.string.term_known, term)
+                        else -> {
+                            GoogleSync.edit(this) { p -> Terms.add(p.keywords, term)?.let { p.keywords = it } }
+                            getString(R.string.term_added, term)
+                        }
+                    }
+                }
+                if (dictation != null || card !== shown || shown == null) return@post
+                shown.notice(messages.joinToString(" · "))
+                main.removeCallbacks(hideCardLater)
+                main.postDelayed(hideCardLater, if (terms.any { it.second != null }) 3000 else 6000)
+            }
+        }.start()
     }
 
     /** The file model failed too: deliver what the live model managed (as the desktop does), if anything. */
@@ -695,7 +735,8 @@ class CiaoService : AccessibilityService() {
         val outcome = when {
             status == History.Status.CANCELLED -> "cancelled"
             status == History.Status.FAILED && d.liveText.isBlank() && d.final == null -> "failed"
-            transcripts.isEmpty() -> "empty"
+            // Nothing, or only "чао, запомни слово …".
+            transcripts.all { it.text.isEmpty() } -> "empty"
             delivery == History.Delivery.PASTED -> "pasted"
             else -> "clipboard"
         }
@@ -761,6 +802,8 @@ class CiaoService : AccessibilityService() {
         private const val FLING_PROJECTION_S = 0.12f
         private const val MAX_FLING_DP_S = 1500f
         private const val COMPLETION_TIMEOUT_MS = 6000L
+        /** Keeps the card up for the term to come (remember()), which then hides it sooner. */
+        private const val REMEMBER_WAIT_MS = 15_000L
         private const val DEFAULT_LIFT_DP = 72
     }
 }

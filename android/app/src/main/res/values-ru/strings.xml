@@ -43,7 +43,7 @@
     <string name="context_text">О чём вы обычно говорите. Помогает с названиями и терминами.</string>
     <string name="gemini_note">Gemini сам определяет язык и не берёт контекст — только термины.</string>
     <string name="terms_title">Термины</string>
-    <string name="terms_text">Слова, которые нужно писать точно, по одному в строке.</string>
+    <string name="terms_text">Слова, которые нужно писать точно, по одному в строке. Или скажите во время диктовки «чао, запомни слово PostHog» — можно по буквам.</string>
     <string name="format_text">Абзацы и списки</string>
     <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
     <string name="show_cost">Показывать стоимость диктовки</string>
@@ -82,6 +82,10 @@
     <string name="offline">Нет связи. Запись идёт, распознаю в конце</string>
     <string name="copied">Скопировано, вставьте куда нужно</string>
     <string name="nothing_heard">Ничего не услышал</string>
+    <string name="term_added">Добавлено в термины: %1$s</string>
+    <string name="term_known">%1$s — уже в терминах</string>
+    <string name="term_failed">Не получилось разобрать слово «%1$s». Добавьте его в Настройках → Термины</string>
+    <string name="term_not_heard">Слово не расслышано. Скажите «чао, запомни слово …» ещё раз</string>
     <string name="failed">Не распознано: %1$s</string>
 
     <string name="error_cannot_reach">Нет связи с %1$s</string>

@@ -48,7 +48,7 @@
     <string name="context_text">What you usually talk about. Helps the recognizer with names and terms.</string>
     <string name="gemini_note">Gemini detects the language itself and takes no context, only the terms.</string>
     <string name="terms_title">Terms</string>
-    <string name="terms_text">Words that must be spelled exactly, one per line.</string>
+    <string name="terms_text">Words that must be spelled exactly, one per line. Or say “ciao, remember the word PostHog” while dictating; spelling it out works too.</string>
     <string name="format_text">Paragraphs and lists</string>
     <string name="stop_phrase">Say “ciao ciao” to finish</string>
     <string name="show_cost">Show the cost of a dictation</string>
@@ -87,6 +87,10 @@
     <string name="offline">Offline. Still recording, will transcribe at the end</string>
     <string name="copied">Copied. Paste it where you need it</string>
     <string name="nothing_heard">Nothing heard</string>
+    <string name="term_added">Added to your terms: %1$s</string>
+    <string name="term_known">%1$s is already in your terms</string>
+    <string name="term_failed">Couldn\'t make out “%1$s”. Add it in Settings → Terms</string>
+    <string name="term_not_heard">Didn\'t catch the word. Say “ciao, remember the word …” again</string>
     <string name="failed">Not transcribed: %1$s</string>
 
     <string name="error_cannot_reach">Cannot reach %1$s</string>
