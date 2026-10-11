@@ -54,6 +54,7 @@ class MainActivity : Activity() {
         bindSwitch(R.id.syncKeys, prefs.syncKeys) { on -> GoogleSync.edit(this) { it.syncKeys = on } }
         bindText(R.id.prompt, prefs.prompt) { s -> GoogleSync.edit(this) { it.prompt = s } }
         bindText(R.id.keywords, prefs.keywords.joinToString("\n")) { s -> GoogleSync.edit(this) { it.keywords = s.split("\n") } }
+        bindSwitch(R.id.learnCorrections, prefs.learnCorrections) { prefs.learnCorrections = it }
         bindSwitch(R.id.formatText, prefs.formatText) { prefs.formatText = it }
         bindSwitch(R.id.stopPhrase, prefs.stopPhrase) { prefs.stopPhrase = it }
         bindSwitch(R.id.showCost, prefs.showCost) { prefs.showCost = it }

@@ -110,6 +110,16 @@ class Prefs(context: Context) {
             .map { it.trim() }.filter { it.isNotEmpty() }
         set(v) = sp.edit().putString("terms", v.joinToString("\n")).remove("keywords").apply()
 
+    /** After a dictation, offer words the user corrects in the field for the terms (CiaoService, Corrections.kt). */
+    var learnCorrections: Boolean
+        get() = sp.getBoolean("learnCorrections", true)
+        set(v) = sp.edit().putBoolean("learnCorrections", v).apply()
+
+    /** Suggested terms the user said no to (lower-case), not offered again; the latest [MAX_DISMISSED]. Local, not synced, as on the desktop. */
+    var dismissedTerms: List<String>
+        get() = sp.getString("dismissedTerms", "")!!.split("\n").filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("dismissedTerms", v.takeLast(MAX_DISMISSED).joinToString("\n")).apply()
+
     /** Google account terms and the prompt sync through (GoogleSync); empty when signed out. */
     var googleEmail: String
         get() = sp.getString("googleEmail", "")!!
@@ -156,6 +166,7 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putInt("bubbleLift", v).apply()
 
     companion object {
+        const val MAX_DISMISSED = 200
         val DELAYS = listOf("minimal", "low", "medium", "high", "xhigh")
         const val DEFAULT_PROMPT =
             "Диктовка промптов для ИИ-агентов программирования. Русская речь с английскими техническими терминами, названиями библиотек, файлов и команд."

@@ -305,6 +305,17 @@
                 style="@style/Field"
                 android:importantForAutofill="no"
                 android:inputType="textMultiLine" />
+
+            <Switch
+                android:id="@+id/learnCorrections"
+                style="@style/Toggle"
+                android:layout_marginTop="8dp"
+                android:text="@string/learn_corrections" />
+
+            <TextView
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:text="@string/learn_corrections_hint" />
         </LinearLayout>
 
         <LinearLayout style="@style/Card">

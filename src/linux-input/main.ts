@@ -15,6 +15,9 @@
 //   the desktop (GNOME: toolkit-accessibility, or a screen reader running); otherwise "no-field".
 // - "key" events: since keys come from evdev, the app gets them at the same time, so the text read
 //   on Enter may already be gone (null). "paste" goes by the key's position (where QWERTY has V).
+//   On Wayland the watched window has no id, so Enter reads nothing and "field" reads the app in
+//   front (main then finds its text gone and stops watching once the user is elsewhere).
+// - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
 //
 // Extra event: {"type":"status","reading":N,"denied":M} after every device scan.
 import readline from "node:readline";
@@ -172,6 +175,12 @@ function readField(hwnd: number, budget: number): FieldResult | { text: null; re
     if (hwnd !== 0 && front !== hwnd) return { text: null, reason: "focus-changed" };
     pid = x11.pid(front);
   }
+  connectAtspi();
+  return atspi ? atspi.focusedText(pid, budget) : { text: null, reason: "unsupported" };
+}
+
+/** Connects once, at the first watch or read: an Enter read can't wait for the accessibility bus. */
+function connectAtspi(): void {
   if (atspi === undefined) {
     try {
       atspi = Atspi.open(koffi);
@@ -181,7 +190,6 @@ function readField(hwnd: number, budget: number): FieldResult | { text: null; re
       log(`AT-SPI unavailable: ${(e as Error).message}`);
     }
   }
-  return atspi ? atspi.focusedText(pid, budget) : { text: null, reason: "unsupported" };
 }
 
 // Terminals paste with Ctrl+Shift+V; Ctrl+V there is a control character.
@@ -232,6 +240,7 @@ function handle(msg: Record<string, unknown>): void {
     case "watch":
       watching = msg.on === true;
       watchWindow = typeof msg.hwnd === "number" ? msg.hwnd : 0;
+      if (watching) connectAtspi();
       return;
   }
 }

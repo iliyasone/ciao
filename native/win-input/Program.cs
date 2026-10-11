@@ -322,6 +322,7 @@ static class Program
             case "watch":
                 Interlocked.Exchange(ref _watchHwnd, msg["hwnd"]?.GetValue<long>() ?? 0);
                 _watching = msg["on"]?.GetValue<bool>() ?? false;
+                if (_watching) FieldReader.Warm();
                 break;
             case "capture":
                 if (msg["on"]?.GetValue<bool>() ?? false) StartCapture();

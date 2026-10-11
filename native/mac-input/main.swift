@@ -383,6 +383,10 @@ func sendPaste() {
 let maxFieldLength = 100_000
 let textRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox"]
 var manualAccessibilityAsked = Set<pid_t>()
+let manualAccessibilityLock = NSLock()
+/// "field" reads run here, off the main run loop: that one also runs the event tap, and a read that
+/// waits on a slow app there would hold up every key press on the Mac.
+let axQueue = DispatchQueue(label: "ciao.ax")
 
 struct AXTimeout: Error {}
 
@@ -413,12 +417,17 @@ struct AXReader {
 /// it. (AXEnhancedUserInterface does it too, but breaks their window animations.) True when this call
 /// just turned it on in such an app: its fields show up a moment later.
 func askForAccessibility(_ pid: pid_t, _ reader: AXReader) -> Bool {
-    guard !manualAccessibilityAsked.contains(pid) else { return false }
+    manualAccessibilityLock.lock()
+    let done = manualAccessibilityAsked.contains(pid)
+    manualAccessibilityLock.unlock()
+    guard !done else { return false }
     let app = AXUIElementCreateApplication(pid)
     guard (try? reader.bound(app)) != nil else { return false }
     let error = AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     if error == .cannotComplete { return false } // the app was busy: ask again next time
+    manualAccessibilityLock.lock()
     manualAccessibilityAsked.insert(pid)
+    manualAccessibilityLock.unlock()
     return error == .success
 }
 
@@ -452,8 +461,9 @@ func readField(pid: pid_t, _ reader: AXReader) -> (text: String?, reason: String
     }
 }
 
-/// Answers "field": in a Chromium or Electron app seen for the first time, the tree may still be
-/// building, so an empty answer is retried once a moment later rather than blocking the tap meanwhile.
+/// Answers "field" (called on the main thread; the read itself runs on axQueue). In a Chromium or
+/// Electron app seen for the first time the tree may still be building, so an empty answer is
+/// retried once a moment later.
 func answerField(id: Int?, wanted: pid_t, retry: Bool) {
     let front = frontmost()?.processIdentifier
     if wanted != 0 && front != wanted {
@@ -464,14 +474,16 @@ func answerField(id: Int?, wanted: pid_t, retry: Bool) {
         emit(["id": id, "text": nil, "reason": "no-field"])
         return
     }
-    let reader = AXReader(budget: 0.5)
-    let asked = AXIsProcessTrusted() && askForAccessibility(pid, reader)
-    let result = readField(pid: pid, reader)
-    if retry && asked && result.reason == "no-field" {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { answerField(id: id, wanted: wanted, retry: false) }
-        return
+    axQueue.async {
+        let reader = AXReader(budget: 0.5)
+        let asked = AXIsProcessTrusted() && askForAccessibility(pid, reader)
+        let result = readField(pid: pid, reader)
+        if retry && asked && result.reason == "no-field" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { answerField(id: id, wanted: wanted, retry: false) }
+            return
+        }
+        if let text = result.text { emit(["id": id, "text": text]) } else { emit(["id": id, "text": nil, "reason": result.reason]) }
     }
-    if let text = result.text { emit(["id": id, "text": text]) } else { emit(["id": id, "text": nil, "reason": result.reason]) }
 }
 
 func handle(_ line: String) {
@@ -510,6 +522,9 @@ func handle(_ line: String) {
     case "watch":
         watching = msg["on"] as? Bool ?? false
         watchPid = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0
+        // Turn a Chromium or Electron app's accessibility on now: the first Enter read has no time to wait for it.
+        let pid = watchPid
+        if watching && pid != 0 && AXIsProcessTrusted() { axQueue.async { _ = askForAccessibility(pid, AXReader(budget: 0.5)) } }
     default:
         break
     }

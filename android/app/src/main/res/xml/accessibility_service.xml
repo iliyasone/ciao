@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Window and focus events tell us when a keyboard is up over a text field; the node tree lets us
-     put the transcript into that field. The service reads nothing else. -->
+     put the transcript into that field. Text-change events are not listed here: CiaoService turns
+     them on for two minutes after it inserts a dictation, ignores every field but that one, and reads
+     that field's text after it changes to spot a word the user corrected (to offer it for the
+     terms). It skips password fields, compares on the phone and keeps or sends nothing. The service reads
+     nothing else. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeViewFocused|typeWindowStateChanged|typeWindowsChanged|typeViewClicked"
     android:accessibilityFeedbackType="feedbackGeneric"

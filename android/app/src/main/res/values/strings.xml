@@ -49,6 +49,8 @@
     <string name="gemini_note">Gemini detects the language itself and takes no context, only the terms.</string>
     <string name="terms_title">Terms</string>
     <string name="terms_text">Words that must be spelled exactly, one per line.</string>
+    <string name="learn_corrections">Suggest new words</string>
+    <string name="learn_corrections_hint">For two minutes after a dictation, Ciao watches the field it went into: fix a misheard word (“posthog” → “PostHog”) and it offers to add the new spelling to the terms. The text is compared on this phone, never stored or sent.</string>
     <string name="format_text">Paragraphs and lists</string>
     <string name="stop_phrase">Say “ciao ciao” to finish</string>
     <string name="show_cost">Show the cost of a dictation</string>
@@ -88,6 +90,11 @@
     <string name="copied">Copied. Paste it where you need it</string>
     <string name="nothing_heard">Nothing heard</string>
     <string name="failed">Not transcribed: %1$s</string>
+    <string name="suggest_title">Ciao · Remember this word?</string>
+    <string name="suggest_change">“%1$s” → “%2$s”</string>
+    <string name="suggest_add">Add to terms</string>
+    <string name="suggest_no">No thanks</string>
+    <string name="suggest_added">“%1$s” is now in your terms</string>
 
     <string name="error_cannot_reach">Cannot reach %1$s</string>
     <string name="error_bad_key">%1$s rejected the API key</string>

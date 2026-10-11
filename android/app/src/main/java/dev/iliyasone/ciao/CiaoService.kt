@@ -121,6 +121,8 @@ class CiaoService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        // Typing moves neither the keyboard nor the focus: only the watch cares (and only gets these while on).
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return onTextChanged(event)
         main.removeCallbacks(refresh)
         main.postDelayed(refresh, 80)
     }
@@ -132,6 +134,7 @@ class CiaoService : AccessibilityService() {
         dictation?.let { cancel() }
         RecordingService.hide(this)
         hideBubble()
+        hideSuggestion()
         main.removeCallbacksAndMessages(null)
         if (::pool.isInitialized) pool.close()
         disk.shutdown() // after the writes already queued
@@ -173,6 +176,7 @@ class CiaoService : AccessibilityService() {
         }
         bubble?.visibility = if (shade) View.INVISIBLE else View.VISIBLE
         cardHost?.visibility = if (shade) View.GONE else View.VISIBLE
+        suggestionHost?.visibility = if (shade) View.GONE else View.VISIBLE
     }
 
     /** The notification shade or quick settings are pulled down (the lock screen doesn't count: the card belongs there). */
@@ -512,6 +516,9 @@ class CiaoService : AccessibilityService() {
             return
         }
         d.recorder = recorder
+        // The previous field is left behind, and the card takes the suggestion's place.
+        stopWatch()
+        hideSuggestion()
         // Only now that the new one is running does a failed dictation waiting for a retry give way.
         dictation?.let { closeAudio(it) }
         dictation = d
@@ -604,6 +611,7 @@ class CiaoService : AccessibilityService() {
             (if (text != heard) listOf(History.Transcript(History.Source.FORMATTED, model, text, now)) else emptyList())
         record(d, History.Status.DONE, transcripts, if (inserted) History.Delivery.PASTED else History.Delivery.CLIPBOARD)
         if (inserted) {
+            d.target?.let { startWatch(it, text) }
             c?.setPhase(CardView.Phase.DONE)
             finish(600)
         } else {
@@ -726,11 +734,130 @@ class CiaoService : AccessibilityService() {
         main.postDelayed({
             val field = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()?.takeIf { it.isEditable && !it.isPassword }
             val inserted = field != null && runCatching { TextInserter.insert(this, field, text, prefs.restoreClipboard) }.getOrDefault(false)
+            if (inserted && dictation == null) startWatch(field!!, text)
             if (!inserted) {
                 TextInserter.copy(this, text)
                 Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
             }
         }, SHADE_CLOSE_MS)
+    }
+
+    // ── Learning corrected words ─────────────────────────────────────────
+
+    /**
+     * The field a dictation went into, watched for [WATCH_MS] for words the user corrects
+     * (Corrections.kt). Its text is read only after it changes, compared on the phone and dropped:
+     * never kept or sent. [offered]: suggestions already shown in this watch; [seen]: what the last
+     * read found, offered only if the next read still shows it ("PostHo" is a word being typed).
+     */
+    private class Watch(val node: AccessibilityNodeInfo, val text: String) {
+        val offered = HashSet<String>()
+        var seen: Set<String> = emptySet()
+    }
+
+    private var watch: Watch? = null
+    private val checkWatch = Runnable { checkWatch() }
+    private val endWatch = Runnable { stopWatch() }
+    private var suggestionHost: FrameLayout? = null
+    private val hideSuggestionLater = Runnable { hideSuggestion() }
+
+    private fun startWatch(node: AccessibilityNodeInfo, text: String) {
+        stopWatch()
+        if (!prefs.learnCorrections || node.isPassword) return
+        watch = Watch(node, text)
+        listenToTyping(true)
+        main.postDelayed(endWatch, WATCH_MS)
+    }
+
+    private fun stopWatch() {
+        if (watch == null) return
+        watch = null
+        main.removeCallbacks(checkWatch)
+        main.removeCallbacks(endWatch)
+        listenToTyping(false)
+    }
+
+    /**
+     * Text-change events come only while a field is watched (accessibility_service.xml leaves them
+     * out): the rest of the time Ciao isn't told about typing anywhere.
+     */
+    private fun listenToTyping(on: Boolean) {
+        val info = serviceInfo ?: return
+        val type = AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+        val types = if (on) info.eventTypes or type else info.eventTypes and type.inv()
+        if (types == info.eventTypes) return
+        info.eventTypes = types
+        serviceInfo = info
+    }
+
+    /** The watched field changed: read it once typing pauses, so a word half-typed isn't taken for a correction. */
+    private fun onTextChanged(event: AccessibilityEvent) {
+        val w = watch ?: return
+        if (event.isPassword || event.windowId != w.node.windowId) return
+        if (event.source != w.node) return
+        main.removeCallbacks(checkWatch)
+        main.postDelayed(checkWatch, TYPING_PAUSE_MS)
+    }
+
+    private fun checkWatch() {
+        val w = watch ?: return
+        val node = w.node
+        // Turned off, gone (the app or screen closed) or turned into a password field: nothing more to read.
+        if (!prefs.learnCorrections || !runCatching { node.refresh() }.getOrDefault(false) || node.isPassword) return stopWatch()
+        // One suggestion at a time; this one is looked at again once it closes.
+        if (suggestionHost != null) return
+        val shown = node.text?.toString().orEmpty()
+        val text = if (node.isShowingHintText || shown == node.hintText?.toString()) "" else shown
+        // null: sent, deleted or rewritten.
+        val found = Corrections.find(w.text, text) ?: return stopWatch()
+        val fresh = Corrections.newTerms(found, prefs.keywords + prefs.dismissedTerms).filter { it.fixed.lowercase() !in w.offered }
+        val before = w.seen
+        w.seen = fresh.map { it.fixed.lowercase() }.toSet()
+        // Found for the first time: look again in a moment, as on the desktop (which also reads on Enter).
+        if (fresh.any { it.fixed.lowercase() !in before }) {
+            main.removeCallbacks(checkWatch)
+            main.postDelayed(checkWatch, CONFIRM_MS)
+        }
+        val next = fresh.firstOrNull { it.fixed.lowercase() in before } ?: return
+        w.offered.add(next.fixed.lowercase())
+        suggest(next)
+    }
+
+    /** At the top, where the live card was: "«постхок» → «PostHog». Add to terms?" */
+    private fun suggest(c: Correction) {
+        if (dictation != null) return
+        hideCard() // the last dictation's, if it is still fading out
+        lateinit var view: SuggestionView
+        view = SuggestionView(this, c, onAdd = {
+            // As an edit in the settings, so Google sync records and sends it.
+            GoogleSync.edit(this) { p -> if (Corrections.newTerms(listOf(c), p.keywords).isNotEmpty()) p.keywords = p.keywords + c.fixed }
+            view.added(c.fixed)
+            main.removeCallbacks(hideSuggestionLater)
+            main.postDelayed(hideSuggestionLater, ADDED_MS)
+        }, onNo = {
+            prefs.dismissedTerms = prefs.dismissedTerms.filter { it != c.fixed.lowercase() } + c.fixed.lowercase()
+            hideSuggestion()
+        })
+        val host = FrameLayout(this).apply {
+            setPadding(dp(10), dp(6), dp(10), dp(12))
+            addView(view, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(20), dp(640)), FrameLayout.LayoutParams.WRAP_CONTENT))
+            clipToPadding = false
+            visibility = if (shade) View.GONE else View.VISIBLE
+        }
+        val params = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+        params.y = statusBarHeight()
+        wm.addView(host, params)
+        suggestionHost = host
+        main.postDelayed(hideSuggestionLater, SUGGESTION_MS)
+    }
+
+    private fun hideSuggestion() {
+        main.removeCallbacks(hideSuggestionLater)
+        val host = suggestionHost ?: return
+        runCatching { wm.removeView(host) }
+        suggestionHost = null
+        // A correction that waited for this one to close.
+        if (watch != null) main.post(checkWatch)
     }
 
     /** Done and Cancel in the notification: the same as on the card. */
@@ -762,5 +889,13 @@ class CiaoService : AccessibilityService() {
         private const val MAX_FLING_DP_S = 1500f
         private const val COMPLETION_TIMEOUT_MS = 6000L
         private const val DEFAULT_LIFT_DP = 72
+        /** How long after an insert the field is watched for corrections, as on the desktop. */
+        private const val WATCH_MS = 120_000L
+        private const val TYPING_PAUSE_MS = 800L
+        /** A correction is offered once a second read this much later still shows it. */
+        private const val CONFIRM_MS = 1500L
+        /** An unanswered suggestion goes away by itself (and isn't offered again in this watch). */
+        private const val SUGGESTION_MS = 10_000L
+        private const val ADDED_MS = 1800L
     }
 }

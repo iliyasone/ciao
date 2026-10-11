@@ -19,6 +19,12 @@ static class FieldReader
     static readonly object Lock = new();
     static Worker _worker = new();
 
+    /// <summary>Starts the worker and its UIA client ahead of the first read: an Enter read can't wait for them.</summary>
+    public static void Warm()
+    {
+        lock (Lock) _ = _worker;
+    }
+
     /// <summary>hwnd 0 = whatever is in front. Completes within about <see cref="Timeout"/>, never faults.</summary>
     public static Task<Result> Read(IntPtr wanted)
     {
@@ -72,8 +78,10 @@ static class FieldReader
             {
                 uia = (IUIAutomation2)new CUIAutomation8();
                 // UIA's own defaults (2 s to connect, 20 s per call) would keep a retired worker around for long.
+                // A call short enough that a slow (not hung) app fails inside the read's own limit, rather than
+                // retiring a worker on every read.
                 uia.put_ConnectionTimeout(700);
-                uia.put_TransactionTimeout(700);
+                uia.put_TransactionTimeout(250);
             }
             catch (Exception)
             {

@@ -24,6 +24,9 @@ export interface ForegroundWindow {
   process: string;
 }
 
+/** Line breaks as "\n", whatever the app or the helper used. */
+const lines = (text: string) => text.replace(/\r\n?|[\u2028\u2029]/g, "\n");
+
 type InputEvents = {
   trigger: [down: boolean, spec: string];
   escape: [];
@@ -167,7 +170,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
   /** The text of the focused editable field, if `hwnd` is still in front (0 = whatever is). Never a password field. */
   async field(hwnd: number): Promise<{ text: string } | { text: null; reason: FieldMiss }> {
     const r = await this.request({ cmd: "field", hwnd });
-    if (typeof r.text === "string") return { text: r.text.replace(/\r\n?/g, "\n") };
+    if (typeof r.text === "string") return { text: lines(r.text) };
     return { text: null, reason: typeof r.reason === "string" ? (r.reason as FieldMiss) : "no-helper" };
   }
 
@@ -228,7 +231,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
         break;
       case "key": {
         const kind = msg.kind === "enter" || msg.kind === "paste" ? msg.kind : "other";
-        this.emit("key", kind, typeof msg.text === "string" ? msg.text.replace(/\r\n?/g, "\n") : null);
+        this.emit("key", kind, typeof msg.text === "string" ? lines(msg.text) : null);
         break;
       }
       case "permission":

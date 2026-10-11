@@ -44,6 +44,8 @@
     <string name="gemini_note">Gemini сам определяет язык и не берёт контекст — только термины.</string>
     <string name="terms_title">Термины</string>
     <string name="terms_text">Слова, которые нужно писать точно, по одному в строке.</string>
+    <string name="learn_corrections">Предлагать новые слова</string>
+    <string name="learn_corrections_hint">Две минуты после диктовки Ciao следит за полем, куда вставил текст: исправите неверно услышанное слово («постхок» → «PostHog»), и он предложит добавить новое написание в термины. Текст сравнивается на телефоне и нигде не сохраняется и никуда не отправляется.</string>
     <string name="format_text">Абзацы и списки</string>
     <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
     <string name="show_cost">Показывать стоимость диктовки</string>
@@ -83,6 +85,11 @@
     <string name="copied">Скопировано, вставьте куда нужно</string>
     <string name="nothing_heard">Ничего не услышал</string>
     <string name="failed">Не распознано: %1$s</string>
+    <string name="suggest_title">Ciao · Запомнить слово?</string>
+    <string name="suggest_change">«%1$s» → «%2$s»</string>
+    <string name="suggest_add">Добавить в термины</string>
+    <string name="suggest_no">Не надо</string>
+    <string name="suggest_added">«%1$s» теперь в терминах</string>
 
     <string name="error_cannot_reach">Нет связи с %1$s</string>
     <string name="error_bad_key">%1$s не принял ключ</string>
