@@ -55,13 +55,15 @@ class TextInserterTest {
 
     /**
      * What insert() hands the app: the text it sets, or the clipboard at the moment it pastes. The field
-     * really holds [holds] characters: like a TextView, it refuses a cursor past them.
+     * really holds [holds] characters: like a TextView, it refuses a selection past them, or one it
+     * already has.
      */
     private fun insert(
         shown: String, hint: String?, start: Int, end: Int, transcript: String,
-        holds: Int = shown.length, canSelect: Boolean = true,
+        holds: Int = shown.length, canSelect: Boolean = true, chrome: Boolean = false,
     ): String? {
         var real = holds
+        var selection = start to end
         val context = RuntimeEnvironment.getApplication()
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         var result: String? = null
@@ -73,6 +75,7 @@ class TextInserterTest {
             hintText = hint
             setTextSelection(start, end)
             if (canSelect) addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION)
+            if (chrome) extras.putString("AccessibilityNodeInfo.chromeRole", "textField")
         }
         shadowOf(node).setOnPerformActionListener { action, args ->
             when (action) {
@@ -84,8 +87,9 @@ class TextInserterTest {
                 AccessibilityNodeInfo.ACTION_SET_SELECTION -> {
                     caret = args.getInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT)
                     val to = args.getInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT)
-                    if (!canSelect || caret > real || to > real) return@setOnPerformActionListener false
-                    selections += caret to to
+                    if (!canSelect || caret > real || to > real || selection == caret to to) return@setOnPerformActionListener false
+                    selection = caret to to
+                    selections += selection
                 }
             }
             true
@@ -115,11 +119,16 @@ class TextInserterTest {
     @Test
     fun realTextWithTheCursorAtTheStartStays() {
         assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, "))
-        // The probe moved the cursor to the end and back, then the caret went after the dictation.
-        assertEquals(listOf(5 to 5, 0 to 0, 6 to 6), selections)
+        // The probe selected the first character and put the cursor back, then it went after the dictation.
+        assertEquals(listOf(0 to 1, 0 to 0, 6 to 6), selections)
+        // Shown text longer than what the field holds (a chip, say) is still real text.
+        assertEquals("Well, Hello @Ann", insert("Hello @Ann", null, 0, 0, "Well, ", holds = 7))
         assertEquals("Hello world", insert("Hello", null, -1, -1, "world"))
         // A field that can't move its cursor tells us nothing: its text is kept.
         assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, ", canSelect = false))
+        // Nor is Chrome's text probed: it flags its hints.
+        assertEquals("Well, Hello", insert("Hello", null, 0, 0, "Well, ", chrome = true))
+        assertEquals(listOf(6 to 6), selections)
     }
 
     @Test

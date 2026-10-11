@@ -21,15 +21,18 @@ object TextInserter {
      * only if that is refused. Either action returning true counts as done: Chrome and WebViews
      * update their accessibility tree later, so reading the text back would look like a miss and
      * insert twice.
+     *
+     * A field whose text may be an unflagged hint gets its first character selected and the cursor
+     * put back first (see [isHint]); [restoreClipboard] off: a paste may leave the transcript on the
+     * clipboard, so a field with text always gets one.
      */
-    /** [restoreClipboard] off: a paste may leave the transcript on the clipboard, so a field with text always gets one. */
     fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String, restoreClipboard: Boolean = true): Boolean {
         if (!node.refresh() || !node.isEditable) return false
         val shown = node.text?.toString().orEmpty()
         val hint = node.hintText?.toString()
         val start = node.textSelectionStart
         val end = node.textSelectionEnd
-        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node, shown, start, end)
+        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node, start, end)
         val (current, before, piece, after) = place(shown, hint, showingHint, start, end, transcript)
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
@@ -81,13 +84,16 @@ object TextInserter {
         shown.isNotEmpty() && shown != hint && selStart == selEnd && selStart <= 0
 
     /**
-     * Asks the field to put its cursor after [shown]. A hint has nothing behind it, so a text view
-     * refuses (its real text is shorter); real text accepts, and the cursor goes back where it was.
-     * A field that can't move its cursor at all tells us nothing, so its text stays text.
+     * Asks the field to select its first character. A hint has nothing behind it, so a text view (or
+     * a Compose field) refuses a selection past its real, empty text; real text accepts, and the
+     * cursor goes back where it was. A field that can't move its cursor tells us nothing, so its
+     * text stays text; so does Chrome's, which flags its hints and moves the cursor asynchronously,
+     * out of order with a paste.
      */
-    private fun isHint(node: AccessibilityNodeInfo, shown: String, selStart: Int, selEnd: Int): Boolean {
+    private fun isHint(node: AccessibilityNodeInfo, selStart: Int, selEnd: Int): Boolean {
         if (AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION !in node.actionList) return false
-        if (!select(node, shown.length, shown.length)) return true
+        if (node.extras.containsKey("AccessibilityNodeInfo.chromeRole")) return false
+        if (!select(node, 0, 1)) return true
         if (selStart >= 0 && selEnd >= 0) select(node, selStart, selEnd)
         return false
     }
