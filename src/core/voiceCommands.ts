@@ -32,12 +32,14 @@ export function stripStopPhrase(text: string): string {
 // words after it are the term as heard: written out ("PostHog", "пост хог") or spelled letter by
 // letter ("пэ, о, эс, тэ", "P-O-S-T"). src/core/terms.ts turns them into the term itself.
 
+// The noun is required: "Чао, добавь тесты" or "Чао, запомни: мы на pnpm" is dictation, not a command
+// (a wake-word start always begins with "Чао").
 const REMEMBER = new RegExp(
   // "ао": a wake-word start may begin with the tail of "чао" (see stripWakeWord).
   `(?:^\\s*ао|(?<!\\p{L})${WORD})${SEP}` +
     `(?:запомни|запиши|добавь|remember|add)(?!\\p{L})` +
-    `(?:${SEP}(?:в|to|the|a|an|новое|новый|new))?` +
-    `(?:${SEP}(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L}))?` +
+    `(?:${SEP}(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?` +
+    `${SEP}(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})` +
     `(?:${SEP}(?:по буквам|spelled|spelt))?`,
   "iu",
 );
@@ -91,7 +93,7 @@ export function takeRememberCommands(text: string): { text: string; commands: Re
     commands.push(command);
     out += text.slice(from, m.index);
     // The punctuation after the term goes with it.
-    from = end + (/^[\s,.!?…;:]*/u.exec(text.slice(end))?.[0].length ?? 0);
+    from = end + (/^[\s,.!?…;:»"”’)\]]*/u.exec(text.slice(end))?.[0].length ?? 0);
     re.lastIndex = from;
   }
   if (!commands.length) return { text, commands };
@@ -113,7 +115,9 @@ function readTerm(text: string, start: number): { end: number; command: Remember
   const gap = (i: number) => text.slice(tokens[i - 1]!.to, tokens[i]!.from);
   /** Letter j goes on a spelling; one that is a word too only before another letter ("…эм, а потом" ends at "эм"). */
   const spells = (j: number) =>
-    isLetter(word(j)) && SPELLING_GAP.test(gap(j)) && (!LETTER_WORDS.has(word(j)) || j + 1 === tokens.length || isLetter(word(j + 1)));
+    isLetter(word(j)) &&
+    SPELLING_GAP.test(gap(j)) &&
+    (!LETTER_WORDS.has(word(j)) || j + 1 === tokens.length || (isLetter(word(j + 1)) && !LETTER_WORDS.has(word(j + 1))));
   /** Two or more letters from token i on: the index after the last; otherwise i. */
   const spelling = (i: number) => {
     let j = isLetter(word(i)) ? i + 1 : i;

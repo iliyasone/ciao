@@ -38,7 +38,7 @@ Answer with the term only, written the way it is normally written: the script, c
         return if (marked) w else null
     }
 
-    /** Without the model (no network, an error): a short term as heard, or Latin letters joined. */
+    /** When the model can't be asked (no network, an error): a short term as heard, or Latin letters joined. */
     fun fallback(c: VoiceCommands.RememberCommand): String? {
         if (c.spelled) {
             val letters = c.heard.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
@@ -47,9 +47,10 @@ Answer with the term only, written the way it is normally written: the script, c
         return if (c.heard.isNotEmpty() && c.heard.split(Regex("\\s+")).size <= 3) c.heard else null
     }
 
-    /** The model's answer as a term: one line, without quotes or a final period; null if none. */
+    /** The model's answer as a term: one line, without quotes or a final period ("A.I." keeps it); null if none. */
     fun clean(answer: String): String? {
-        val term = answer.replace(Regex("(?U)^[\\s\"'«“`]+|[\\s\"'»”`.]+$"), "")
+        var term = answer.replace(Regex("(?U)^[\\s\"'«“`]+|[\\s\"'»”`]+$"), "")
+        if (!Regex("(?:\\p{L}\\.)+").matches(term)) term = term.removeSuffix(".")
         return term.takeIf { it.isNotEmpty() && it.length <= MAX_TERM && it.none { ch -> ch in "\r\n<>" } }
     }
 
@@ -91,12 +92,15 @@ Answer with the term only, written the way it is normally written: the script, c
         }
     }
 
-    /** Blocking: the term a command asked for, as heard when that's enough, else from the model, else a fallback. */
+    /**
+     * Blocking: the term a command asked for, as heard when that's enough, else from the model (null
+     * when it found none: nothing is added), else, when the model can't be reached, a fallback.
+     */
     fun resolve(provider: Provider, key: String, c: VoiceCommands.RememberCommand): String? {
         if (c.heard.isEmpty()) return null
         plain(c)?.let { return it }
         return try {
-            fromModel(provider, key, c.heard) ?: fallback(c)
+            fromModel(provider, key, c.heard)
         } catch (e: Exception) {
             Log.w("Ciao", "term from model: ${e.message}")
             fallback(c)

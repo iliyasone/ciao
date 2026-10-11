@@ -18,12 +18,13 @@ object VoiceCommands {
     // A port of takeRememberCommands in src/core/voiceCommands.ts; Terms.kt turns what was heard
     // into the term. (?U): \s takes Unicode spaces too, as in JS.
 
+    // The noun is required: "Чао, добавь тесты" is dictation, not a command.
     private val REMEMBER = Regex(
         // "ао": a wake-word start may begin with the tail of "чао".
         "(?iU)(?:^\\s*ао|(?<!\\p{L})$WORD)$SEP" +
             "(?:запомни|запиши|добавь|remember|add)(?!\\p{L})" +
-            "(?:$SEP(?:в|to|the|a|an|новое|новый|new))?" +
-            "(?:$SEP(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L}))?" +
+            "(?:$SEP(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?" +
+            "$SEP(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})" +
             "(?:$SEP(?:по буквам|spelled|spelt))?",
     )
 
@@ -45,7 +46,7 @@ object VoiceCommands {
     /** Gaps between words in a spoken spelling; a sentence end anywhere else ends the term. */
     private val SPELLING_GAP = Regex("(?U)[\\s,.\\-–—:;]*")
     private val SENTENCE_GAP = Regex("[,.!?…;:\\n]")
-    private val TRAILING = Regex("(?U)^[\\s,.!?…;:]*")
+    private val TRAILING = Regex("(?U)^[\\s,.!?…;:»\"”’)\\]]*")
     /** Words of a written-out term, at most this many: the rest of the sentence is dictation again. */
     private const val MAX_WORDS = 3
     /** Dictation goes on after the term ("…слово PostHog и запушь"). */
@@ -99,7 +100,8 @@ object VoiceCommands {
         fun gap(i: Int) = text.substring(tokens[i - 1].to, tokens[i].from)
         /** Letter j goes on a spelling; one that is a word too only before another letter ("…эм, а потом" ends at "эм"). */
         fun spells(j: Int) =
-            isLetter(word(j)) && SPELLING_GAP.matches(gap(j)) && (word(j) !in LETTER_WORDS || j + 1 == tokens.size || isLetter(word(j + 1)))
+            isLetter(word(j)) && SPELLING_GAP.matches(gap(j)) &&
+                (word(j) !in LETTER_WORDS || j + 1 == tokens.size || (isLetter(word(j + 1)) && word(j + 1) !in LETTER_WORDS))
         /** Two or more letters from token i on: the index after the last; otherwise i. */
         fun spelling(i: Int): Int {
             var j = if (isLetter(word(i))) i + 1 else i

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, session, shell, systemPreferences, Tray } from "electron";
-import { DELAYS, type HistoryEntry, type Provider, type RetryMode, type Settings, type UpdateState } from "../core/types";
+import { DELAYS, type HistoryEntry, type OverlayPhase, type Provider, type RetryMode, type Settings, type UpdateState } from "../core/types";
 import { costUsd } from "../core/cost";
 import { models, PROVIDERS } from "../core/providers";
 import { setLang, t } from "../core/i18n";
@@ -330,11 +330,16 @@ async function showRecovered(entries: HistoryEntry[]): Promise<void> {
   }
 }
 
+/** How long the dictation's own card says something worth reading (HIDE_AFTER in Overlay.tsx), before a term card may replace it. */
+const READ_FIRST_MS: Partial<Record<OverlayPhase, number>> = { clipboard: 3800, saved: 6300 };
+
 /**
  * "Чао, запомни слово …": adds each term the way an edit in Settings does (so Google sync sends
- * it) and says so on a card of its own, unless the next dictation has started by then.
+ * it) and says so on a card of its own, after the dictation's card (`phase`) has said its part,
+ * unless the next dictation has started by then.
  */
-async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: string): Promise<void> {
+async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: string, phase: OverlayPhase): Promise<void> {
+  const shownAt = Date.now();
   const terms = await Promise.all(commands.map(async (c) => ({ heard: c.heard, term: await resolveTerm(s.provider, apiKey, c) })));
   const messages: string[] = [];
   for (const { heard, term } of terms) {
@@ -350,10 +355,21 @@ async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: s
     messages.push(known ? t().overlay.termKnown(term) : t().overlay.termAdded(term));
   }
   historyWin?.webContents.send("settings:synced", settings);
+  const wait = shownAt + (READ_FIRST_MS[phase] ?? 0) - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   if (dictation.busy) return;
   const now = Date.now();
-  const phase = terms.some((x) => x.term !== null) ? "term" : "termFailed";
-  overlay.state({ seq: dictation.nextSeq(), phase, handsFree: false, startedAt: now, endedAt: now, showCost: false, costPerMinuteUsd: 0, offline: false, message: messages.join(" · ") });
+  overlay.state({
+    seq: dictation.nextSeq(),
+    phase: terms.some((x) => x.term !== null) ? "term" : "termFailed",
+    handsFree: false,
+    startedAt: now,
+    endedAt: now,
+    showCost: false,
+    costPerMinuteUsd: 0,
+    offline: false,
+    message: messages.join(" · "),
+  });
 }
 
 function registerIpc(): void {
@@ -471,7 +487,7 @@ void app.whenReady().then(() => {
     changed: notifyChanged,
     idle: () => wake.reset(),
     ended: (report) => telemetry.capture("dictation", { ...report }),
-    remember: (commands, s, apiKey) => void rememberTerms(commands, s, apiKey),
+    remember: (commands, s, apiKey, phase) => void rememberTerms(commands, s, apiKey, phase),
   });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
   input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));

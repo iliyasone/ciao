@@ -33,7 +33,7 @@ export function plainTerm(c: RememberCommand): string | null {
   return /.\p{Lu}|\p{N}|[.+#_-]/u.test(w) || /^\p{Lu}{2,}$/u.test(w) ? w : null;
 }
 
-/** Without the model (no network, an error): a short term as heard, or Latin letters joined. */
+/** When the model can't be asked (no network, an error): a short term as heard, or Latin letters joined. */
 export function fallbackTerm(c: RememberCommand): string | null {
   if (c.spelled) {
     const letters = c.heard.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
@@ -42,9 +42,10 @@ export function fallbackTerm(c: RememberCommand): string | null {
   return c.heard && c.heard.split(/\s+/).length <= 3 ? c.heard : null;
 }
 
-/** The model's answer as a term: one line, without quotes or a final period; null if none. */
+/** The model's answer as a term: one line, without quotes or a final period ("A.I." keeps it); null if none. */
 export function cleanTerm(answer: string): string | null {
-  const term = answer.replace(/^[\s"'«“`]+|[\s"'»”`.]+$/gu, "");
+  let term = answer.replace(/^[\s"'«“`]+|[\s"'»”`]+$/gu, "");
+  if (!/^(?:\p{L}\.)+$/u.test(term)) term = term.replace(/\.$/, "");
   return term && term.length <= MAX_TERM && !/[\r\n<>]/.test(term) ? term : null;
 }
 
@@ -89,13 +90,16 @@ export async function termFromModel(provider: Provider, apiKey: string, heard: s
   return cleanTerm(answer);
 }
 
-/** The term a command asked for: as heard when that's enough, else from the model, else a fallback. */
+/**
+ * The term a command asked for: as heard when that's enough, else from the model (null when it found
+ * none: nothing is added), else, when the model can't be reached, a fallback.
+ */
 export async function resolveTerm(provider: Provider, apiKey: string, c: RememberCommand): Promise<string | null> {
   if (!c.heard) return null;
   const plain = plainTerm(c);
   if (plain) return plain;
   try {
-    return (await termFromModel(provider, apiKey, c.heard)) ?? fallbackTerm(c);
+    return await termFromModel(provider, apiKey, c.heard);
   } catch (e) {
     console.warn("term from model:", (e as Error).message);
     return fallbackTerm(c);

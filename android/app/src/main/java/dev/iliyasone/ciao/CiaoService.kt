@@ -593,7 +593,7 @@ class CiaoService : AccessibilityService() {
             c?.final("")
             c?.setPhase(CardView.Phase.DONE)
             finish(REMEMBER_WAIT_MS)
-            return remember(commands, d.provider)
+            return remember(commands, d.provider, null)
         }
         if (text.isEmpty()) {
             if (d.endedAt - d.startedAt < 1500) {
@@ -621,15 +621,15 @@ class CiaoService : AccessibilityService() {
             c?.setPhase(CardView.Phase.CLIPBOARD, getString(R.string.copied))
             finish(if (commands.isEmpty()) 3500 else REMEMBER_WAIT_MS)
         }
-        if (commands.isNotEmpty()) remember(commands, d.provider)
+        if (commands.isNotEmpty()) remember(commands, d.provider, if (inserted) null else getString(R.string.copied))
     }
 
     /**
      * "Чао, запомни слово …" (cut out of the text): adds each term as an edit in Settings does, so
-     * Google sync sends it, and says so on the card, unless the next dictation has started by then.
-     * As rememberTerms in src/main/main.ts.
+     * Google sync sends it, and says so on the card after its [note] ("Copied…"), unless the next
+     * dictation has started by then. As rememberTerms in src/main/main.ts.
      */
-    private fun remember(commands: List<VoiceCommands.RememberCommand>, provider: Provider) {
+    private fun remember(commands: List<VoiceCommands.RememberCommand>, provider: Provider, note: String?) {
         val key = prefs.keyOf(provider)
         val shown = card
         Thread {
@@ -646,9 +646,9 @@ class CiaoService : AccessibilityService() {
                     }
                 }
                 if (dictation != null || card !== shown || shown == null) return@post
-                shown.notice(messages.joinToString(" · "))
+                shown.notice((listOfNotNull(note) + messages).joinToString(" · "))
                 main.removeCallbacks(hideCardLater)
-                main.postDelayed(hideCardLater, if (terms.any { it.second != null }) 3000 else 6000)
+                main.postDelayed(hideCardLater, if (note == null && terms.any { it.second != null }) 3000 else 6000)
             }
         }.start()
     }

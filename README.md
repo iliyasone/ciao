@@ -56,8 +56,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     "gpt-5"), the words after the command go to a small text model of the
     service you use, with the same key: `gpt-5.4-mini` for OpenAI,
     `gemini-3.5-flash-lite` for Gemini (about half a second, a tiny fraction of a
-    cent). Only those few words are sent. Without a network it keeps the word as
-    heard, or says it couldn't make it out.
+    cent). Only those few words are sent. If the model finds no term there,
+    nothing is added; without a network it keeps the word as heard, or says it
+    couldn't make it out.
+  - "Слово"/"термин"/"word"/"term" is needed: "чао, добавь тесты" or "чао,
+    запомни, что…" stays dictation.
   - The term syncs like one typed in *Settings → Terms*. A term that differs only
     in case is replaced ("Posthog" becomes "PostHog").
 - **The card stays out of your way.**

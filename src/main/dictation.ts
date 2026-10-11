@@ -124,8 +124,8 @@ export class DictationController {
       idle: () => void;
       /** A dictation that was kept in history ended; for anonymous usage counts. */
       ended: (report: DictationReport) => void;
-      /** It said "чао, запомни слово …" (cut out of its text): add the terms. Called once its card is done. */
-      remember: (commands: RememberCommand[], settings: Settings, apiKey: string) => void;
+      /** It said "чао, запомни слово …" (cut out of its text): add the terms. Called once its card shows `phase`. */
+      remember: (commands: RememberCommand[], settings: Settings, apiKey: string, phase: OverlayPhase) => void;
     },
   ) {}
 
@@ -462,7 +462,7 @@ export class DictationController {
         this.active = null;
         this.deps.idle();
         this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
-        if (commands.length) this.deps.remember(commands, settings, a.apiKey);
+        if (commands.length) this.deps.remember(commands, settings, a.apiKey, "empty");
         return;
       }
       entry.status = entry.error ? "failed" : "done";
@@ -501,7 +501,7 @@ export class DictationController {
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     });
-    if (commands.length) this.deps.remember(commands, settings, a.apiKey);
+    if (commands.length) this.deps.remember(commands, settings, a.apiKey, phase);
   }
 
   private ended(a: Active, outcome: DictationOutcome): void {
