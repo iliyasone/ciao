@@ -76,6 +76,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   typo fixes are not. The text is compared on your computer and never stored or
   sent. Fixing a dictation in the history (*Edit*) offers the corrected words too.
   Turn it off in *Settings → Behavior → Suggest new words*.
+  - Reading a field makes a Chromium or Electron app (Chrome, VS Code, T3 Code,
+    Slack) turn its accessibility support on, as a screen reader would; it costs
+    that app some memory, and VS Code may ask once whether you use a screen
+    reader (answer *No*).
   - Password fields are never read. Apps that don't expose their text to the
     system's accessibility interface (some terminals, games) simply get no
     suggestions; on Linux see [below](#linux).

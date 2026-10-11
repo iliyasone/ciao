@@ -17,12 +17,16 @@ const SETTLE_MS = 400;
 const TYPING_PAUSE_MS = 900;
 /** A second read this long after one that found something, to see that it stayed. */
 const CONFIRM_MS = 1500;
+/** Reads in a row that find no field before the watch gives up (focus may sit on a message for a moment). */
+const MAX_MISSES = 3;
 
 interface Watch {
   text: string;
   hwnd: number;
   /** Words already offered in this watch. */
   offered: Set<string>;
+  /** Reads in a row that found no editable field. */
+  misses: number;
   /** Corrections the last read found, waiting for the next one to confirm them (by lower-case word). */
   seen: Map<string, Correction>;
   timer?: ReturnType<typeof setTimeout>;
@@ -49,7 +53,7 @@ export class CorrectionWatcher {
   /** `text` was just pasted into `hwnd`. */
   pasted(text: string, hwnd: number): void {
     this.stop();
-    this.watch = { text, hwnd, offered: new Set(), seen: new Map() };
+    this.watch = { text, hwnd, offered: new Set(), seen: new Map(), misses: 0 };
     this.listen(WATCH_MS, hwnd);
     this.schedule(SETTLE_MS);
   }
@@ -104,9 +108,13 @@ export class CorrectionWatcher {
     try {
       const r = await this.deps.input.field(w.hwnd);
       if (this.watch !== w) return;
-      if (r.text !== null) this.check(w, r.text, false);
-      // The user is elsewhere for now; any other miss means this field can't be read at all.
-      else if (r.reason !== "focus-changed" && r.reason !== "timeout") this.stop();
+      if (r.text !== null) {
+        w.misses = 0;
+        this.check(w, r.text, false);
+      }
+      // Elsewhere for now, or on something that isn't a field for a moment; the rest means this
+      // field can't be read at all.
+      else if (r.reason === "no-field" ? ++w.misses >= MAX_MISSES : r.reason !== "focus-changed" && r.reason !== "timeout") this.stop();
     } finally {
       this.reading = false;
     }

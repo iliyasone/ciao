@@ -274,8 +274,9 @@ function addTerm(term: string): void {
   if (!t || settings.keywords.some((k) => k.trim().toLowerCase() === t.toLowerCase())) return;
   console.log("term added from a correction");
   applySettings({ ...settings, keywords: [t, ...settings.keywords] });
-  // The Settings page shows the terms as it last read them: give it the new list, as after a sync.
-  historyWin?.webContents.send("settings:synced", settings);
+  // The Settings page shows the terms as it last read them (and may be saving an edit of them):
+  // it adds the word to its own list.
+  historyWin?.webContents.send("settings:term-added", t);
 }
 
 /** Words the user corrected, before they become suggestions: not terms already, not turned down before. */

@@ -36,11 +36,22 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     });
     void ciao.settings.wakeAvailable().then(setWakeAvailable);
     // Terms and context merged from another device replace what's shown here.
-    return ciao.settings.onSynced((synced) => {
+    const offSynced = ciao.settings.onSynced((synced) => {
       if (!latest.current) return;
       latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt, syncKeys: synced.syncKeys };
       setS(latest.current);
     });
+    // A word added from a suggestion joins the list as shown, so terms being typed aren't lost.
+    const offAdded = ciao.settings.onTermAdded((term) => {
+      const cur = latest.current;
+      if (!cur || cur.keywords.some((k) => k.trim().toLowerCase() === term.toLowerCase())) return;
+      latest.current = { ...cur, keywords: [term, ...cur.keywords] };
+      setS(latest.current);
+    });
+    return () => {
+      offSynced();
+      offAdded();
+    };
   }, []);
 
   const update = (patch: Partial<Settings>, debounce = false) => {

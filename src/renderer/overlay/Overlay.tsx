@@ -168,10 +168,10 @@ function reportRegion(): void {
   reportQueued = true;
   setTimeout(() => {
     reportQueued = false;
-    const m = 14;
+    // Room for the shadows (0 14px 44px): the shape clips drawing too.
     ciao.overlay.setRegion([...drawn].map((el) => {
       const r = el.getBoundingClientRect();
-      return { x: r.x - m, y: r.y - m, width: r.width + 2 * m, height: r.height + 2 * m };
+      return { x: r.x - 30, y: r.y - 20, width: r.width + 60, height: r.height + 20 + 56 };
     }));
   });
 }
@@ -243,9 +243,11 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
       const scroller = target.closest<HTMLElement>("[data-scroller]");
       if (scroller && e.clientX >= scroller.getBoundingClientRect().left + scroller.clientWidth) return;
       e.stopPropagation();
-      e.currentTarget.setPointerCapture(e.pointerId);
       press.current = { x: e.screenX, y: e.screenY, moved: mode === "resize" };
+      // Captured only once it is a drag: a captured press sends its clicks to the card, and the
+      // grip's double-click would never arrive.
       if (mode === "resize") {
+        e.currentTarget.setPointerCapture(e.pointerId);
         dragging.current = true;
         ciao.overlay.dragStart();
       }
@@ -257,6 +259,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
       const dy = e.screenY - p.y;
       if (!p.moved) {
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
         p.moved = true;
         dragging.current = true;
         ciao.overlay.dragStart();

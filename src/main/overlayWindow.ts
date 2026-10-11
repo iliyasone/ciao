@@ -163,15 +163,19 @@ export class OverlayWindow implements OverlayPort {
   dragEnd(): void {
     if (!this.drag0) return;
     this.drag0 = null;
-    const b = this.win.getBounds();
-    console.log("overlay moved to", JSON.stringify(b));
-    this.savePlacement({
-      anchor: { x: b.x + Math.round(b.width / 2), y: b.y + b.height - CARD_BOTTOM },
-      cardWidth: b.width - SIDE_PADDING,
-      lines: Math.round((b.height - CHROME_HEIGHT) / LINE),
-    });
-    // Dropped (partly) off the screen: back into it.
+    const save = () => {
+      const b = this.win.getBounds();
+      this.savePlacement({
+        anchor: { x: b.x + Math.round(b.width / 2), y: b.y + b.height - CARD_BOTTOM },
+        cardWidth: b.width - SIDE_PADDING,
+        lines: Math.round((b.height - CHROME_HEIGHT) / LINE),
+      });
+    };
+    save();
+    // Dropped (partly) off the screen: back into it, and remember where it ended up.
     this.place();
+    save();
+    console.log("overlay moved to", JSON.stringify(this.win.getBounds()));
   }
 
   /** Back to bottom-centre at the default size. */
@@ -235,9 +239,14 @@ export class OverlayWindow implements OverlayPort {
       width,
       height,
     });
-    // A saved spot is used only while it is still on some screen (monitors come and go).
-    const saved = anchor && screen.getAllDisplays().find((d) => contains(d.workArea, anchor));
-    if (anchor && saved) return at(anchor.x, anchor.y, saved.workArea);
+    // A saved spot is used while it is still on or next to some screen (monitors come and go;
+    // a pill dropped on the taskbar is just past the work area).
+    if (anchor) {
+      const near = screen.getDisplayNearestPoint(anchor).bounds;
+      if (contains({ x: near.x - 200, y: near.y - 200, width: near.width + 400, height: near.height + 400 }, anchor)) {
+        return at(anchor.x, anchor.y, screen.getDisplayNearestPoint(anchor).workArea);
+      }
+    }
     const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
     return at(area.x + area.width / 2, area.y + area.height - SCREEN_GAP - CARD_BOTTOM, area);
   }

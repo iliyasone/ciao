@@ -69,6 +69,8 @@ const api = {
     onChanged: (cb: (s: Settings) => void) => on("settings:changed", cb),
     /** Terms or the prompt changed through sync, not in this window. */
     onSynced: (cb: (s: Settings) => void) => on("settings:synced", cb),
+    /** A corrected word was added to the terms from a suggestion. */
+    onTermAdded: (cb: (term: string) => void) => on("settings:term-added", cb),
     hasApiKey: (provider: Provider): Promise<boolean> => ipcRenderer.invoke("settings:has-key", provider),
     /** A key was saved, here or on another device (through sync). */
     onKeys: (cb: () => void) => on("settings:keys", cb),
