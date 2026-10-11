@@ -56,10 +56,16 @@ Answer with the term only, written the way it is normally written: the script, c
         return term.takeIf { it.isNotEmpty() && it.length <= MAX_TERM && it.none { ch -> ch in "\r\n<>" } }
     }
 
-    /** The service answered with an error (a key without access to the model, a quota): no reason to guess the term. */
+    /** The service refused (a key without access to the model, a bad request): no reason to guess the term. */
     class ModelError(message: String) : IOException(message)
 
-    /** Blocking: asks the provider's text model for the term; throws on a network error, [ModelError] on an API error. */
+    /** What came of a command: the term, none (nothing in what was heard), or the service's refusal. */
+    data class Result(val term: String?, val error: String? = null)
+
+    /**
+     * Blocking: asks the provider's text model for the term. Throws [ModelError] when the service
+     * refuses (4xx), any other exception when it can't be reached or is down (network, timeout, 429, 5xx).
+     */
     fun fromModel(provider: Provider, key: String, heard: String): String? {
         val request = if (provider == Provider.GEMINI) {
             val body = JSONObject()
@@ -86,30 +92,34 @@ Answer with the term only, written the way it is normally written: the script, c
         }
         client.newCall(request).execute().use { res ->
             val json = runCatching { JSONObject(res.body!!.string()) }.getOrDefault(JSONObject())
-            if (!res.isSuccessful) throw ModelError(json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() } ?: "${provider.displayName} ${res.code}")
+            if (!res.isSuccessful) {
+                val message = json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() } ?: "${provider.displayName} ${res.code}"
+                throw if (res.code == 429 || res.code >= 500) IOException(message) else ModelError(message)
+            }
             val answer = if (provider == Provider.GEMINI) {
                 val parts = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
                 (0 until (parts?.length() ?: 0)).joinToString("") { parts!!.optJSONObject(it)?.optString("text") ?: "" }
             } else {
-                json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content") ?: ""
+                // optString turns a JSON null (a refusal) into "null".
+                json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.let { if (it.isNull("content")) "" else it.optString("content") } ?: ""
             }
             return clean(answer)
         }
     }
 
     /**
-     * Blocking: the term a command asked for, as heard when that's enough, else from the model (null
-     * when it found none, or answered with an error: nothing is added), else, when the model can't be
-     * reached, a fallback.
+     * Blocking: the term a command asked for, as heard when that's enough, else from the model (none
+     * when it found none, or refused: nothing is added), else, when the model can't be reached or is
+     * down, a fallback.
      */
-    fun resolve(provider: Provider, key: String, c: VoiceCommands.RememberCommand): String? {
-        if (c.heard.isEmpty()) return null
-        plain(c)?.let { return it }
+    fun resolve(provider: Provider, key: String, c: VoiceCommands.RememberCommand): Result {
+        if (c.heard.isEmpty()) return Result(null)
+        plain(c)?.let { return Result(it) }
         return try {
-            fromModel(provider, key, c.heard)
+            Result(fromModel(provider, key, c.heard))
         } catch (e: Exception) {
             Log.w("Ciao", "term from model: ${e.message}")
-            if (e is ModelError) null else fallback(c)
+            if (e is ModelError) Result(null, e.message) else Result(fallback(c))
         }
     }
 

@@ -51,10 +51,13 @@ export function cleanTerm(answer: string): string | null {
   return term && term.length <= MAX_TERM && !/[\r\n<>]/.test(term) ? term : null;
 }
 
-/** The service answered with an error (a key without access to the model, a quota): no reason to guess the term. */
+/** The service refused (a key without access to the model, a bad request): no reason to guess the term. */
 class ModelError extends Error {}
 
-/** Asks the provider's text model for the term; throws on a network error, ModelError on an API error. */
+/**
+ * Asks the provider's text model for the term. Throws ModelError when the service refuses (4xx), any
+ * other error when it can't be reached or is down (network, timeout, 429, 5xx).
+ */
 export async function termFromModel(provider: Provider, apiKey: string, heard: string): Promise<string | null> {
   const name = PROVIDERS[provider].name;
   const res =
@@ -87,7 +90,10 @@ export async function termFromModel(provider: Provider, apiKey: string, heard: s
     choices?: { message?: { content?: string } }[];
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
-  if (!res.ok) throw new ModelError(body.error?.message ?? t().errors.status(name, res.status));
+  if (!res.ok) {
+    const message = body.error?.message ?? t().errors.status(name, res.status);
+    throw res.status === 429 || res.status >= 500 ? new Error(message) : new ModelError(message);
+  }
   const answer =
     provider === "gemini"
       ? (body.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("")
@@ -95,19 +101,26 @@ export async function termFromModel(provider: Provider, apiKey: string, heard: s
   return cleanTerm(answer);
 }
 
+/** What came of a command: the term, none (nothing in what was heard), or the service's refusal. */
+export interface TermResult {
+  term: string | null;
+  error?: string;
+}
+
 /**
- * The term a command asked for: as heard when that's enough, else from the model (null when it found
- * none, or answered with an error: nothing is added), else, when the model can't be reached, a fallback.
+ * The term a command asked for: as heard when that's enough, else from the model (none when it found
+ * none, or refused: nothing is added), else, when the model can't be reached or is down, a fallback.
  */
-export async function resolveTerm(provider: Provider, apiKey: string, c: RememberCommand): Promise<string | null> {
-  if (!c.heard) return null;
+export async function resolveTerm(provider: Provider, apiKey: string, c: RememberCommand): Promise<TermResult> {
+  if (!c.heard) return { term: null };
   const plain = plainTerm(c);
-  if (plain) return plain;
+  if (plain) return { term: plain };
   try {
-    return await termFromModel(provider, apiKey, c.heard);
+    return { term: await termFromModel(provider, apiKey, c.heard) };
   } catch (e) {
-    console.warn("term from model:", (e as Error).message);
-    return e instanceof ModelError ? null : fallbackTerm(c);
+    const message = (e as Error).message;
+    console.warn("term from model:", message);
+    return e instanceof ModelError ? { term: null, error: message } : { term: fallbackTerm(c) };
   }
 }
 

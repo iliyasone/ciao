@@ -32,15 +32,18 @@ export function stripStopPhrase(text: string): string {
 // words after it are the term as heard: written out ("PostHog", "пост хог") or spelled letter by
 // letter ("пэ, о, эс, тэ", "P-O-S-T"). src/core/terms.ts turns them into the term itself.
 
-// The noun is required: "Чао, добавь тесты" or "Чао, запомни: мы на pnpm" is dictation, not a command
-// (a wake-word start always begins with "Чао").
+// The noun is required, and narrow: "Чао, добавь тесты", "Чао, запомни: мы на pnpm", "add new words
+// to the list", "add a word count" or "добавь термины в глоссарий" are dictation, not commands (a
+// wake-word start always begins with "Чао"). Commands: "запомни (новое) слово …", "добавь в
+// термины/словарь (слово) …", "remember the word …", "add to my terms …".
+const NOUN = `(?:слово|термин|word|term)(?!\\p{L})(?!${SEP}count(?!\\p{L}))`;
 const VERB_AND_NOUN =
-  `(?:запомни|запиши|добавь|remember|add)(?!\\p{L})` +
-  `(?:${SEP}(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?` +
-  `${SEP}(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})` +
-  // "добавь в словарь слово …"
-  `(?:${SEP}(?:слово|термин|word|term)(?!\\p{L}))?` +
+  `(?:запомни|запиши|добавь|remember|add)(?!\\p{L})${SEP}` +
+  `(?:(?:(?:новое|новый|new|the|a|an)(?!\\p{L})${SEP})?${NOUN}` +
+  `|(?:в|to)(?:${SEP}(?:my|the))?(?!\\p{L})${SEP}(?:словарь|термины|terms|dictionary|vocabulary)(?!\\p{L})(?:${SEP}${NOUN})?)` +
   `(?:${SEP}(?:по буквам|spelled|spelt))?`;
+/** A command followed by one of these was dictation: "Чао, запиши новое слово в документ". */
+const NOT_A_TERM = new Set("в во на для из от про с to of for in on into from with".split(" "));
 // "ао": a wake-word start may begin with the tail of "чао" (see stripWakeWord), or with none of it.
 const REMEMBER = `(?:^\\s*ао|(?<!\\p{L})${WORD})${SEP}${VERB_AND_NOUN}`;
 const REMEMBER_AFTER_WAKE = `(?:^\\s*(?:ао)?|(?<!\\p{L})${WORD})${SEP}${VERB_AND_NOUN}`;
@@ -99,6 +102,10 @@ export function takeRememberCommands(text: string, wakeStarted = false): { text:
   const re = new RegExp(wakeStarted ? REMEMBER_AFTER_WAKE : REMEMBER, "giu");
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const term = readTerm(text, m.index + m[0].length);
+    if (!term.command.spelled && NOT_A_TERM.has(term.command.heard.split(/[^\p{L}]/u)[0]!.toLowerCase())) {
+      re.lastIndex = m.index + 1;
+      continue;
+    }
     commands.push(term.command);
     add(text.slice(from, m.index));
     const end = term.end + (DESTINATION.exec(text.slice(term.end))?.[0].length ?? 0);

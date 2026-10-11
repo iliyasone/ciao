@@ -88,6 +88,7 @@
     <string name="copied">Copied. Paste it where you need it</string>
     <string name="nothing_heard">Nothing heard</string>
     <string name="term_added">Added to your terms: %1$s</string>
+    <string name="term_error">Couldn\'t add “%1$s” to your terms: %2$s</string>
     <string name="term_known">%1$s is already in your terms</string>
     <string name="term_failed">Couldn\'t make out “%1$s”. Add it in Settings → Terms</string>
     <string name="term_not_heard">Didn\'t catch the word. Say “ciao, remember the word …” again</string>

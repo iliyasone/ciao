@@ -637,10 +637,12 @@ class CiaoService : AccessibilityService() {
         val shown = card
         val mine = started
         Thread {
-            val terms = commands.map { it.heard to Terms.resolve(provider, key, it) }
+            val results = commands.map { it.heard to Terms.resolve(provider, key, it) }
             main.post {
-                val messages = terms.map { (heard, term) ->
+                val messages = results.map { (heard, result) ->
+                    val term = result.term
                     when {
+                        result.error != null -> getString(R.string.term_error, heard, result.error)
                         term == null -> if (heard.isEmpty()) getString(R.string.term_not_heard) else getString(R.string.term_failed, heard)
                         Terms.add(prefs.keywords, term) == null -> getString(R.string.term_known, term)
                         else -> {
@@ -652,7 +654,7 @@ class CiaoService : AccessibilityService() {
                 if (dictation != null || started != mine || card !== shown || shown == null) return@post
                 shown.notice((listOfNotNull(note) + messages).joinToString(" · "))
                 main.removeCallbacks(hideCardLater)
-                main.postDelayed(hideCardLater, if (note == null && terms.any { it.second != null }) 3000 else 6000)
+                main.postDelayed(hideCardLater, if (note == null && results.any { it.second.term != null }) 3000 else 6000)
             }
         }.start()
     }

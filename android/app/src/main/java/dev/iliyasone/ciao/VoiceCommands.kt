@@ -18,14 +18,16 @@ object VoiceCommands {
     // A port of takeRememberCommands in src/core/voiceCommands.ts; Terms.kt turns what was heard
     // into the term. (?U): \s takes Unicode spaces too, as in JS.
 
-    // The noun is required: "Чао, добавь тесты" is dictation, not a command.
+    // The noun is required, and narrow: "Чао, добавь тесты", "add new words to the list", "add a word
+    // count" or "добавь термины в глоссарий" are dictation, not commands.
+    private const val NOUN = "(?:слово|термин|word|term)(?!\\p{L})(?!${SEP}count(?!\\p{L}))"
     private const val VERB_AND_NOUN =
-        "(?:запомни|запиши|добавь|remember|add)(?!\\p{L})" +
-            "(?:$SEP(?:в|to|the|a|an|my|новое|новый|new)(?!\\p{L}))?" +
-            "$SEP(?:словарь|слово|термины|термин|words?|terms?|vocabulary|dictionary)(?!\\p{L})" +
-            // "добавь в словарь слово …"
-            "(?:$SEP(?:слово|термин|word|term)(?!\\p{L}))?" +
+        "(?:запомни|запиши|добавь|remember|add)(?!\\p{L})$SEP" +
+            "(?:(?:(?:новое|новый|new|the|a|an)(?!\\p{L})$SEP)?$NOUN" +
+            "|(?:в|to)(?:$SEP(?:my|the))?(?!\\p{L})$SEP(?:словарь|термины|terms|dictionary|vocabulary)(?!\\p{L})(?:$SEP$NOUN)?)" +
             "(?:$SEP(?:по буквам|spelled|spelt))?"
+    /** A command followed by one of these was dictation: "Чао, запиши новое слово в документ". */
+    private val NOT_A_TERM = "в во на для из от про с to of for in on into from with".split(" ").toSet()
     // "ао": a wake-word start may begin with the tail of "чао", or with none of it.
     private val REMEMBER = Regex("(?iU)(?:^\\s*ао|(?<!\\p{L})$WORD)$SEP$VERB_AND_NOUN")
     private val REMEMBER_AFTER_WAKE = Regex("(?iU)(?:^\\s*(?:ао)?|(?<!\\p{L})$WORD)$SEP$VERB_AND_NOUN")
@@ -86,6 +88,10 @@ object VoiceCommands {
         var m = re.find(text)
         while (m != null) {
             val (termEnd, command) = readTerm(text, m.range.last + 1)
+            if (!command.spelled && command.heard.split(Regex("[^\\p{L}]")).first().lowercase() in NOT_A_TERM) {
+                m = re.find(text, m.range.first + 1)
+                continue
+            }
             commands.add(command)
             add(text.substring(from, m.range.first))
             val end = termEnd + (DESTINATION.find(text.substring(termEnd))?.value?.length ?: 0)

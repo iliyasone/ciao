@@ -341,12 +341,12 @@ const READ_FIRST_MS: Partial<Record<OverlayPhase, number>> = { clipboard: 3800, 
 async function rememberTerms(commands: RememberCommand[], s: Settings, apiKey: string, phase: OverlayPhase): Promise<void> {
   const shownAt = Date.now();
   const seq = dictation.lastSeq;
-  const terms = await Promise.all(commands.map(async (c) => ({ heard: c.heard, term: await resolveTerm(s.provider, apiKey, c) })));
+  const terms = await Promise.all(commands.map(async (c) => ({ heard: c.heard, ...(await resolveTerm(s.provider, apiKey, c)) })));
   const messages: string[] = [];
-  for (const { heard, term } of terms) {
+  for (const { heard, term, error } of terms) {
     if (term === null) {
-      console.warn("remember: no term in", JSON.stringify(heard));
-      messages.push(t().overlay.termFailed(heard));
+      console.warn("remember: no term in", JSON.stringify(heard), error ?? "");
+      messages.push(error ? t().overlay.termError(heard, error) : t().overlay.termFailed(heard));
       continue;
     }
     const keywords = addTerm(settings.keywords, term);

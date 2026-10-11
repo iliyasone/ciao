@@ -83,6 +83,7 @@
     <string name="copied">Скопировано, вставьте куда нужно</string>
     <string name="nothing_heard">Ничего не услышал</string>
     <string name="term_added">Добавлено в термины: %1$s</string>
+    <string name="term_error">Не удалось добавить «%1$s» в термины: %2$s</string>
     <string name="term_known">%1$s — уже в терминах</string>
     <string name="term_failed">Не получилось разобрать слово «%1$s». Добавьте его в Настройках → Термины</string>
     <string name="term_not_heard">Слово не расслышано. Скажите «чао, запомни слово …» ещё раз</string>

@@ -56,6 +56,7 @@ const ru = {
     recoveredSaved: "Запись прервалась при перезапуске — аудио сохранено в истории",
     termAdded: (term: string) => `Добавлено в термины: ${term}`,
     termKnown: (term: string) => `${term} — уже в терминах`,
+    termError: (heard: string, error: string) => `Не удалось добавить «${heard}» в термины: ${error}`,
     termFailed: (heard: string) =>
       heard ? `Не получилось разобрать слово «${heard}» — добавь его в Настройках → Термины` : "Слово не расслышано — скажи «чао, запомни слово …» ещё раз",
     close: "Закрыть",
@@ -323,6 +324,7 @@ const en: Strings = {
     recoveredSaved: "The recording was cut short by a restart — the audio is saved in history",
     termAdded: (term: string) => `Added to your terms: ${term}`,
     termKnown: (term: string) => `${term} is already in your terms`,
+    termError: (heard: string, error: string) => `Couldn't add “${heard}” to your terms: ${error}`,
     termFailed: (heard: string) =>
       heard ? `Couldn't make out “${heard}” — add it in Settings → Terms` : "Didn't catch the word — say “ciao, remember the word …” again",
     close: "Close",
