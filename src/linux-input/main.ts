@@ -15,8 +15,8 @@
 //   the desktop (GNOME: toolkit-accessibility, or a screen reader running); otherwise "no-field".
 // - "key" events: since keys come from evdev, the app gets them at the same time, so the text read
 //   on Enter may already be gone (null). "paste" goes by the key's position (where QWERTY has V).
-//   On Wayland the watched window has no id, so Enter reads nothing and "field" reads the app in
-//   front (main then finds its text gone and stops watching once the user is elsewhere).
+//   On Wayland the watched window has no id, so Enter reads nothing, and "field" sticks with the app
+//   its first read in a watch found in front: in any other app it answers "focus-changed".
 // - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
 //
 // Extra event: {"type":"status","reading":N,"denied":M} after every device scan.
@@ -166,6 +166,8 @@ if (wayland && !uinput) log("no write access to /dev/uinput: dictations stay on 
 // ── The focused field ─────────────────────────────────────────────────────
 
 let atspi: Atspi | null | undefined; // connected on the first read, so a user who never needs it never connects
+/** Wayland: the app the first read of this watch found in front; a read in another app is "focus-changed". */
+let watchApp: number | null = null;
 
 /** See "field" in Program.cs; `budget` in ms. */
 function readField(hwnd: number, budget: number): FieldResult | { text: null; reason: "focus-changed" } {
@@ -176,7 +178,21 @@ function readField(hwnd: number, budget: number): FieldResult | { text: null; re
     pid = x11.pid(front);
   }
   connectAtspi();
-  return atspi ? atspi.focusedText(pid, budget) : { text: null, reason: "unsupported" };
+  if (!atspi) return { text: null, reason: "unsupported" };
+  let r: FieldResult;
+  try {
+    r = atspi.focusedText(pid, budget);
+  } catch (e) {
+    // Not one of the expected misses (a decoding error, say): answer rather than die.
+    log(`reading the field: ${(e as Error).message}`);
+    return { text: null, reason: "no-field" };
+  }
+  // Wayland names no window: stay with the app the watch began in, never read on in another one.
+  if (wayland && watching) {
+    watchApp ??= atspi.appPid;
+    if (atspi.appPid !== watchApp) return { text: null, reason: "focus-changed" };
+  }
+  return r;
 }
 
 /** Connects once, at the first watch or read: an Enter read can't wait for the accessibility bus. */
@@ -240,6 +256,7 @@ function handle(msg: Record<string, unknown>): void {
     case "watch":
       watching = msg.on === true;
       watchWindow = typeof msg.hwnd === "number" ? msg.hwnd : 0;
+      watchApp = null;
       if (watching) connectAtspi();
       return;
   }

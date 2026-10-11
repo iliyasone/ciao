@@ -385,7 +385,7 @@ function registerIpc(): void {
       store.save(entry);
       notifyChanged(entry);
     }
-    return { entry, suggestions: newTerms(findCorrections(before, text) ?? [], settings.keywords) };
+    return { entry, suggestions: newTerms(findCorrections(before, text) ?? [], knownWords()) };
   });
   ipcMain.handle("history:add-term", (_e, term: string) => addTerm(term));
 

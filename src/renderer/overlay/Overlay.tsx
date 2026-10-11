@@ -556,7 +556,14 @@ export function Overlay() {
   let icon: ReactNode;
   switch (state.phase) {
     case "recording":
-      icon = <LevelDot />;
+      // Hands-free there is no key to let go of: the dot finishes it, as a second click on the pill would.
+      icon = state.handsFree ? (
+        <button onClick={() => ciao.overlay.pillClick()} title={tr.finish} className="-m-1.5 cursor-pointer rounded-full p-1.5 hover:bg-tint/10">
+          <LevelDot />
+        </button>
+      ) : (
+        <LevelDot />
+      );
       break;
     case "finishing":
       icon = <Loader2 className="size-4 animate-spin text-muted" />;

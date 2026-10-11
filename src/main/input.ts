@@ -55,6 +55,8 @@ export class InputHelper extends EventEmitter<InputEvents> {
   private captureResolve: ((spec: string | null) => void) | null = null;
   /** macOS: false until the helper has the Accessibility permission (it hears no keys before). */
   private canHear = true;
+  /** The last "watch" sent, sent again to a restarted helper. */
+  private watching: { on: boolean; hwnd: number } = { on: false, hwnd: 0 };
 
   constructor(private triggers: string[]) {
     super();
@@ -95,6 +97,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
     readline.createInterface({ input: child.stderr! }).on("line", (line) => console.error("input stderr:", line));
     this.child = child;
     readline.createInterface({ input: child.stdout! }).on("line", (line) => this.onLine(line));
+    if (this.watching.on) this.send({ cmd: "watch", ...this.watching });
     child.on("exit", () => {
       this.child = null;
       for (const resolve of this.pending.values()) resolve({ ok: false, reason: "helper-exited" });
@@ -176,6 +179,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
 
   /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */
   watch(on: boolean, hwnd = 0): void {
+    this.watching = { on, hwnd };
     this.send({ cmd: "watch", on, hwnd });
   }
 

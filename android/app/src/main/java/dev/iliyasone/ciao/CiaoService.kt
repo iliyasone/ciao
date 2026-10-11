@@ -748,11 +748,14 @@ class CiaoService : AccessibilityService() {
      * The field a dictation went into, watched for [WATCH_MS] for words the user corrects
      * (Corrections.kt). Its text is read only after it changes, compared on the phone and dropped:
      * never kept or sent. [offered]: suggestions already shown in this watch; [seen]: what the last
-     * read found, offered only if the next read still shows it ("PostHo" is a word being typed).
+     * read found (by lower-case spelling), offered only if the next read still shows it ("PostHo" is
+     * a word being typed) or the text is sent meanwhile. [sent]: the whole text as it was just before
+     * the field was cleared (Send), from that change's event; final, so no second read is needed.
      */
     private class Watch(val node: AccessibilityNodeInfo, val text: String) {
         val offered = HashSet<String>()
-        var seen: Set<String> = emptySet()
+        var seen: Map<String, Correction> = emptyMap()
+        var sent: String? = null
     }
 
     private var watch: Watch? = null
@@ -795,6 +798,10 @@ class CiaoService : AccessibilityService() {
         val w = watch ?: return
         if (event.isPassword || event.windowId != w.node.windowId) return
         if (event.source != w.node) return
+        // The whole text removed at once: sent (or cleared). Fields that report it hand over the text
+        // as it was; WebViews often don't, and then only the corrections already seen remain.
+        val before = event.beforeText
+        if (before != null && before.isNotEmpty() && event.fromIndex <= 0 && event.removedCount >= before.length && event.addedCount == 0) w.sent = before.toString()
         main.removeCallbacks(checkWatch)
         main.postDelayed(checkWatch, TYPING_PAUSE_MS)
     }
@@ -809,10 +816,11 @@ class CiaoService : AccessibilityService() {
         val shown = node.text?.toString().orEmpty()
         val text = if (node.isShowingHintText || shown == node.hintText?.toString()) "" else shown
         // null: sent, deleted or rewritten.
-        val found = Corrections.find(w.text, text) ?: return stopWatch()
-        val fresh = Corrections.newTerms(found, prefs.keywords + prefs.dismissedTerms).filter { it.fixed.lowercase() !in w.offered }
+        val found = Corrections.find(w.text, text) ?: return stopAndOfferSent(w)
+        w.sent = null
+        val fresh = newFor(w, found)
         val before = w.seen
-        w.seen = fresh.map { it.fixed.lowercase() }.toSet()
+        w.seen = fresh.associateBy { it.fixed.lowercase() }
         // Found for the first time: look again in a moment, as on the desktop (which also reads on Enter).
         if (fresh.any { it.fixed.lowercase() !in before }) {
             main.removeCallbacks(checkWatch)
@@ -823,6 +831,21 @@ class CiaoService : AccessibilityService() {
         suggest(next)
     }
 
+    /** Corrections not in the terms, not turned down before and not offered in this watch yet. */
+    private fun newFor(w: Watch, found: List<Correction>) =
+        Corrections.newTerms(found, prefs.keywords + prefs.dismissedTerms).filter { it.fixed.lowercase() !in w.offered }
+
+    /**
+     * The text left the field. Sent quickly after a fix, its corrections never got a second read: what
+     * the text held just before it went (or, without that, what the last read found) is final.
+     */
+    private fun stopAndOfferSent(w: Watch) {
+        val last = w.sent?.let { Corrections.find(w.text, it) }?.let { newFor(w, it) } ?: emptyList()
+        val waiting = newFor(w, w.seen.values.toList())
+        stopWatch()
+        (last + waiting).firstOrNull()?.let { suggest(it) }
+    }
+
     /** At the top, where the live card was: "«постхок» → «PostHog». Add to terms?" */
     private fun suggest(c: Correction) {
         if (dictation != null) return
@@ -830,7 +853,7 @@ class CiaoService : AccessibilityService() {
         lateinit var view: SuggestionView
         view = SuggestionView(this, c, onAdd = {
             // As an edit in the settings, so Google sync records and sends it.
-            GoogleSync.edit(this) { p -> if (Corrections.newTerms(listOf(c), p.keywords).isNotEmpty()) p.keywords = p.keywords + c.fixed }
+            GoogleSync.edit(this) { p -> if (Corrections.newTerms(listOf(c), p.keywords).isNotEmpty()) p.keywords = listOf(c.fixed) + p.keywords } // first, as on the desktop
             view.added(c.fixed)
             main.removeCallbacks(hideSuggestionLater)
             main.postDelayed(hideSuggestionLater, ADDED_MS)
@@ -895,7 +918,7 @@ class CiaoService : AccessibilityService() {
         /** A correction is offered once a second read this much later still shows it. */
         private const val CONFIRM_MS = 1500L
         /** An unanswered suggestion goes away by itself (and isn't offered again in this watch). */
-        private const val SUGGESTION_MS = 10_000L
+        private const val SUGGESTION_MS = 15_000L
         private const val ADDED_MS = 1800L
     }
 }

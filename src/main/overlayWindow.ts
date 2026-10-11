@@ -107,7 +107,7 @@ export class OverlayWindow implements OverlayPort {
     if (this.win.webContents.isLoading()) return;
     this.win.webContents.send("overlay:pill", on);
     if (on) {
-      this.place();
+      if (!this.busy) this.place(); // not under a card that is up
       this.win.showInactive();
     } else if (!this.busy) {
       this.win.hide();
@@ -170,6 +170,8 @@ export class OverlayWindow implements OverlayPort {
       cardWidth: b.width - SIDE_PADDING,
       lines: Math.round((b.height - CHROME_HEIGHT) / LINE),
     });
+    // Dropped (partly) off the screen: back into it.
+    this.place();
   }
 
   /** Back to bottom-centre at the default size. */
@@ -225,11 +227,19 @@ export class OverlayWindow implements OverlayPort {
     const { anchor, cardWidth, lines } = this.placement();
     const width = clamp(cardWidth, MIN_CARD_WIDTH, MAX_CARD_WIDTH) + SIDE_PADDING;
     const height = CHROME_HEIGHT + clamp(lines, MIN_LINES, MAX_LINES) * LINE;
-    const at = (x: number, y: number) => ({ x: Math.round(x - width / 2), y: Math.round(y + CARD_BOTTOM - height), width, height });
+    // The card unfolds up and to both sides of the anchor: keep all of it on the anchor's screen (its
+    // transparent margin may stick out), so a pill dragged to an edge doesn't open a card off screen.
+    const at = (x: number, y: number, a: Rectangle) => ({
+      x: Math.round(clamp(x - width / 2, a.x - SIDE_PADDING / 2, a.x + a.width - width + SIDE_PADDING / 2)),
+      y: Math.round(clamp(y + CARD_BOTTOM - height, a.y, a.y + a.height - height + CARD_BOTTOM)),
+      width,
+      height,
+    });
     // A saved spot is used only while it is still on some screen (monitors come and go).
-    if (anchor && screen.getAllDisplays().some((d) => contains(d.workArea, anchor))) return at(anchor.x, anchor.y);
+    const saved = anchor && screen.getAllDisplays().find((d) => contains(d.workArea, anchor));
+    if (anchor && saved) return at(anchor.x, anchor.y, saved.workArea);
     const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-    return at(area.x + area.width / 2, area.y + area.height - SCREEN_GAP - CARD_BOTTOM);
+    return at(area.x + area.width / 2, area.y + area.height - SCREEN_GAP - CARD_BOTTOM, area);
   }
 
   private place(): void {

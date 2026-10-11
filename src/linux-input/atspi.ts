@@ -102,7 +102,11 @@ export class Atspi {
    * or, without one (Wayland, or an app in another pid namespace like Flatpak), the app whose
    * window is active. Takes at most about `budget` ms plus one call's timeout.
    */
+  /** The process whose field the last focusedText looked at (null: none found). */
+  appPid: number | null = null;
+
   focusedText(pid: number | null, budget: number): FieldResult {
+    this.appPid = null;
     this.timeout = Math.max(50, Math.min(300, budget));
     this.deadline = Date.now() + budget;
     // No longer startup grace for apps seen for the first time: a hung app must not hold us.
@@ -139,6 +143,7 @@ export class Atspi {
         if (!(e instanceof Miss) || e.reason === "timeout" || candidates.length) throw e;
         continue; // another app that is going away
       }
+      if (window || candidates.length === 1) this.appPid = Number(this.call("atspi_accessible_get_process_id", "no-field", app));
       if (window) return this.focusedIn(window);
       // Matched by pid but no window says it is active (some toolkits never do): look in all of them.
       if (candidates.length === 1) return this.focusedIn(app);

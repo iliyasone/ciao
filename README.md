@@ -46,7 +46,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     the history.
 - **A pill between dictations.** A small Ciao pill stays at the bottom of the
   screen; the card unfolds out of it when you start and folds back when the text
-  is in. Click it to dictate hands-free (click again to finish), drag it anywhere.
+  is in. Click it to dictate hands-free (click the red dot on the card to
+  finish), drag it anywhere. The card then opens where the pill is, on that
+  screen, rather than on the screen under the pointer.
   Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
   appears and disappears.
 - **The card stays out of your way.**
@@ -64,8 +66,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   text ("постхок" → "PostHog", "клод код" → "Claude Code"), Ciao offers to add it
   to the terms, in a small card under its own name; one click and recognition
   spells it right from then on (and on your other devices, with
-  [sync](#sync)). For that it reads the field it pasted into for two minutes
-  after the paste: after you type in it, and as you press Enter (a chat app
+  [sync](#sync)). For that it reads the focused field of the window it pasted
+  into, for two minutes after the paste and only while that window is in front:
+  after you type in it, and as you press Enter (a chat app
   sends and clears the field then). If the text went to the clipboard instead,
   the field you paste it into yourself with Ctrl+V (⌘V) is watched the same way.
   Only words that sound like what was heard and look like a term (Latin letters
@@ -309,7 +312,9 @@ How it differs from Windows:
   accessibility bus. GTK and Qt apps answer it; Chromium, Electron and Firefox
   only once accessibility is switched on, for example with GNOME's
   `gsettings set org.gnome.desktop.interface toolkit-accessibility true` (or a
-  screen reader running). Where nothing answers, Ciao just offers no words.
+  screen reader running). Where nothing answers, Ciao just offers no words. On
+  Wayland there is no window to go by, so Ciao stays with the app that was in
+  front at its first look and doesn't read Enter.
 - The tray icon needs AppIndicator support (on GNOME, the *AppIndicator and
   KStatusNotifierItem Support* extension). *Start when you sign in* writes
   `~/.config/autostart/ciao.desktop`.

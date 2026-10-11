@@ -23,8 +23,8 @@ interface Watch {
   hwnd: number;
   /** Words already offered in this watch. */
   offered: Set<string>;
-  /** Corrections the last read found, waiting for the next one to confirm them. */
-  seen: Set<string>;
+  /** Corrections the last read found, waiting for the next one to confirm them (by lower-case word). */
+  seen: Map<string, Correction>;
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -49,7 +49,7 @@ export class CorrectionWatcher {
   /** `text` was just pasted into `hwnd`. */
   pasted(text: string, hwnd: number): void {
     this.stop();
-    this.watch = { text, hwnd, offered: new Set(), seen: new Set() };
+    this.watch = { text, hwnd, offered: new Set(), seen: new Map() };
     this.listen(WATCH_MS, hwnd);
     this.schedule(SETTLE_MS);
   }
@@ -116,11 +116,14 @@ export class CorrectionWatcher {
   private check(w: Watch, field: string, final: boolean): void {
     const found = findCorrections(w.text, field);
     if (found === null) {
-      if (this.watch === w) this.stop(); // sent, deleted or rewritten
+      // Sent, deleted or rewritten. Sent right after a fix (a Send button, no Enter), a correction
+      // seen once had no second read to confirm it: the text it was in is what went out.
+      for (const c of w.seen.values()) this.offer(w, c);
+      if (this.watch === w) this.stop();
       return;
     }
     const fresh = newTerms(found, this.deps.known()).filter((c) => !w.offered.has(c.fixed.toLowerCase()));
-    const seen = new Set(fresh.map((c) => c.fixed.toLowerCase()));
+    const seen = new Map(fresh.map((c) => [c.fixed.toLowerCase(), c]));
     let waiting = false;
     for (const c of fresh) {
       const k = c.fixed.toLowerCase();
@@ -128,10 +131,15 @@ export class CorrectionWatcher {
         waiting = true;
         continue;
       }
-      w.offered.add(k);
-      this.deps.suggest(c);
+      this.offer(w, c);
     }
     w.seen = seen;
     if (waiting && !final) this.schedule(CONFIRM_MS);
+  }
+
+  private offer(w: Watch, c: Correction): void {
+    if (w.offered.has(c.fixed.toLowerCase())) return;
+    w.offered.add(c.fixed.toLowerCase());
+    this.deps.suggest(c);
   }
 }
