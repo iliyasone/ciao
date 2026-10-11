@@ -29,14 +29,18 @@ export const DEFAULT_SETTINGS: Settings = {
   openAtLogin: true,
   theme: "system",
   language: "en", // replaced by the OS language while none is saved (loadSettings)
-  overlayPosition: null,
+  overlayAnchor: null,
   overlayWidth: 640,
+  overlayLines: 6,
+  overlayPill: true,
   showDelay: false,
   stopPhrase: true,
   wakeWord: false,
   formatText: true,
   telemetry: true,
   syncKeys: true,
+  learnCorrections: true,
+  dismissedTerms: [],
 };
 
 const file = () => path.join(app.getPath("userData"), "config.json");
@@ -47,7 +51,7 @@ function systemLanguage(): Settings["language"] {
 }
 
 export function loadSettings(): Settings {
-  let raw: Partial<Settings> & { hotkey?: string; middleClick?: boolean };
+  let raw: Partial<Settings> & { hotkey?: string; middleClick?: boolean; overlayPosition?: { x: number; y: number } | null };
   try {
     raw = JSON.parse(fs.readFileSync(file(), "utf8"));
   } catch {
@@ -61,6 +65,13 @@ export function loadSettings(): Settings {
   }
   delete raw.hotkey;
   delete raw.middleClick;
+  // Older configs kept the card window's top-left corner (the window was 320 px tall, 80 px wider
+  // than the card, its bottom edge 16 px below the card's).
+  if (raw.overlayPosition && raw.overlayAnchor === undefined) {
+    const width = (raw.overlayWidth ?? DEFAULT_SETTINGS.overlayWidth) + 80;
+    raw.overlayAnchor = { x: raw.overlayPosition.x + Math.round(width / 2), y: raw.overlayPosition.y + 320 - 16 };
+  }
+  delete raw.overlayPosition;
   return { ...DEFAULT_SETTINGS, ...raw };
 }
 

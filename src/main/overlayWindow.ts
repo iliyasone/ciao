@@ -1,40 +1,59 @@
 import path from "node:path";
 import { BrowserWindow, screen, type Rectangle } from "electron";
-import type { OverlayState } from "../core/types";
+import type { OverlayState, TermSuggestion } from "../core/types";
 import type { OverlayPort } from "./dictation";
 
 // Transparent window a bit larger than the card (room for its shadow); the card grows
-// smoothly inside and the empty area is click-through. Never focusable, so the app you
-// dictate into stays active. It sits bottom-centre until the user drags it by the grip;
-// the chosen position and width are then remembered.
-const HEIGHT = 320;
+// smoothly inside and the empty area lets clicks through. Never focusable, so the app you
+// dictate into stays active. Between dictations it shows a small Ciao pill where the card's bottom
+// edge is (if Settings.overlayPill): the card unfolds from it and folds back into it. The pill and
+// the card are dragged anywhere and the card's corner sizes it; the spot and size are remembered.
+//
+// Letting clicks through: on Windows and macOS the window ignores the mouse except while the pointer
+// is over the pill or a card (the renderer reports hovers; mouse moves are forwarded to it). Linux
+// can't forward them, so there the window's shape is cut to what the renderer draws instead.
+const LINE = 25; // px, one line of the card's text
+/** Window height minus the text lines: the card's header, padding and shadow room. */
+const CHROME_HEIGHT = 170;
 const SIDE_PADDING = 80; // card width + this = window width
-const BOTTOM_GAP = 28;
+/** From the window's bottom edge to the card's (the renderer's bottom padding). */
+const CARD_BOTTOM = 16;
+const SCREEN_GAP = 28; // from the bottom of the screen to the window, by default
 export const DEFAULT_CARD_WIDTH = 640;
 const MIN_CARD_WIDTH = 420;
-const MAX_CARD_WIDTH = 1200;
+const MAX_CARD_WIDTH = 1400;
+export const MIN_LINES = 3;
+export const MAX_LINES = 24;
+const LINUX = process.platform === "linux";
 
 export interface OverlayPlacement {
-  /** Window top-left; null = bottom-centre of the display under the cursor. */
-  position: { x: number; y: number } | null;
+  /** The middle of the card's bottom edge on screen; null = bottom-centre of the display under the cursor. */
+  anchor: { x: number; y: number } | null;
   cardWidth: number;
+  lines: number;
 }
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export class OverlayWindow implements OverlayPort {
   readonly win: BrowserWindow;
   private visibleSeq = -1;
-  private dragOrigin: Rectangle | null = null;
+  private drag0: { bounds: Rectangle; lines: number } | null = null;
   private wake = false;
+  private pill: boolean;
+  /** The renderer shows a card or a suggestion; without the pill the window hides when it shows nothing. */
+  private busy = false;
 
   constructor(
     preload: string,
     rendererDir: string,
     private readonly placement: () => OverlayPlacement,
     private readonly savePlacement: (p: OverlayPlacement) => void,
+    pill: boolean,
   ) {
+    this.pill = pill;
     this.win = new BrowserWindow({
-      width: DEFAULT_CARD_WIDTH + SIDE_PADDING,
-      height: HEIGHT,
+      ...this.bounds(),
       show: false,
       frame: false,
       transparent: true,
@@ -59,9 +78,20 @@ export class OverlayWindow implements OverlayPort {
     this.win.setAlwaysOnTop(true, "screen-saver");
     // macOS: show on every Space, over full-screen apps too.
     if (process.platform === "darwin") this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-    this.win.setIgnoreMouseEvents(true, { forward: true });
+    if (LINUX) this.win.setShape([]);
+    else this.win.setIgnoreMouseEvents(true, { forward: true });
+    // A monitor went away or changed: bring the pill back onto a screen (not under a running card).
+    const replace = () => {
+      if (this.pill && !this.busy && this.win.isVisible()) this.place();
+    };
+    screen.on("display-removed", replace);
+    screen.on("display-metrics-changed", replace);
     void this.win.loadFile(path.join(rendererDir, "overlay.html"));
-    this.win.webContents.on("did-finish-load", () => this.win.webContents.send("wake:enable", this.wake));
+    this.win.webContents.on("did-finish-load", () => {
+      this.win.webContents.send("wake:enable", this.wake);
+      this.win.webContents.send("overlay:pill", this.pill);
+      if (this.pill) this.win.showInactive();
+    });
   }
 
   /** Keep the mic open for the wake-word detector (or not). */
@@ -70,51 +100,82 @@ export class OverlayWindow implements OverlayPort {
     if (!this.win.webContents.isLoading()) this.win.webContents.send("wake:enable", on);
   }
 
-  /** The card was hovered/left: let clicks and wheel scrolling through only while over it. */
-  setInteractive(on: boolean): void {
-    this.win.setIgnoreMouseEvents(!on, { forward: true });
-  }
-
-  /** The renderer finished its fade-out for this card. */
-  hidden(seq: number): void {
-    if (seq === this.visibleSeq) {
+  /** Show the pill between dictations (or not). */
+  setPill(on: boolean): void {
+    if (on === this.pill) return;
+    this.pill = on;
+    if (this.win.webContents.isLoading()) return;
+    this.win.webContents.send("overlay:pill", on);
+    if (on) {
+      this.place();
+      this.win.showInactive();
+    } else if (!this.busy) {
       this.win.hide();
-      this.visibleSeq = -1;
     }
   }
 
-  // ── Moving and resizing by the grip ─────────────────────────────────────
+  /** Windows, macOS: the pointer is over the pill or a card, so clicks and wheel scrolling land there. */
+  setInteractive(on: boolean): void {
+    if (!LINUX) this.win.setIgnoreMouseEvents(!on, { forward: true });
+  }
+
+  /** Linux: what the renderer draws (the pill, a card), in window pixels; the rest lets clicks through. */
+  setRegion(rects: Rectangle[]): void {
+    if (LINUX) this.win.setShape(rects.map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) })));
+  }
+
+  /** The renderer finished folding away the card for `seq`. */
+  hidden(seq: number): void {
+    if (seq === this.visibleSeq) this.visibleSeq = -1;
+  }
+
+  /** The renderer shows a card or a suggestion (true), or nothing but maybe the pill (false). */
+  setBusy(on: boolean): void {
+    this.busy = on;
+    // A card that folded away may report after the next one was already shown: keep that one up.
+    if (on && !this.win.isVisible()) this.win.showInactive();
+    else if (!on && !this.pill && this.visibleSeq === -1) this.win.hide();
+  }
+
+  // ── Moving and resizing ─────────────────────────────────────────────────
 
   dragStart(): void {
-    this.dragOrigin = this.win.getBounds();
+    this.drag0 = { bounds: this.win.getBounds(), lines: this.placement().lines };
   }
 
-  /** dx/dy: pointer offset since dragStart; mode "move" shifts the window, "resize" widens it. */
+  /** dx/dy: pointer offset since dragStart. "move" shifts the window; "resize" widens the card (both ways) and adds lines (upwards). */
   drag(mode: "move" | "resize", dx: number, dy: number): void {
-    const o = this.dragOrigin;
-    if (!o) return;
+    const d = this.drag0;
+    if (!d) return;
+    const o = d.bounds;
     if (mode === "move") {
       this.win.setBounds({ ...o, x: Math.round(o.x + dx), y: Math.round(o.y + dy) });
-    } else {
-      // Grow symmetrically so the card stays centred on the same spot.
-      const card = Math.min(MAX_CARD_WIDTH, Math.max(MIN_CARD_WIDTH, o.width - SIDE_PADDING + 2 * dx));
-      const width = card + SIDE_PADDING;
-      this.win.setBounds({ x: Math.round(o.x + (o.width - width) / 2), y: o.y, width, height: HEIGHT });
+      return;
     }
+    const card = clamp(o.width - SIDE_PADDING + 2 * dx, MIN_CARD_WIDTH, MAX_CARD_WIDTH);
+    const lines = clamp(d.lines + Math.round(-dy / LINE), MIN_LINES, MAX_LINES);
+    const width = card + SIDE_PADDING;
+    const height = CHROME_HEIGHT + lines * LINE;
+    // The card's bottom edge stays where it is and its middle too.
+    this.win.setBounds({ x: Math.round(o.x + (o.width - width) / 2), y: o.y + o.height - height, width, height });
   }
 
   dragEnd(): void {
-    if (!this.dragOrigin) return;
-    this.dragOrigin = null;
+    if (!this.drag0) return;
+    this.drag0 = null;
     const b = this.win.getBounds();
     console.log("overlay moved to", JSON.stringify(b));
-    this.savePlacement({ position: { x: b.x, y: b.y }, cardWidth: b.width - SIDE_PADDING });
+    this.savePlacement({
+      anchor: { x: b.x + Math.round(b.width / 2), y: b.y + b.height - CARD_BOTTOM },
+      cardWidth: b.width - SIDE_PADDING,
+      lines: Math.round((b.height - CHROME_HEIGHT) / LINE),
+    });
   }
 
-  /** Back to bottom-centre at the default width. */
+  /** Back to bottom-centre at the default size. */
   resetPlacement(): void {
-    this.dragOrigin = null;
-    this.savePlacement({ position: null, cardWidth: DEFAULT_CARD_WIDTH });
+    this.drag0 = null;
+    this.savePlacement({ anchor: null, cardWidth: DEFAULT_CARD_WIDTH, lines: 6 });
     this.place();
   }
 
@@ -122,7 +183,9 @@ export class OverlayWindow implements OverlayPort {
 
   state(s: OverlayState): void {
     if (this.visibleSeq !== s.seq) {
-      this.place();
+      // Without a saved spot the card comes up on the display you're working on; while the pill is
+      // shown it unfolds where the pill is.
+      if (!this.pill || !this.win.isVisible()) this.place();
       this.win.showInactive();
       this.visibleSeq = s.seq;
     }
@@ -149,26 +212,31 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.send("capture:stop", seq);
   }
 
-  private place(): void {
-    const { position, cardWidth } = this.placement();
-    const width = Math.min(MAX_CARD_WIDTH, Math.max(MIN_CARD_WIDTH, cardWidth)) + SIDE_PADDING;
-    // A saved spot is used only while it is still on some screen (monitors come and go).
-    if (position) {
-      const onScreen = screen.getAllDisplays().some((d) => {
-        const a = d.workArea;
-        return position.x + width / 2 >= a.x && position.x + width / 2 <= a.x + a.width && position.y + HEIGHT / 2 >= a.y && position.y + HEIGHT / 2 <= a.y + a.height;
-      });
-      if (onScreen) {
-        this.win.setBounds({ ...position, width, height: HEIGHT });
-        return;
-      }
+  suggest(s: TermSuggestion): void {
+    if (!this.win.isVisible()) {
+      this.place();
+      this.win.showInactive();
     }
-    const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-    this.win.setBounds({
-      x: Math.round(area.x + (area.width - width) / 2),
-      y: Math.round(area.y + area.height - HEIGHT - BOTTOM_GAP),
-      width,
-      height: HEIGHT,
-    });
+    this.win.webContents.send("overlay:suggest", s);
   }
+
+  /** Where the window goes for the saved spot and size, or bottom-centre of the display under the cursor. */
+  private bounds(): Rectangle {
+    const { anchor, cardWidth, lines } = this.placement();
+    const width = clamp(cardWidth, MIN_CARD_WIDTH, MAX_CARD_WIDTH) + SIDE_PADDING;
+    const height = CHROME_HEIGHT + clamp(lines, MIN_LINES, MAX_LINES) * LINE;
+    const at = (x: number, y: number) => ({ x: Math.round(x - width / 2), y: Math.round(y + CARD_BOTTOM - height), width, height });
+    // A saved spot is used only while it is still on some screen (monitors come and go).
+    if (anchor && screen.getAllDisplays().some((d) => contains(d.workArea, anchor))) return at(anchor.x, anchor.y);
+    const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+    return at(area.x + area.width / 2, area.y + area.height - SCREEN_GAP - CARD_BOTTOM);
+  }
+
+  private place(): void {
+    this.win.setBounds(this.bounds());
+  }
+}
+
+function contains(a: Rectangle, p: { x: number; y: number }): boolean {
+  return p.x >= a.x && p.x <= a.x + a.width && p.y >= a.y && p.y <= a.y + a.height;
 }

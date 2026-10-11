@@ -59,7 +59,12 @@ const ru = {
     copied: "Скопировано",
     history: "История",
     gripTitle: "Перетащи, чтобы подвинуть. Двойной клик — вернуть на место.",
-    resizeTitle: "Потяни, чтобы изменить ширину",
+    resizeTitle: "Потяни, чтобы изменить ширину и высоту",
+    pillTitle: "Ciao — нажми, чтобы диктовать. Перетащи, чтобы подвинуть.",
+    suggestTitle: "Запомнить слово?",
+    suggestAdd: "Добавить в термины",
+    suggestNo: "Не надо",
+    suggestAdded: (word: string) => `«${word}» теперь в терминах`,
   },
 
   update: {
@@ -86,7 +91,7 @@ const ru = {
     search: "Поиск по тексту",
     nothingFound: "Ничего не нашлось",
     empty: `Пока пусто. Зажми ${isMac ? "правый Option" : "правый Ctrl"} и скажи что-нибудь.`,
-    source: { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком", formatted: "с абзацами" },
+    source: { live: "вживую", "retry-live": "повтор вживую", "retry-file": "целиком", formatted: "с абзацами", edited: "исправлено" },
     status: {
       running: "идёт",
       failed: "не распознано",
@@ -107,6 +112,11 @@ const ru = {
     openFolder: "Открыть папку записи",
     delete: "Удалить запись и аудио",
     confirmDelete: "Точно удалить?",
+    edit: "Исправить",
+    editTitle: "Исправь текст — Ciao предложит запомнить исправленные слова",
+    save: "Сохранить",
+    cancel: "Отмена",
+    addTerms: "Добавить в термины:",
     play: "Слушать",
     pause: "Пауза",
   },
@@ -154,6 +164,11 @@ const ru = {
       showCost: "Показывать стоимость",
       showCostHint: "Сколько центов ты наговорил — прямо во время записи.",
       openAtLogin: "Запускать при входе в систему",
+      pill: "Значок на экране",
+      pillHint: "Маленький значок Ciao остаётся на экране и между диктовками: нажми — начнётся диктовка, перетащи — подвинется. Карточка записи раскрывается из него.",
+      learn: "Предлагать новые слова",
+      learnHint:
+        "Если исправишь слово во вставленном тексте (например, «постхок» на «PostHog»), Ciao предложит добавить его в термины. Для этого пару минут после вставки он читает поле, куда вставил текст, — только на этом компьютере, никуда не отправляет. Исправления в Истории тоже считаются.",
       telemetry: "Анонимная статистика",
       telemetryHint:
         "Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия системы — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются.",
@@ -322,7 +337,12 @@ const en: Strings = {
     copied: "Copied",
     history: "History",
     gripTitle: "Drag to move. Double-click to put it back.",
-    resizeTitle: "Drag to change the width",
+    resizeTitle: "Drag to change the width and height",
+    pillTitle: "Ciao — click to dictate. Drag to move it.",
+    suggestTitle: "Remember this word?",
+    suggestAdd: "Add to terms",
+    suggestNo: "No thanks",
+    suggestAdded: (word) => `“${word}” is now in your terms`,
   },
 
   update: {
@@ -349,7 +369,7 @@ const en: Strings = {
     search: "Search text",
     nothingFound: "Nothing found",
     empty: `Nothing here yet. Hold ${isMac ? "Right Option" : "Right Ctrl"} and say something.`,
-    source: { live: "live", "retry-live": "live again", "retry-file": "whole recording", formatted: "with paragraphs" },
+    source: { live: "live", "retry-live": "live again", "retry-file": "whole recording", formatted: "with paragraphs", edited: "edited" },
     status: {
       running: "in progress",
       failed: "not transcribed",
@@ -370,6 +390,11 @@ const en: Strings = {
     openFolder: "Open the recording's folder",
     delete: "Delete the recording and its audio",
     confirmDelete: "Really delete?",
+    edit: "Edit",
+    editTitle: "Fix the text — Ciao will offer to remember the corrected words",
+    save: "Save",
+    cancel: "Cancel",
+    addTerms: "Add to terms:",
     play: "Listen",
     pause: "Pause",
   },
@@ -417,6 +442,11 @@ const en: Strings = {
       showCost: "Show cost",
       showCostHint: "What the dictation costs in cents, shown while you record.",
       openAtLogin: "Start when you sign in",
+      pill: "Pill on screen",
+      pillHint: "A small Ciao pill stays on screen between dictations: click it to dictate, drag it to move it. The recording card unfolds from it.",
+      learn: "Suggest new words",
+      learnHint:
+        "When you correct a word in a pasted dictation, Ciao offers to add it to your terms. For that it reads the field it pasted into for a couple of minutes, on this computer only; nothing is sent anywhere. Edits in History count too.",
       telemetry: "Anonymous usage stats",
       telemetryHint:
         "How many people use Ciao and how dictation goes: what started it, how long it took and what it cost, which kind of app it pasted into and whether that worked, the OS version — with a random install id. No text, audio or window titles are sent.",

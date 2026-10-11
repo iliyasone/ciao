@@ -39,9 +39,13 @@ export interface Settings {
   theme: Theme;
   /** Interface language; until one is saved (a new install, or a config from before the setting existed), the OS locale picks it. */
   language: Lang;
-  /** Where the live card sits (window top-left); null = bottom-centre. Set by dragging its grip. */
-  overlayPosition: { x: number; y: number } | null;
+  /** Where the card and the idle pill sit: the middle of the card's bottom edge, in screen pixels; null = bottom-centre. Set by dragging. */
+  overlayAnchor: { x: number; y: number } | null;
   overlayWidth: number;
+  /** Lines of text the live card shows before it scrolls. Set by dragging its corner. */
+  overlayLines: number;
+  /** A small Ciao pill stays on screen between dictations: drag it anywhere, click it to dictate. */
+  overlayPill: boolean;
   /** Developer mode: show and change the recognizer delay level. */
   showDelay: boolean;
   /** Paragraphs after long pauses and numbered lists for "первое… второе…", live and in the pasted text. */
@@ -54,11 +58,15 @@ export interface Settings {
   telemetry: boolean;
   /** With Google sync: the API keys go into the synced file too, so a new device is ready at once. */
   syncKeys: boolean;
+  /** Offer to add a word to the terms when the user corrects it in a pasted dictation. */
+  learnCorrections: boolean;
+  /** Corrections the user said no to (lower-case): not offered again. Local, not synced. */
+  dismissedTerms: string[];
 }
 
 export type EntryStatus = "recording" | "transcribing" | "done" | "failed" | "cancelled";
 export type Delivery = "pasted" | "clipboard" | "none";
-export type TranscriptSource = "live" | "retry-live" | "retry-file" | "formatted";
+export type TranscriptSource = "live" | "retry-live" | "retry-file" | "formatted" | "edited";
 
 /** How a dictation ended, for usage counts. */
 export type DictationOutcome = Exclude<Delivery, "none"> | "empty" | "failed" | "cancelled";
@@ -112,6 +120,13 @@ export interface OverlayState {
   /** Live connection dropped — audio is still recorded and will be transcribed from the file. */
   offline: boolean;
   message?: string;
+}
+
+/** A word the user corrected, offered for the terms (src/main/corrections.ts). */
+export interface TermSuggestion {
+  id: number;
+  heard: string;
+  fixed: string;
 }
 
 export type RetryMode = "file" | "live";

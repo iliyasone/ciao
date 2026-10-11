@@ -32,7 +32,12 @@ type InputEvents = {
   devices: [reading: number, denied: number];
   /** macOS: whether Ciao has the Accessibility permission the helper needs. */
   permission: [accessibility: boolean];
+  /** While watching: a key press. With Enter, the focused field's text read at that moment (null: unreadable). */
+  key: [kind: "enter" | "paste" | "other", text: string | null];
 };
+
+/** Why the focused field's text could not be read. */
+export type FieldMiss = "focus-changed" | "no-field" | "too-long" | "timeout" | "unsupported" | "no-helper";
 
 /**
  * Talks to the input helper: native/win-input (Ciao.Input.exe) on Windows, native/mac-input
@@ -159,6 +164,18 @@ export class InputHelper extends EventEmitter<InputEvents> {
     };
   }
 
+  /** The text of the focused editable field, if `hwnd` is still in front (0 = whatever is). Never a password field. */
+  async field(hwnd: number): Promise<{ text: string } | { text: null; reason: FieldMiss }> {
+    const r = await this.request({ cmd: "field", hwnd });
+    if (typeof r.text === "string") return { text: r.text.replace(/\r\n?/g, "\n") };
+    return { text: null, reason: typeof r.reason === "string" ? (r.reason as FieldMiss) : "no-helper" };
+  }
+
+  /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */
+  watch(on: boolean, hwnd = 0): void {
+    this.send({ cmd: "watch", on, hwnd });
+  }
+
   private request(msg: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.child) return Promise.resolve({ ok: false, reason: "no-helper" });
     const id = this.nextId++;
@@ -191,7 +208,8 @@ export class InputHelper extends EventEmitter<InputEvents> {
       this.pending.delete(msg.id);
       return;
     }
-    if (msg.type !== "trigger") console.log("input:", line); // trigger presses are too chatty to log
+    // Trigger presses are too chatty to log; key events may carry the text of a field.
+    if (msg.type !== "trigger" && msg.type !== "key") console.log("input:", line);
     switch (msg.type) {
       case "trigger":
         this.emit("trigger", msg.down === true, String(msg.spec ?? ""));
@@ -208,6 +226,11 @@ export class InputHelper extends EventEmitter<InputEvents> {
       case "status":
         this.emit("devices", Number(msg.reading), Number(msg.denied));
         break;
+      case "key": {
+        const kind = msg.kind === "enter" || msg.kind === "paste" ? msg.kind : "other";
+        this.emit("key", kind, typeof msg.text === "string" ? msg.text.replace(/\r\n?/g, "\n") : null);
+        break;
+      }
       case "permission":
         this.canHear = msg.accessibility === true;
         this.emit("permission", this.canHear);

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, UpdateState } from "../core/types";
+import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, TermSuggestion, UpdateState } from "../core/types";
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
@@ -24,6 +24,18 @@ const api = {
     resetPlacement: () => ipcRenderer.send("overlay:reset-placement"),
     copy: (text: string): Promise<void> => ipcRenderer.invoke("overlay:copy", text),
     openHistory: () => ipcRenderer.send("overlay:open-history"),
+    /** Whether the pill stays on screen between dictations. */
+    onPill: (cb: (on: boolean) => void) => on("overlay:pill", cb),
+    /** The pill was clicked: start a hands-free dictation, or finish the one running. */
+    pillClick: () => ipcRenderer.send("overlay:pill-click"),
+    /** Linux: what is drawn, in window pixels (the rest of the window lets clicks through). */
+    setRegion: (rects: { x: number; y: number; width: number; height: number }[]) => ipcRenderer.send("overlay:region", rects),
+    /** A card or a suggestion is up (true), or nothing but maybe the pill (false). */
+    setBusy: (on: boolean) => ipcRenderer.send("overlay:busy", on),
+    /** A word the user corrected in a pasted dictation, offered for the terms. */
+    onSuggest: (cb: (s: TermSuggestion) => void) => on("overlay:suggest", cb),
+    /** The answer to a suggestion: add the word to the terms, or don't offer it again. */
+    answer: (s: TermSuggestion, add: boolean) => ipcRenderer.send("overlay:answer", s, add),
   },
   capture: {
     onStart: (cb: (seq: number) => void) => on("capture:start", cb),
@@ -43,6 +55,11 @@ const api = {
     retry: (id: string, mode: RetryMode, provider?: Provider): Promise<HistoryEntry> => ipcRenderer.invoke("history:retry", id, mode, provider),
     copy: (text: string): Promise<void> => ipcRenderer.invoke("history:copy", text),
     openFolder: (id?: string): Promise<void> => ipcRenderer.invoke("history:open-folder", id),
+    /** Saves the user's own version of the text; resolves with the entry and the corrected words worth adding to the terms. */
+    /** `base`: the id of the transcript that was edited. */
+    edit: (id: string, base: string, text: string): Promise<{ entry: HistoryEntry; suggestions: { heard: string; fixed: string }[] }> =>
+      ipcRenderer.invoke("history:edit", id, base, text),
+    addTerm: (term: string): Promise<void> => ipcRenderer.invoke("history:add-term", term),
     onChanged: (cb: (entry: HistoryEntry) => void) => on("history:changed", cb),
     audioUrl: (id: string) => `ciao-audio://entry/${encodeURIComponent(id)}`,
   },
