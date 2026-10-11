@@ -118,6 +118,8 @@ class TextInserterTest {
         // The field shows "Message" as its text, with no hint and the cursor at 0, but holds nothing,
         // so (as a TextView does) it doesn't even list ACTION_SET_SELECTION.
         assertEquals("Привет", insert("Message", null, 0, 0, "Привет", holds = 0))
+        // Both probes were refused and the cursor wasn't put back: it only went after the dictation.
+        assertEquals(listOf(6 to 6), selections)
         assertEquals("Привет", insert("Сообщение", "Message", 0, 0, "Привет", holds = 0))
     }
 

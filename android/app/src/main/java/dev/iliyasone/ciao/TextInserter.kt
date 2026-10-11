@@ -22,8 +22,8 @@ object TextInserter {
      * update their accessibility tree later, so reading the text back would look like a miss and
      * insert twice.
      *
-     * A field whose text may be an unflagged hint gets its cursor moved past the first character and
-     * back first (see [isHint]); [restoreClipboard] off: a paste may leave the transcript on the
+     * A field whose text may be an unflagged hint gets its cursor moved past the first character or
+     * to the end, and back, first (see [isHint]); [restoreClipboard] off: a paste may leave the transcript on the
      * clipboard, so a field with text always gets one.
      */
     fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String, restoreClipboard: Boolean = true): Boolean {
