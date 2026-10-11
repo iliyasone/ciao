@@ -38,13 +38,17 @@ Answer with the term only, written the way it is normally written: the script, c
         return if (marked) w else null
     }
 
-    /** When the model can't be asked (no network, an error): a short term as heard, or Latin letters joined. */
+    /**
+     * When the model can't be asked (no network, down): a short Latin term as heard, or Latin letters
+     * joined. Cyrillic ("пост хог") is most likely a misheard Latin term: better none than that.
+     */
     fun fallback(c: VoiceCommands.RememberCommand): String? {
         if (c.spelled) {
             val letters = c.heard.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
             return if (letters.all { it.length == 1 && (isLatin(it[0]) || it[0].isDigit()) }) letters.joinToString("") else null
         }
-        return if (c.heard.isNotEmpty() && c.heard.split(Regex("\\s+")).size <= 3) c.heard else null
+        val latin = c.heard.any { it.isLetter() } && c.heard.all { isLatin(it) || it.isDigit() || it.isWhitespace() || it in ".+#_'’-" }
+        return if (latin && c.heard.split(Regex("\\s+")).size <= 3) c.heard else null
     }
 
     /** The model's answer as a term: one line, without quotes or a final period ("A.I." keeps it); null if none. */

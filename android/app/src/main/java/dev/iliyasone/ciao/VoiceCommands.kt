@@ -23,11 +23,14 @@ object VoiceCommands {
     private const val NOUN = "(?:слово|термин|word|term)(?!\\p{L})(?!${SEP}count(?!\\p{L}))"
     private const val VERB_AND_NOUN =
         "(?:запомни|запиши|добавь|remember|add)(?!\\p{L})$SEP" +
-            "(?:(?:(?:новое|новый|new|the|a|an)(?!\\p{L})$SEP)?$NOUN" +
+            "(?:(?:(?:новое|новый|это|этот|такое|new|the|a|an|this)(?!\\p{L})$SEP)?$NOUN" +
             "|(?:в|to)(?:$SEP(?:my|the))?(?!\\p{L})$SEP(?:словарь|термины|terms|dictionary|vocabulary)(?!\\p{L})(?:$SEP$NOUN)?)" +
             "(?:$SEP(?:по буквам|spelled|spelt))?"
-    /** A command followed by one of these was dictation: "Чао, запиши новое слово в документ". */
-    private val NOT_A_TERM = "в во на для из от про с to of for in on into from with".split(" ").toSet()
+    /** A command followed by one of these was dictation: "Чао, запиши новое слово в документ", "…слово, которое…". */
+    private val NOT_A_TERM = (
+        "в во на для из от про с который которое которая которые что чтобы как где " +
+            "to of for in on into from with that which what who where how"
+        ).split(" ").toSet()
     // "ао": a wake-word start may begin with the tail of "чао", or with none of it.
     private val REMEMBER = Regex("(?iU)(?:^\\s*ао|(?<!\\p{L})$WORD)$SEP$VERB_AND_NOUN")
     private val REMEMBER_AFTER_WAKE = Regex("(?iU)(?:^\\s*(?:ао)?|(?<!\\p{L})$WORD)$SEP$VERB_AND_NOUN")
@@ -117,10 +120,14 @@ object VoiceCommands {
         fun word(i: Int) = tokens.getOrNull(i)?.word?.lowercase() ?: ""
         /** What separates token i from the one before. */
         fun gap(i: Int) = text.substring(tokens[i - 1].to, tokens[i].from)
-        /** Letter j goes on a spelling; one that is a word too only before another letter ("…эм, а потом" ends at "эм"). */
+        /**
+         * Letter j goes on a spelling; one that is a word too only before another letter or a sentence
+         * end ("…эм, а потом" ends at "эм"; "J, A, V, A. Then…" keeps the last A).
+         */
         fun spells(j: Int) =
             isLetter(word(j)) && SPELLING_GAP.matches(gap(j)) &&
-                (word(j) !in LETTER_WORDS || j + 1 == tokens.size || (isLetter(word(j + 1)) && word(j + 1) !in LETTER_WORDS))
+                (word(j) !in LETTER_WORDS || j + 1 == tokens.size || (isLetter(word(j + 1)) && word(j + 1) !in LETTER_WORDS) ||
+                    Regex("[.!?…\\n]").containsMatchIn(gap(j + 1)))
         /** Two or more letters from token i on: the index after the last; otherwise i. */
         fun spelling(i: Int): Int {
             var j = if (isLetter(word(i))) i + 1 else i

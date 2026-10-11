@@ -39,11 +39,13 @@ export function stripStopPhrase(text: string): string {
 const NOUN = `(?:слово|термин|word|term)(?!\\p{L})(?!${SEP}count(?!\\p{L}))`;
 const VERB_AND_NOUN =
   `(?:запомни|запиши|добавь|remember|add)(?!\\p{L})${SEP}` +
-  `(?:(?:(?:новое|новый|new|the|a|an)(?!\\p{L})${SEP})?${NOUN}` +
+  `(?:(?:(?:новое|новый|это|этот|такое|new|the|a|an|this)(?!\\p{L})${SEP})?${NOUN}` +
   `|(?:в|to)(?:${SEP}(?:my|the))?(?!\\p{L})${SEP}(?:словарь|термины|terms|dictionary|vocabulary)(?!\\p{L})(?:${SEP}${NOUN})?)` +
   `(?:${SEP}(?:по буквам|spelled|spelt))?`;
-/** A command followed by one of these was dictation: "Чао, запиши новое слово в документ". */
-const NOT_A_TERM = new Set("в во на для из от про с to of for in on into from with".split(" "));
+/** A command followed by one of these was dictation: "Чао, запиши новое слово в документ", "…слово, которое…". */
+const NOT_A_TERM = new Set(
+  "в во на для из от про с который которое которая которые что чтобы как где to of for in on into from with that which what who where how".split(" "),
+);
 // "ао": a wake-word start may begin with the tail of "чао" (see stripWakeWord), or with none of it.
 const REMEMBER = `(?:^\\s*ао|(?<!\\p{L})${WORD})${SEP}${VERB_AND_NOUN}`;
 const REMEMBER_AFTER_WAKE = `(?:^\\s*(?:ао)?|(?<!\\p{L})${WORD})${SEP}${VERB_AND_NOUN}`;
@@ -131,11 +133,17 @@ function readTerm(text: string, start: number): { end: number; command: Remember
   const word = (i: number) => tokens[i]?.word.toLowerCase() ?? "";
   /** What separates token i from the one before. */
   const gap = (i: number) => text.slice(tokens[i - 1]!.to, tokens[i]!.from);
-  /** Letter j goes on a spelling; one that is a word too only before another letter ("…эм, а потом" ends at "эм"). */
+  /**
+   * Letter j goes on a spelling; one that is a word too only before another letter or a sentence end
+   * ("…эм, а потом" ends at "эм"; "J, A, V, A. Then…" keeps the last A).
+   */
   const spells = (j: number) =>
     isLetter(word(j)) &&
     SPELLING_GAP.test(gap(j)) &&
-    (!LETTER_WORDS.has(word(j)) || j + 1 === tokens.length || (isLetter(word(j + 1)) && !LETTER_WORDS.has(word(j + 1))));
+    (!LETTER_WORDS.has(word(j)) ||
+      j + 1 === tokens.length ||
+      (isLetter(word(j + 1)) && !LETTER_WORDS.has(word(j + 1))) ||
+      /[.!?…\n]/u.test(gap(j + 1)));
   /** Two or more letters from token i on: the index after the last; otherwise i. */
   const spelling = (i: number) => {
     let j = isLetter(word(i)) ? i + 1 : i;

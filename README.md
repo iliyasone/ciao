@@ -59,7 +59,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     cent). Only those few words are sent. If the model finds no term there, or the
     service refuses (a key without access to that model), nothing is added and the
     card says why; when the service can't be reached or is overloaded, Ciao keeps
-    the word as heard, or says it couldn't make it out.
+    a Latin word as heard ("Posthog", "P-O-S-T"), or says it couldn't make it out.
   - "Слово"/"термин"/"word"/"term" (or "в термины"/"to my terms") is needed:
     "чао, добавь тесты", "чао, запомни, что…" or "ciao, add new words to the list"
     stays dictation. One term per command: for two, say it twice.
