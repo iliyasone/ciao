@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import { BYTES_PER_MS, level, wavHeader } from "../core/audio";
-import { GeminiLiveSession, vocabulary } from "../core/gemini";
+import { geminiEndpoint, GeminiLiveSession, vertexFileUrl, vocabulary } from "../core/gemini";
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
@@ -9,7 +9,7 @@ import type { Provider, Settings } from "../core/types";
 export function openLive(provider: Provider, apiKey: string): LiveSession {
   if (provider === "gemini")
     // The key goes in a header, not ?key=: query strings end up in logs.
-    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey } }) as unknown as SocketLike);
+    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey } }) as unknown as SocketLike, geminiEndpoint(apiKey));
   return new RealtimeSession((url) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } }) as unknown as SocketLike);
 }
 
@@ -183,11 +183,14 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
 }
 
 /**
- * gemini-3.5-transcribe through the Interactions API: the only Gemini endpoint where smart mode
- * works (on :generateContent it parses, then returns an empty text). Never add language codes,
- * see core/gemini.ts.
+ * gemini-3.5-transcribe through the Interactions API: the only Gemini API endpoint where smart mode
+ * works (on :generateContent it parses, then returns an empty text). Vertex AI has no Interactions
+ * for this model but takes smart mode on :generateContent (transcribeFileVertex). Never add language
+ * codes, see core/gemini.ts.
  */
 async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
+  const { vertexProject } = await geminiEndpoint(apiKey);
+  if (vertexProject) return transcribeFileVertex(apiKey, vertexProject, pcm, settings);
   const config: Record<string, unknown> = {};
   if (settings.smart) config.mode = "smart";
   const terms = vocabulary(settings.keywords);
@@ -233,5 +236,34 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
 interface GeminiInteraction {
   status?: string;
   steps?: { type?: string; content?: { type?: string; text?: string }[] }[];
+  error?: { message?: string };
+}
+
+/** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. */
+async function transcribeFileVertex(apiKey: string, project: string, pcm: Buffer, settings: Settings): Promise<string> {
+  const config: Record<string, unknown> = { mode: settings.smart ? "SMART" : "VERBATIM" };
+  const terms = vocabulary(settings.keywords);
+  if (terms.length) config.customVocabulary = terms;
+  const texts: string[] = [];
+  for (const part of splitPcm(pcm, GEMINI_MAX_PART_MS)) {
+    const res = await fetch(vertexFileUrl(project), {
+      method: "POST",
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ inlineData: { mimeType: "audio/wav", data: Buffer.from(wav(part)).toString("base64") } }] }],
+        generationConfig: { audioTranscriptionConfig: config },
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as VertexResponse | VertexResponse[];
+    const first = Array.isArray(body) ? body[0] : body;
+    if (!res.ok) throw new Error(first?.error?.message ?? t().errors.status("Gemini", res.status));
+    const text = (first?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
+    texts.push(text.trim());
+  }
+  return texts.filter(Boolean).join(" ");
+}
+
+interface VertexResponse {
+  candidates?: { content?: { parts?: { text?: string }[] } }[];
   error?: { message?: string };
 }

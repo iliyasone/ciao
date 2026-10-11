@@ -5,6 +5,61 @@ import type { LiveSession, RealtimeHandlers, SocketFactory, SocketLike } from ".
 import type { Settings } from "./types";
 
 export const GEMINI_LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+export const VERTEX_LIVE_URL = "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent";
+
+/**
+ * Where a Gemini key works. A key from Google AI Studio calls the Gemini API; a Google Cloud key
+ * bound to a service account calls the same models through Vertex AI, in the key's project. Vertex
+ * has none of AI Studio's usage tiers (Tier 1 allows the file model 100 requests a day) and bills
+ * the project's Cloud billing account.
+ */
+export interface GeminiEndpoint {
+  /** The Google Cloud project number of a Vertex key; null for an AI Studio key. */
+  vertexProject: string | null;
+}
+
+/** On Vertex the models carry "-preview" and live in the "global" location only (us and eu: 404). */
+function vertexModel(project: string, model: string): string {
+  return `projects/${project}/locations/global/publishers/google/models/${model}-preview`;
+}
+
+/** The live model, as the setup message names it. */
+export function liveModelName(ep: GeminiEndpoint): string {
+  const model = PROVIDERS.gemini.liveModel;
+  return ep.vertexProject ? vertexModel(ep.vertexProject, model) : `models/${model}`;
+}
+
+/** The file model's :generateContent on Vertex. */
+export function vertexFileUrl(project: string): string {
+  return `https://aiplatform.googleapis.com/v1/${vertexModel(project, PROVIDERS.gemini.fileModel)}:generateContent`;
+}
+
+const endpoints = new Map<string, Promise<GeminiEndpoint>>();
+
+/**
+ * Tells an AI Studio key from a Vertex one; both look alike ("AQ.…"). Asks the Gemini API for its
+ * models: an AI Studio key gets them. A Vertex key is refused with API_KEY_SERVICE_BLOCKED, and the
+ * refusal names the key's project ("consumer": "projects/906271403959"), which Vertex URLs need. Any
+ * other answer (a wrong key) counts as AI Studio, so its errors read as before. Remembered per key;
+ * a failed check (offline) is not.
+ */
+export function geminiEndpoint(apiKey: string): Promise<GeminiEndpoint> {
+  let ep = endpoints.get(apiKey);
+  if (!ep) {
+    ep = detect(apiKey);
+    endpoints.set(apiKey, ep);
+    ep.catch(() => endpoints.delete(apiKey));
+  }
+  return ep;
+}
+
+async function detect(apiKey: string): Promise<GeminiEndpoint> {
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", { headers: { "x-goog-api-key": apiKey } });
+  if (res.ok) return { vertexProject: null };
+  const body = (await res.json().catch(() => ({}))) as { error?: { details?: { reason?: string; metadata?: { consumer?: string } }[] } };
+  const blocked = body.error?.details?.find((d) => d.reason === "API_KEY_SERVICE_BLOCKED");
+  return { vertexProject: /^projects\/(\d+)$/.exec(blocked?.metadata?.consumer ?? "")?.[1] ?? null };
+}
 
 const OPEN = 1;
 const AUDIO_MIME = `audio/pcm;rate=${SAMPLE_RATE}`;
@@ -31,6 +86,8 @@ export function vocabulary(keywords: string[]): string[] {
  * after it: nothing is lost. Should the server end one first, the next starts right away; then the
  * ~2 s before that are lost.
  *
+ * Vertex AI speaks the same protocol at another address, with the model named by its full path.
+ *
  * Never send language codes along with smart mode: on Gemini's transcription endpoints that silently
  * turns smart mode off (found by google-gemini/jot-gemini-transcribe-macOS). Without them the
  * language is detected per utterance, mixed Russian and English included.
@@ -47,8 +104,10 @@ export class GeminiLiveSession implements LiveSession {
   failure: string | null = null;
   handlers: RealtimeHandlers = {};
 
-  private readonly socket: SocketLike;
-  private readonly queue: string[] = [];
+  private socket: SocketLike | null = null;
+  /** Sent before the socket opened. The setup is filled in with the model then, when the endpoint is known. */
+  private readonly queue: object[] = [];
+  private endpoint: GeminiEndpoint | null = null;
   private closedByUs = false;
   private readonly finals: string[] = [];
   private interim = "";
@@ -68,19 +127,41 @@ export class GeminiLiveSession implements LiveSession {
   /** Whether any of the held audio is more than quiet. */
   private heldVoice = false;
 
-  /** Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer". */
-  constructor(factory: SocketFactory) {
-    this.socket = factory(GEMINI_LIVE_URL);
-    this.socket.onopen = () => {
+  /**
+   * Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer".
+   * The socket opens once the endpoint is known (see geminiEndpoint); until then everything waits in
+   * the queue.
+   */
+  constructor(factory: SocketFactory, endpoint: Promise<GeminiEndpoint>) {
+    endpoint.then(
+      (ep) => {
+        if (this.closedByUs) return;
+        this.endpoint = ep;
+        this.open(factory(ep.vertexProject ? VERTEX_LIVE_URL : GEMINI_LIVE_URL));
+      },
+      () => this.fail(t().errors.cannotReach("Gemini")),
+    );
+  }
+
+  private open(socket: SocketLike): void {
+    this.socket = socket;
+    socket.onopen = () => {
       this.connected = true;
-      for (const msg of this.queue.splice(0)) this.socket.send(msg);
+      for (const msg of this.queue.splice(0)) socket.send(this.wire(msg));
       this.handlers.onConnected?.();
     };
-    this.socket.onmessage = (ev) => this.handle(ev.data);
-    this.socket.onerror = () => this.fail(t().errors.cannotReach("Gemini"));
-    this.socket.onclose = (ev) => {
+    socket.onmessage = (ev) => this.handle(ev.data);
+    socket.onerror = () => this.fail(t().errors.cannotReach("Gemini"));
+    socket.onclose = (ev) => {
       if (!this.closedByUs && !this.completed) this.fail(t().errors.connectionClosed(ev.reason ?? ""));
     };
+  }
+
+  /** The JSON for a message; the setup gets the model's name for the endpoint. */
+  private wire(msg: object): string {
+    if (!("setup" in msg)) return JSON.stringify(msg);
+    const setup = (msg as { setup: object }).setup;
+    return JSON.stringify({ setup: { model: liveModelName(this.endpoint!), ...setup } });
   }
 
   get usable(): boolean {
@@ -93,7 +174,6 @@ export class GeminiLiveSession implements LiveSession {
     if (terms.length) transcription.customVocabulary = terms;
     this.send({
       setup: {
-        model: `models/${PROVIDERS.gemini.liveModel}`,
         generationConfig: { responseModalities: ["TEXT"] },
         inputAudioTranscription: transcription,
         realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
@@ -130,16 +210,15 @@ export class GeminiLiveSession implements LiveSession {
     this.closedByUs = true;
     clearTimeout(this.settleTimer);
     try {
-      this.socket.close();
+      this.socket?.close();
     } catch {
       // Already closed.
     }
   }
 
   private send(msg: object): void {
-    const json = JSON.stringify(msg);
-    if (this.socket.readyState === OPEN) this.socket.send(json);
-    else this.queue.push(json);
+    if (this.socket?.readyState === OPEN) this.socket.send(this.wire(msg));
+    else this.queue.push(msg);
   }
 
   private startActivity(): void {

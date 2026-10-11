@@ -7,6 +7,8 @@ import android.os.SystemClock
 import android.util.Base64
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
@@ -18,6 +20,45 @@ import org.json.JSONObject
 /** Terms for custom_vocabulary: the same cleanup as OpenAI's keywords, at most the API's 1,000. */
 fun geminiVocabulary(keywords: List<String>): List<String> =
     keywords.map { it.trim() }.filter { k -> k.isNotEmpty() && k.none { it in "<>\r\n" } }.take(1000)
+
+/**
+ * Where a Gemini key works. A key from Google AI Studio calls the Gemini API; a Google Cloud key bound
+ * to a service account calls the same models through Vertex AI, in the key's project, without AI
+ * Studio's usage tiers. Mirrors geminiEndpoint in src/core/gemini.ts.
+ */
+object GeminiEndpoint {
+    const val VERTEX_LIVE_URL = "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+
+    /** Per key: its Vertex project number, or "" for AI Studio. */
+    private val known = ConcurrentHashMap<String, String>()
+
+    /**
+     * Blocking. The Vertex project number of [key], or null for an AI Studio key; both look alike
+     * ("AQ.…"). Asks the Gemini API for its models: an AI Studio key gets them, a Vertex key is
+     * refused with API_KEY_SERVICE_BLOCKED, and the refusal names the key's project. Any other answer
+     * (a wrong key) counts as AI Studio. Remembered per key; a failed check (offline) throws and is not.
+     */
+    fun vertexProject(key: String): String? {
+        known[key]?.let { return it.ifEmpty { null } }
+        val request = Request.Builder()
+            .url("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
+            .header("x-goog-api-key", key)
+            .build()
+        val project = http.newCall(request).execute().use { response ->
+            if (response.isSuccessful) return@use ""
+            val details = runCatching { JSONObject(response.body?.string() ?: "").getJSONObject("error").getJSONArray("details") }.getOrNull() ?: JSONArray()
+            (0 until details.length()).map { details.optJSONObject(it) ?: JSONObject() }
+                .firstOrNull { it.optString("reason") == "API_KEY_SERVICE_BLOCKED" }
+                ?.optJSONObject("metadata")?.optString("consumer")
+                ?.let { Regex("""^projects/(\d+)$""").find(it)?.groupValues?.get(1) } ?: ""
+        }
+        known[key] = project
+        return project.ifEmpty { null }
+    }
+
+    /** On Vertex the models carry "-preview" and live in the "global" location only. */
+    fun vertexModel(project: String, model: String) = "projects/$project/locations/global/publishers/google/models/$model-preview"
+}
 
 /**
  * One Gemini Live transcription session.
@@ -34,13 +75,16 @@ fun geminiVocabulary(keywords: List<String>): List<String> =
  * reports the end (ACTIVITY_END), so the audio in between is held and sent after it. Should the
  * server end one first, the next starts right away. Mirrors src/core/gemini.ts.
  *
+ * Vertex AI speaks the same protocol at another address, with the model named by its full path; the
+ * socket opens once [GeminiEndpoint] knows which, and what is sent before waits in [pending].
+ *
  * Never send language codes along with smart mode: on Gemini's transcription endpoints that silently
  * turns smart mode off. Without them the language is detected per utterance.
  *
  * Everything the socket reports is handled on the main thread, so the state needs no locks, except
  * what [append] shares from the recorder's thread: that is under [lock].
  */
-class GeminiSession(private val context: Context, apiKey: String) : LiveSession {
+class GeminiSession(private val context: Context, private val apiKey: String) : LiveSession {
     override val createdAt = SystemClock.elapsedRealtime()
 
     @Volatile override var failure: String? = null
@@ -70,42 +114,69 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     private val settle = Runnable { complete() }
     private var settling = false
 
-    // The key goes in a header, not ?key=: query strings end up in logs.
-    private val socket: WebSocket = http.newWebSocket(
-        Request.Builder().url(URL).header("x-goog-api-key", apiKey).build(),
-        object : WebSocketListener() {
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                main.post { handle(text) }
-            }
+    /** Null until the endpoint is known; then [pending] goes out. Both under [lock]. */
+    private var socket: WebSocket? = null
+    private val pending = mutableListOf<JSONObject>()
+    /** The Vertex project of the key, null for AI Studio; set before [socket]. */
+    private var vertexProject: String? = null
 
-            // Gemini sends its JSON as binary frames.
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                val text = bytes.utf8()
-                main.post { handle(text) }
+    init {
+        Thread {
+            val project = try {
+                Result.success(GeminiEndpoint.vertexProject(apiKey))
+            } catch (e: IOException) {
+                Result.failure(e)
             }
+            main.post {
+                if (closedByUs) return@post
+                project.onSuccess { open(it) }.onFailure { fail(context.getString(R.string.error_cannot_reach, NAME)) }
+            }
+        }.start()
+    }
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                val message = socketError(context, NAME, response)
-                main.post { fail(message) }
-            }
+    private fun open(project: String?) {
+        vertexProject = project
+        // The key goes in a header, not ?key=: query strings end up in logs.
+        val ws = http.newWebSocket(
+            Request.Builder().url(if (project != null) GeminiEndpoint.VERTEX_LIVE_URL else URL).header("x-goog-api-key", apiKey).build(),
+            object : WebSocketListener() {
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    main.post { handle(text) }
+                }
 
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
-                main.post { if (!completed) fail(context.getString(R.string.error_closed, reason)) }
-            }
-        },
-    )
+                // Gemini sends its JSON as binary frames.
+                override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                    val text = bytes.utf8()
+                    main.post { handle(text) }
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    val message = socketError(context, NAME, response)
+                    main.post { fail(message) }
+                }
+
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(1000, null)
+                    main.post { if (!completed) fail(context.getString(R.string.error_closed, reason)) }
+                }
+            },
+        )
+        synchronized(lock) {
+            socket = ws
+            for (msg in pending) ws.send(wire(msg))
+            pending.clear()
+        }
+    }
 
     override val usable: Boolean get() = failure == null && !closedByUs
 
-    override val queued: Long get() = socket.queueSize()
+    override val queued: Long get() = synchronized(lock) { socket?.queueSize() ?: 0L }
 
     override fun configure(prefs: Prefs) {
         val transcription = JSONObject().put("mode", if (prefs.smart) "SMART" else "VERBATIM")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) transcription.put("customVocabulary", JSONArray(terms))
         val setup = JSONObject()
-            .put("model", "models/${Provider.GEMINI.liveModel}")
             .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("TEXT")))
             .put("inputAudioTranscription", transcription)
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject().put("disabled", true)))
@@ -161,12 +232,23 @@ class GeminiSession(private val context: Context, apiKey: String) : LiveSession 
     override fun close() {
         closedByUs = true
         main.removeCallbacks(settle)
-        socket.close(1000, null)
+        synchronized(lock) { socket?.close(1000, null) }
     }
 
-    /** OkHttp queues anything sent before the socket opens. */
+    /** OkHttp queues anything sent before the socket opens; before there is one, [pending] does. */
     private fun send(msg: JSONObject) {
-        socket.send(msg.toString())
+        synchronized(lock) {
+            val ws = socket
+            if (ws == null) pending.add(msg) else ws.send(wire(msg))
+        }
+    }
+
+    /** The JSON for a message; the setup gets the model's name for the endpoint. */
+    private fun wire(msg: JSONObject): String {
+        val setup = msg.optJSONObject("setup") ?: return msg.toString()
+        val model = Provider.GEMINI.liveModel
+        setup.put("model", vertexProject?.let { GeminiEndpoint.vertexModel(it, model) } ?: "models/$model")
+        return msg.toString()
     }
 
     private fun fail(message: String) {
