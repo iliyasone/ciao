@@ -92,24 +92,29 @@ export function takeRememberCommands(text: string, wakeStarted = false): { text:
   const commands: RememberCommand[] = [];
   let out = "";
   let from = 0;
+  /** The text after a command: with a capital where a sentence starts (at the start, or after "."). */
+  const add = (piece: string) => {
+    out += from > 0 && /^\s*$|[.!?…]\s*$/u.test(out) ? piece.charAt(0).toLocaleUpperCase("ru-RU") + piece.slice(1) : piece;
+  };
   const re = new RegExp(wakeStarted ? REMEMBER_AFTER_WAKE : REMEMBER, "giu");
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const term = readTerm(text, m.index + m[0].length);
     commands.push(term.command);
-    out += text.slice(from, m.index);
+    add(text.slice(from, m.index));
     const end = term.end + (DESTINATION.exec(text.slice(term.end))?.[0].length ?? 0);
     // The punctuation after the term goes with it.
     from = end + (/^[\s,.!?…;:»"”’)\]]*/u.exec(text.slice(end))?.[0].length ?? 0);
     re.lastIndex = from;
   }
   if (!commands.length) return { text, commands };
-  // The text went on after a command at its start: begin it with a capital, as stripWakeWord does.
-  const capital = !out.trim();
-  out = (out + text.slice(from))
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/[\s,;:—–\-«"„“(]+$/u, "")
-    .trim();
-  return { text: capital ? out.charAt(0).toLocaleUpperCase("ru-RU") + out.slice(1) : out, commands };
+  add(text.slice(from));
+  return {
+    text: out
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/[\s,;:—–\-«"„“(]+$/u, "")
+      .trim(),
+    commands,
+  };
 }
 
 /** The term after a command that ends at `start`, and where it ends. */
@@ -130,6 +135,9 @@ function readTerm(text: string, start: number): { end: number; command: Remember
     while (j > i && j < tokens.length && spells(j)) j++;
     return j - i >= 2 ? j : i;
   };
+  // After a sentence end ("…слово. PostHog.") a lone word or a spelling: anything longer is the next sentence.
+  const alone = tokens.length === 1 || /[.!?…\n]/u.test(gap(1));
+  if (/[.!?…]/u.test(text.slice(start, tokens[0]!.from)) && !alone && spelling(0) === 0) return { end: start, command: { heard: "", spelled: false } };
   let end = spelling(0);
   let spelled = end > 0;
   if (!spelled) {

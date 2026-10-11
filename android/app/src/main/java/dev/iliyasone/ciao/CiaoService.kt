@@ -62,6 +62,8 @@ class CiaoService : AccessibilityService() {
     /** The lowest the current glide may go: never below its start or its spot, so it doesn't bounce over the keys. */
     private var glideFloor = Int.MAX_VALUE
     private var dictation: Dictation? = null
+    /** Dictations started so far: a later one owns the card. */
+    private var started = 0
     /** The shade is down: the bubble and the card step aside until it's back up. */
     private var shade = false
 
@@ -515,6 +517,7 @@ class CiaoService : AccessibilityService() {
         // Only now that the new one is running does a failed dictation waiting for a retry give way.
         dictation?.let { closeAudio(it) }
         dictation = d
+        started++
         showBubble()
         bubble?.state = BubbleView.State.RECORDING
         bubble?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -632,6 +635,7 @@ class CiaoService : AccessibilityService() {
     private fun remember(commands: List<VoiceCommands.RememberCommand>, provider: Provider, note: String?) {
         val key = prefs.keyOf(provider)
         val shown = card
+        val mine = started
         Thread {
             val terms = commands.map { it.heard to Terms.resolve(provider, key, it) }
             main.post {
@@ -645,7 +649,7 @@ class CiaoService : AccessibilityService() {
                         }
                     }
                 }
-                if (dictation != null || card !== shown || shown == null) return@post
+                if (dictation != null || started != mine || card !== shown || shown == null) return@post
                 shown.notice((listOfNotNull(note) + messages).joinToString(" · "))
                 main.removeCallbacks(hideCardLater)
                 main.postDelayed(hideCardLater, if (note == null && terms.any { it.second != null }) 3000 else 6000)

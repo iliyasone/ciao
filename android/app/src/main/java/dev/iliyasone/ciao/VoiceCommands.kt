@@ -50,6 +50,8 @@ object VoiceCommands {
     /** Gaps between words in a spoken spelling; a sentence end anywhere else ends the term. */
     private val SPELLING_GAP = Regex("(?U)[\\s,.\\-–—:;]*")
     private val SENTENCE_GAP = Regex("[,.!?…;:\\n»\"”’)]")
+    /** Nothing yet, or a sentence end: what follows starts a sentence. */
+    private val SENTENCE_STARTS = Regex("(?U)^\\s*$|[.!?…]\\s*$")
     private val TRAILING = Regex("(?U)^[\\s,.!?…;:»\"”’)\\]]*")
     /** Words of a written-out term, at most this many: the rest of the sentence is dictation again. */
     private const val MAX_WORDS = 3
@@ -77,24 +79,27 @@ object VoiceCommands {
         val commands = mutableListOf<RememberCommand>()
         val out = StringBuilder()
         var from = 0
+        /** The text after a command: with a capital where a sentence starts (at the start, or after "."). */
+        fun add(piece: String) {
+            out.append(if (from > 0 && SENTENCE_STARTS.containsMatchIn(out)) piece.replaceFirstChar { it.uppercaseChar() } else piece)
+        }
         var m = re.find(text)
         while (m != null) {
             val (termEnd, command) = readTerm(text, m.range.last + 1)
             commands.add(command)
-            out.append(text, from, m.range.first)
+            add(text.substring(from, m.range.first))
             val end = termEnd + (DESTINATION.find(text.substring(termEnd))?.value?.length ?: 0)
             // The punctuation after the term goes with it.
             from = end + TRAILING.find(text.substring(end))!!.value.length
             m = if (from < text.length) re.find(text, from) else null
         }
         if (commands.isEmpty()) return text to commands
-        // The text went on after a command at its start: begin it with a capital.
-        val capital = out.isBlank()
-        val rest = out.append(text.substring(from)).toString()
+        add(text.substring(from))
+        val rest = out.toString()
             .replace(Regex("[ \\t]{2,}"), " ")
             .replace(Regex("(?U)[\\s,;:—–\\-«\"„“(]+$"), "")
             .trim()
-        return (if (capital) rest.replaceFirstChar { it.uppercaseChar() } else rest) to commands
+        return rest to commands
     }
 
     private class Token(val word: String, val from: Int, val to: Int)
@@ -116,6 +121,9 @@ object VoiceCommands {
             while (j > i && j < tokens.size && spells(j)) j++
             return if (j - i >= 2) j else i
         }
+        // After a sentence end ("…слово. PostHog.") a lone word or a spelling: anything longer is the next sentence.
+        val alone = tokens.size == 1 || Regex("[.!?…\\n]").containsMatchIn(gap(1))
+        if (Regex("[.!?…]").containsMatchIn(text.substring(start, tokens[0].from)) && !alone && spelling(0) == 0) return start to RememberCommand("", false)
         var end = spelling(0)
         var spelled = end > 0
         if (!spelled) {

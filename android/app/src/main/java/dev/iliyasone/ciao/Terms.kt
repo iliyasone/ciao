@@ -56,7 +56,10 @@ Answer with the term only, written the way it is normally written: the script, c
         return term.takeIf { it.isNotEmpty() && it.length <= MAX_TERM && it.none { ch -> ch in "\r\n<>" } }
     }
 
-    /** Blocking: asks the provider's text model for the term; throws on a network or API error. */
+    /** The service answered with an error (a key without access to the model, a quota): no reason to guess the term. */
+    class ModelError(message: String) : IOException(message)
+
+    /** Blocking: asks the provider's text model for the term; throws on a network error, [ModelError] on an API error. */
     fun fromModel(provider: Provider, key: String, heard: String): String? {
         val request = if (provider == Provider.GEMINI) {
             val body = JSONObject()
@@ -83,7 +86,7 @@ Answer with the term only, written the way it is normally written: the script, c
         }
         client.newCall(request).execute().use { res ->
             val json = runCatching { JSONObject(res.body!!.string()) }.getOrDefault(JSONObject())
-            if (!res.isSuccessful) throw IOException(json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() } ?: "${provider.displayName} ${res.code}")
+            if (!res.isSuccessful) throw ModelError(json.optJSONObject("error")?.optString("message")?.takeIf { it.isNotEmpty() } ?: "${provider.displayName} ${res.code}")
             val answer = if (provider == Provider.GEMINI) {
                 val parts = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
                 (0 until (parts?.length() ?: 0)).joinToString("") { parts!!.optJSONObject(it)?.optString("text") ?: "" }
@@ -96,7 +99,8 @@ Answer with the term only, written the way it is normally written: the script, c
 
     /**
      * Blocking: the term a command asked for, as heard when that's enough, else from the model (null
-     * when it found none: nothing is added), else, when the model can't be reached, a fallback.
+     * when it found none, or answered with an error: nothing is added), else, when the model can't be
+     * reached, a fallback.
      */
     fun resolve(provider: Provider, key: String, c: VoiceCommands.RememberCommand): String? {
         if (c.heard.isEmpty()) return null
@@ -105,7 +109,7 @@ Answer with the term only, written the way it is normally written: the script, c
             fromModel(provider, key, c.heard)
         } catch (e: Exception) {
             Log.w("Ciao", "term from model: ${e.message}")
-            fallback(c)
+            if (e is ModelError) null else fallback(c)
         }
     }
 

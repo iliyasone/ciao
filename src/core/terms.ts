@@ -51,7 +51,10 @@ export function cleanTerm(answer: string): string | null {
   return term && term.length <= MAX_TERM && !/[\r\n<>]/.test(term) ? term : null;
 }
 
-/** Asks the provider's text model for the term; throws on a network or API error. */
+/** The service answered with an error (a key without access to the model, a quota): no reason to guess the term. */
+class ModelError extends Error {}
+
+/** Asks the provider's text model for the term; throws on a network error, ModelError on an API error. */
 export async function termFromModel(provider: Provider, apiKey: string, heard: string): Promise<string | null> {
   const name = PROVIDERS[provider].name;
   const res =
@@ -84,7 +87,7 @@ export async function termFromModel(provider: Provider, apiKey: string, heard: s
     choices?: { message?: { content?: string } }[];
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
-  if (!res.ok) throw new Error(body.error?.message ?? t().errors.status(name, res.status));
+  if (!res.ok) throw new ModelError(body.error?.message ?? t().errors.status(name, res.status));
   const answer =
     provider === "gemini"
       ? (body.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("")
@@ -94,7 +97,7 @@ export async function termFromModel(provider: Provider, apiKey: string, heard: s
 
 /**
  * The term a command asked for: as heard when that's enough, else from the model (null when it found
- * none: nothing is added), else, when the model can't be reached, a fallback.
+ * none, or answered with an error: nothing is added), else, when the model can't be reached, a fallback.
  */
 export async function resolveTerm(provider: Provider, apiKey: string, c: RememberCommand): Promise<string | null> {
   if (!c.heard) return null;
@@ -104,7 +107,7 @@ export async function resolveTerm(provider: Provider, apiKey: string, c: Remembe
     return await termFromModel(provider, apiKey, c.heard);
   } catch (e) {
     console.warn("term from model:", (e as Error).message);
-    return fallbackTerm(c);
+    return e instanceof ModelError ? null : fallbackTerm(c);
   }
 }
 

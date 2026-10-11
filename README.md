@@ -49,7 +49,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   anywhere in a dictation. Ciao cuts the command out of the text, adds the word to
   your [terms](#sync) and says so on the card: *Added to your terms: PostHog*.
   - Spelling it out works too, in Russian or English letter names: "чао, запомни
-    слово: пэ, о, эс, тэ, эйч, о, джи", "ciao, remember P-O-S-T-H-O-G", or the
+    слово: пэ, о, эс, тэ, эйч, о, джи", "ciao, remember the word P-O-S-T-H-O-G", or the
     word then its spelling ("…слово пост хог, по буквам: …").
   - The recognizer writes the word as it heard it (often in Cyrillic, or letter by
     letter), so unless it already looks like a term ("PostHog", "Next.js",
