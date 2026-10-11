@@ -201,18 +201,35 @@ object FileTranscriber {
                 }
             }
             val request = Request.Builder().url(url).header("x-goog-api-key", key).post(body).build()
-            val response = try {
-                http.newCall(request).execute()
-            } catch (e: IOException) {
-                throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
-            }
-            response.use {
-                val raw = it.body?.string() ?: ""
-                val first = runCatching { JSONObject(raw) }.getOrNull() ?: runCatching { JSONArray(raw).getJSONObject(0) }.getOrNull() ?: JSONObject()
-                val error = first.optJSONObject("error")?.optString("message")?.takeIf { m -> m.isNotEmpty() }
-                if (!it.isSuccessful) throw IOException(error ?: context.getString(R.string.error_status, GeminiSession.NAME, it.code))
-                val parts = first.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
-                texts.add((0 until parts.length()).joinToString("") { i -> parts.optJSONObject(i)?.optString("text") ?: "" }.trim())
+            var attempt = 0
+            while (true) {
+                val response = try {
+                    http.newCall(request).execute()
+                } catch (e: IOException) {
+                    throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
+                }
+                // The preview models share Google's capacity: "Resource exhausted" passes in a while.
+                if (response.code == 429 && attempt++ < 2) {
+                    response.close()
+                    Thread.sleep(20_000)
+                    continue
+                }
+                response.use {
+                    val raw = it.body?.string() ?: ""
+                    val first = runCatching { JSONObject(raw) }.getOrNull() ?: runCatching { JSONArray(raw).getJSONObject(0) }.getOrNull() ?: JSONObject()
+                    val error = first.optJSONObject("error")?.optString("message")?.takeIf { m -> m.isNotEmpty() }
+                    if (!it.isSuccessful) throw IOException(error ?: context.getString(R.string.error_status, GeminiSession.NAME, it.code))
+                    val candidate = first.optJSONArray("candidates")?.optJSONObject(0)
+                    val finish = candidate?.optString("finishReason").orEmpty()
+                    // No candidate (a blocked prompt) or one cut short: say so rather than pass for silence.
+                    if (candidate == null || (finish.isNotEmpty() && finish != "STOP")) {
+                        val why = finish.ifEmpty { first.optJSONObject("promptFeedback")?.optString("blockReason").orEmpty().ifEmpty { it.code.toString() } }
+                        throw IOException(context.getString(R.string.error_status_text, GeminiSession.NAME, why))
+                    }
+                    val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+                    texts.add((0 until parts.length()).joinToString("") { i -> parts.optJSONObject(i)?.optString("text") ?: "" }.trim())
+                }
+                break
             }
         }
         return texts.filter { it.isNotEmpty() }.joinToString(" ")

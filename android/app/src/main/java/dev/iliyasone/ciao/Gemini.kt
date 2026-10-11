@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
@@ -33,10 +34,10 @@ object GeminiEndpoint {
     private val known = ConcurrentHashMap<String, String>()
 
     /**
-     * Blocking. The Vertex project number of [key], or null for an AI Studio key; both look alike
-     * ("AQ.…"). Asks the Gemini API for its models: an AI Studio key gets them, a Vertex key is
-     * refused with API_KEY_SERVICE_BLOCKED, and the refusal names the key's project. Any other answer
-     * (a wrong key) counts as AI Studio. Remembered per key; a failed check (offline) throws and is not.
+     * Blocking. The Vertex project number of [key], or null for an AI Studio key, by the answer to
+     * GET /v1beta/models on the Gemini API (see [parse]). Remembered per key. Offline throws; a check
+     * with no answer to go by (a 5xx) counts as AI Studio this once. Mirrors geminiEndpoint in
+     * src/main/transcribe.ts.
      */
     fun vertexProject(key: String): String? {
         known[key]?.let { return it.ifEmpty { null } }
@@ -44,16 +45,30 @@ object GeminiEndpoint {
             .url("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
             .header("x-goog-api-key", key)
             .build()
-        val project = http.newCall(request).execute().use { response ->
-            if (response.isSuccessful) return@use ""
-            val details = runCatching { JSONObject(response.body?.string() ?: "").getJSONObject("error").getJSONArray("details") }.getOrNull() ?: JSONArray()
-            (0 until details.length()).map { details.optJSONObject(it) ?: JSONObject() }
-                .firstOrNull { it.optString("reason") == "API_KEY_SERVICE_BLOCKED" }
-                ?.optJSONObject("metadata")?.optString("consumer")
-                ?.let { Regex("""^projects/(\d+)$""").find(it)?.groupValues?.get(1) } ?: ""
+        // Every live session and file transcription waits for this: a stalled request must not hold them.
+        val call = http.newCall(request).apply { timeout().timeout(10, TimeUnit.SECONDS) }
+        val found = call.execute().use { parse(it.code, it.body?.string() ?: "") } ?: return null
+        known[key] = found
+        return found.ifEmpty { null }
+    }
+
+    /**
+     * Both kinds of key look alike ("AQ.…"). An AI Studio key gets the models: "". A Vertex key is
+     * refused, and the refusal names its project ("consumer": "projects/906271403959"), which Vertex
+     * URLs need: API_KEY_SERVICE_BLOCKED when the key is limited to Vertex AI, SERVICE_DISABLED when
+     * it isn't but the project has no Gemini API. Another 400, 401 or 403 is a wrong key: "", so its
+     * errors read as before. Null: no answer to go by. Mirrors parseGeminiEndpoint in src/core/gemini.ts.
+     */
+    fun parse(status: Int, body: String): String? {
+        if (status in 200..299) return ""
+        val details = runCatching { JSONObject(body).getJSONObject("error").getJSONArray("details") }.getOrNull() ?: JSONArray()
+        for (i in 0 until details.length()) {
+            val d = details.optJSONObject(i) ?: continue
+            if (d.optString("reason") != "API_KEY_SERVICE_BLOCKED" && d.optString("reason") != "SERVICE_DISABLED") continue
+            val consumer = d.optJSONObject("metadata")?.optString("consumer") ?: continue
+            Regex("""^projects/(\d+)$""").find(consumer)?.let { return it.groupValues[1] }
         }
-        known[key] = project
-        return project.ifEmpty { null }
+        return if (status == 400 || status == 401 || status == 403) "" else null
     }
 
     /** On Vertex the models carry "-preview" and live in the "global" location only. */
@@ -117,6 +132,8 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     /** Null until the endpoint is known; then [pending] goes out. Both under [lock]. */
     private var socket: WebSocket? = null
     private val pending = mutableListOf<JSONObject>()
+    /** Roughly what [pending] holds, for [queued]: a replay must not pile up while the endpoint is found. */
+    private var pendingBytes = 0L
     /** The Vertex project of the key, null for AI Studio; set before [socket]. */
     private var vertexProject: String? = null
 
@@ -165,12 +182,13 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
             socket = ws
             for (msg in pending) ws.send(wire(msg))
             pending.clear()
+            pendingBytes = 0
         }
     }
 
     override val usable: Boolean get() = failure == null && !closedByUs
 
-    override val queued: Long get() = synchronized(lock) { socket?.queueSize() ?: 0L }
+    override val queued: Long get() = synchronized(lock) { socket?.queueSize() ?: pendingBytes }
 
     override fun configure(prefs: Prefs) {
         val transcription = JSONObject().put("mode", if (prefs.smart) "SMART" else "VERBATIM")
@@ -239,7 +257,9 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     private fun send(msg: JSONObject) {
         synchronized(lock) {
             val ws = socket
-            if (ws == null) pending.add(msg) else ws.send(wire(msg))
+            if (ws != null) return ws.send(wire(msg)).let {}
+            pending.add(msg)
+            pendingBytes += msg.toString().length
         }
     }
 

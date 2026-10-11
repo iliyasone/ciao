@@ -34,31 +34,24 @@ export function vertexFileUrl(project: string): string {
   return `https://aiplatform.googleapis.com/v1/${vertexModel(project, PROVIDERS.gemini.fileModel)}:generateContent`;
 }
 
-const endpoints = new Map<string, Promise<GeminiEndpoint>>();
-
 /**
- * Tells an AI Studio key from a Vertex one; both look alike ("AQ.…"). Asks the Gemini API for its
- * models: an AI Studio key gets them. A Vertex key is refused with API_KEY_SERVICE_BLOCKED, and the
- * refusal names the key's project ("consumer": "projects/906271403959"), which Vertex URLs need. Any
- * other answer (a wrong key) counts as AI Studio, so its errors read as before. Remembered per key;
- * a failed check (offline) is not.
+ * Tells an AI Studio key from a Vertex one by the answer to GET /v1beta/models on the Gemini API
+ * (see geminiEndpoint in main/transcribe.ts); both look alike ("AQ.…"). An AI Studio key gets the
+ * models. A Vertex key is refused, and the refusal names the key's project ("consumer":
+ * "projects/906271403959"), which Vertex URLs need: API_KEY_SERVICE_BLOCKED when the key is limited
+ * to Vertex AI, SERVICE_DISABLED when it isn't but the project has no Gemini API. Another 400, 401
+ * or 403 is a wrong key: AI Studio, so its errors read as before. Null: no answer to go by (a 429, a
+ * 5xx), so ask again next time.
  */
-export function geminiEndpoint(apiKey: string): Promise<GeminiEndpoint> {
-  let ep = endpoints.get(apiKey);
-  if (!ep) {
-    ep = detect(apiKey);
-    endpoints.set(apiKey, ep);
-    ep.catch(() => endpoints.delete(apiKey));
+export function parseGeminiEndpoint(status: number, body: unknown): GeminiEndpoint | null {
+  if (status >= 200 && status < 300) return { vertexProject: null };
+  const details = (body as { error?: { details?: unknown } } | null)?.error?.details;
+  for (const d of Array.isArray(details) ? (details as { reason?: string; metadata?: { consumer?: string } }[]) : []) {
+    if (d?.reason !== "API_KEY_SERVICE_BLOCKED" && d?.reason !== "SERVICE_DISABLED") continue;
+    const project = /^projects\/(\d+)$/.exec(d.metadata?.consumer ?? "")?.[1];
+    if (project) return { vertexProject: project };
   }
-  return ep;
-}
-
-async function detect(apiKey: string): Promise<GeminiEndpoint> {
-  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", { headers: { "x-goog-api-key": apiKey } });
-  if (res.ok) return { vertexProject: null };
-  const body = (await res.json().catch(() => ({}))) as { error?: { details?: { reason?: string; metadata?: { consumer?: string } }[] } };
-  const blocked = body.error?.details?.find((d) => d.reason === "API_KEY_SERVICE_BLOCKED");
-  return { vertexProject: /^projects\/(\d+)$/.exec(blocked?.metadata?.consumer ?? "")?.[1] ?? null };
+  return status === 400 || status === 401 || status === 403 ? { vertexProject: null } : null;
 }
 
 const OPEN = 1;
@@ -129,8 +122,7 @@ export class GeminiLiveSession implements LiveSession {
 
   /**
    * Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer".
-   * The socket opens once the endpoint is known (see geminiEndpoint); until then everything waits in
-   * the queue.
+   * The socket opens once the endpoint is known; until then everything waits in the queue.
    */
   constructor(factory: SocketFactory, endpoint: Promise<GeminiEndpoint>) {
     endpoint.then(
