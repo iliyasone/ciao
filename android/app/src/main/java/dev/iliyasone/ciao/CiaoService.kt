@@ -849,7 +849,10 @@ class CiaoService : AccessibilityService() {
 
     /** At the top, where the live card was: "«постхок» → «PostHog». Add to terms?" */
     private fun suggest(c: Correction) {
-        if (dictation != null) return
+        if (dictation != null) {
+            watch?.offered?.remove(c.fixed.lowercase()) // not shown: the next read may offer it
+            return
+        }
         hideCard() // the last dictation's, if it is still fading out
         lateinit var view: SuggestionView
         view = SuggestionView(this, c, onAdd = {

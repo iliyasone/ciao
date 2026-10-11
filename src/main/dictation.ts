@@ -133,6 +133,8 @@ export class DictationController {
       delivered: (text: string, hwnd: number | null) => void;
       /** A dictation started (whatever was being watched is done). */
       started: () => void;
+      /** The window is one of Ciao's own (History, Settings). */
+      isOwnWindow: (hwnd: number) => boolean;
     },
   ) {}
 
@@ -529,11 +531,13 @@ export class DictationController {
 
   /**
    * The window in front when the dictation was stopped, else the one it was started in (when there
-   * was none to tell: see InputHelper.foreground). Recorded in history as the dictation's window.
+   * was none to tell, see InputHelper.foreground, or it is Ciao's own: opening Settings mid-dictation
+   * must not paste it all into the terms). Recorded in history as the dictation's window.
    */
   private async target(a: Active): Promise<ForegroundWindow | null> {
     const start = await a.target;
-    const stop = a.stopTarget ? await a.stopTarget : null;
+    let stop = a.stopTarget ? await a.stopTarget : null;
+    if (stop && this.deps.isOwnWindow(stop.hwnd)) stop = null;
     if (!stop || !start || stop.hwnd === start.hwnd) return stop ?? start;
     a.targetMoved = true;
     a.entry.target = { title: stop.title, process: stop.process };

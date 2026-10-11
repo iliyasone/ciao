@@ -279,6 +279,15 @@ function addTerm(term: string): void {
   historyWin?.webContents.send("settings:term-added", t);
 }
 
+/** `hwnd` (as the input helper names windows: a pid on macOS) is one of Ciao's windows. */
+function isOwnWindow(hwnd: number): boolean {
+  if (MAC) return hwnd === process.pid;
+  return BrowserWindow.getAllWindows().some((w) => {
+    const h = w.getNativeWindowHandle();
+    return Number(h.length >= 8 ? h.readBigUInt64LE(0) : h.readUInt32LE(0)) === hwnd;
+  });
+}
+
 /** Words the user corrected, before they become suggestions: not terms already, not turned down before. */
 function knownWords(): string[] {
   return [...settings.keywords, ...settings.dismissedTerms];
@@ -505,6 +514,7 @@ void app.whenReady().then(() => {
       else corrections.pasted(text, hwnd);
     },
     started: () => corrections.stop(),
+    isOwnWindow,
   });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));
   input.on("trigger", (down, spec) => dictation.onHotkey(down, spec));

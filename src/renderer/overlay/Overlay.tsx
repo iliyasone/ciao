@@ -623,6 +623,12 @@ export function Overlay() {
         onMouseMove={(e) => {
           // Only a real pointer move turns it see-through: the card often appears right under a
           // resting cursor (at the prompt box), and that alone must not hide the text.
+          // The header stays readable: its dot finishes a hands-free dictation.
+          if ((e.target as HTMLElement).closest("header")) {
+            if (peek) setPeek(false);
+            pointerAt.current = null;
+            return;
+          }
           const at = pointerAt.current;
           if (!at) pointerAt.current = { x: e.screenX, y: e.screenY };
           else if (!peek && !withActions && !solidUntilLeave.current && !dragging.current && Math.hypot(e.screenX - at.x, e.screenY - at.y) > 4) setPeek(true);
