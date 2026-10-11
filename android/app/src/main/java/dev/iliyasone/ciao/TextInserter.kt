@@ -25,10 +25,12 @@ object TextInserter {
     /** [restoreClipboard] off: a paste may leave the transcript on the clipboard, so a field with text always gets one. */
     fun insert(context: Context, node: AccessibilityNodeInfo, transcript: String, restoreClipboard: Boolean = true): Boolean {
         if (!node.refresh() || !node.isEditable) return false
-        val (current, before, piece, after) = place(
-            node.text?.toString().orEmpty(), node.hintText?.toString(), node.isShowingHintText,
-            node.textSelectionStart, node.textSelectionEnd, transcript,
-        )
+        val shown = node.text?.toString().orEmpty()
+        val hint = node.hintText?.toString()
+        val start = node.textSelectionStart
+        val end = node.textSelectionEnd
+        val showingHint = node.isShowingHintText || mayBeHint(shown, hint, start, end) && isHint(node, shown, start, end)
+        val (current, before, piece, after) = place(shown, hint, showingHint, start, end, transcript)
 
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         // Only plain text can be put back: a copied image or file is a content:// URI whose read
@@ -44,13 +46,7 @@ object TextInserter {
             return paste(context, node, piece, saved)
         }
         val caret = before.length + piece.length
-        node.performAction(
-            AccessibilityNodeInfo.ACTION_SET_SELECTION,
-            Bundle().apply {
-                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, caret)
-                putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, caret)
-            },
-        )
+        select(node, caret, caret)
         return true
     }
 
@@ -75,6 +71,34 @@ object TextInserter {
         val piece = (if (before.isNotEmpty() && !before.last().isWhitespace()) " " else "") + transcript
         return Placement(current, before, piece, current.substring(end))
     }
+
+    /**
+     * Whether [shown] may be a hint the app reports as the field's text without saying so: the field
+     * doesn't flag it, and its cursor is at the very start (an empty field's) or unknown. Placed as
+     * text, the hint would end up after the dictation, or before it.
+     */
+    fun mayBeHint(shown: String, hint: String?, selStart: Int, selEnd: Int): Boolean =
+        shown.isNotEmpty() && shown != hint && selStart == selEnd && selStart <= 0
+
+    /**
+     * Asks the field to put its cursor after [shown]. A hint has nothing behind it, so a text view
+     * refuses (its real text is shorter); real text accepts, and the cursor goes back where it was.
+     * A field that can't move its cursor at all tells us nothing, so its text stays text.
+     */
+    private fun isHint(node: AccessibilityNodeInfo, shown: String, selStart: Int, selEnd: Int): Boolean {
+        if (AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION !in node.actionList) return false
+        if (!select(node, shown.length, shown.length)) return true
+        if (selStart >= 0 && selEnd >= 0) select(node, selStart, selEnd)
+        return false
+    }
+
+    private fun select(node: AccessibilityNodeInfo, start: Int, end: Int) = node.performAction(
+        AccessibilityNodeInfo.ACTION_SET_SELECTION,
+        Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end)
+        },
+    )
 
     /** Pastes [text], then puts back [saved] (what was on the clipboard), if Android let us read it. */
     private fun paste(context: Context, node: AccessibilityNodeInfo, text: String, saved: ClipData?): Boolean {
