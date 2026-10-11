@@ -87,10 +87,17 @@ object FileTranscriber {
     }
 
     /**
-     * gemini-3.5-transcribe through the Interactions API: the only Gemini endpoint where smart mode
-     * works. Never add language codes, see Gemini.kt. Mirrors transcribeFileGemini.
+     * gemini-3.5-transcribe through the Interactions API: the only Gemini API endpoint where smart
+     * mode works. Vertex AI takes it on :generateContent instead ([transcribeVertex]). Never add
+     * language codes, see Gemini.kt. Mirrors transcribeFileGemini.
      */
     private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, smart: Boolean): String {
+        val project = try {
+            GeminiEndpoint.vertexProject(key)
+        } catch (e: IOException) {
+            throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
+        }
+        if (project != null) return transcribeVertex(context, prefs, audio, key, project, smart)
         val config = JSONObject()
         if (smart) config.put("mode", "smart")
         val terms = geminiVocabulary(prefs.keywords)
@@ -159,6 +166,68 @@ object FileTranscriber {
                         }
                     }
                     texts.add(text.toString().trim())
+                }
+                break
+            }
+        }
+        return texts.filter { it.isNotEmpty() }.joinToString(" ")
+    }
+
+    /** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. Mirrors transcribeFileVertex. */
+    private fun transcribeVertex(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, project: String, smart: Boolean): String {
+        val config = JSONObject().put("mode", if (smart) "SMART" else "VERBATIM")
+        val terms = geminiVocabulary(prefs.keywords)
+        if (terms.isNotEmpty()) config.put("customVocabulary", JSONArray(terms))
+        val url = "https://aiplatform.googleapis.com/v1/${GeminiEndpoint.vertexModel(project, Provider.GEMINI.fileModel)}:generateContent"
+        val texts = mutableListOf<String>()
+        for ((start, end) in split(audio, GEMINI_MAX_PART_MS)) {
+            val inline = JSONObject().put("mimeType", "audio/wav").put("data", DATA)
+            val content = JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("inlineData", inline)))
+            val text = JSONObject()
+                .put("contents", JSONArray().put(content))
+                .put("generationConfig", JSONObject().put("audioTranscriptionConfig", config))
+                .toString()
+            val head = text.substringBefore(DATA).toByteArray()
+            val tail = text.substringAfter(DATA).toByteArray()
+            val body = object : RequestBody() {
+                override fun contentType() = "application/json".toMediaType()
+                override fun contentLength() = head.size + (WAV_HEADER + end - start + 2) / 3 * 4 + tail.size
+                override fun writeTo(sink: BufferedSink) {
+                    sink.write(head)
+                    val base64 = Base64OutputStream(sink.outputStream(), Base64.NO_WRAP or Base64.NO_CLOSE)
+                    writeWav(audio, start, end, base64)
+                    base64.close()
+                    sink.write(tail)
+                }
+            }
+            val request = Request.Builder().url(url).header("x-goog-api-key", key).post(body).build()
+            var attempt = 0
+            while (true) {
+                val response = try {
+                    http.newCall(request).execute()
+                } catch (e: IOException) {
+                    throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
+                }
+                // The preview models share Google's capacity: "Resource exhausted" passes in a while.
+                if (response.code == 429 && attempt++ < 2) {
+                    response.close()
+                    Thread.sleep(20_000)
+                    continue
+                }
+                response.use {
+                    val raw = it.body?.string() ?: ""
+                    val first = runCatching { JSONObject(raw) }.getOrNull() ?: runCatching { JSONArray(raw).getJSONObject(0) }.getOrNull() ?: JSONObject()
+                    val error = first.optJSONObject("error")?.optString("message")?.takeIf { m -> m.isNotEmpty() }
+                    if (!it.isSuccessful) throw IOException(error ?: context.getString(R.string.error_status, GeminiSession.NAME, it.code))
+                    val candidate = first.optJSONArray("candidates")?.optJSONObject(0)
+                    val finish = candidate?.optString("finishReason").orEmpty()
+                    // No candidate (a blocked prompt) or one cut short: say so rather than pass for silence.
+                    if (candidate == null || (finish.isNotEmpty() && finish != "STOP")) {
+                        val why = finish.ifEmpty { first.optJSONObject("promptFeedback")?.optString("blockReason").orEmpty() }
+                        throw IOException(if (why.isEmpty()) context.getString(R.string.error_provider, GeminiSession.NAME) else context.getString(R.string.error_status_text, GeminiSession.NAME, why))
+                    }
+                    val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+                    texts.add((0 until parts.length()).joinToString("") { i -> parts.optJSONObject(i)?.optString("text") ?: "" }.trim())
                 }
                 break
             }

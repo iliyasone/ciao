@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import { BYTES_PER_MS, level, wavHeader } from "../core/audio";
-import { GeminiLiveSession, vocabulary } from "../core/gemini";
+import { type GeminiEndpoint, GeminiLiveSession, parseGeminiEndpoint, vertexFileUrl, vocabulary } from "../core/gemini";
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
@@ -9,8 +9,37 @@ import type { Provider, Settings } from "../core/types";
 export function openLive(provider: Provider, apiKey: string): LiveSession {
   if (provider === "gemini")
     // The key goes in a header, not ?key=: query strings end up in logs.
-    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey } }) as unknown as SocketLike);
+    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey } }) as unknown as SocketLike, geminiEndpoint(apiKey));
   return new RealtimeSession((url) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } }) as unknown as SocketLike);
+}
+
+const endpoints = new Map<string, Promise<GeminiEndpoint>>();
+
+/**
+ * Where a Gemini key works (see parseGeminiEndpoint), remembered per key. A check with no answer to go
+ * by (offline, a 5xx) is not remembered: offline fails as such, a 5xx counts as AI Studio this once.
+ */
+export function geminiEndpoint(apiKey: string): Promise<GeminiEndpoint> {
+  let ep = endpoints.get(apiKey);
+  if (!ep) {
+    const check = detectEndpoint(apiKey);
+    check.then(
+      (found) => found ?? endpoints.delete(apiKey),
+      () => endpoints.delete(apiKey),
+    );
+    ep = check.then((found) => found ?? { vertexProject: null });
+    endpoints.set(apiKey, ep);
+  }
+  return ep;
+}
+
+async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
+  // Every live session and file transcription waits for this: a stalled request must not hold them.
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", {
+    headers: { "x-goog-api-key": apiKey },
+    signal: AbortSignal.timeout(10_000),
+  });
+  return parseGeminiEndpoint(res.status, await res.json().catch(() => null));
 }
 
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */
@@ -183,11 +212,16 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
 }
 
 /**
- * gemini-3.5-transcribe through the Interactions API: the only Gemini endpoint where smart mode
- * works (on :generateContent it parses, then returns an empty text). Never add language codes,
- * see core/gemini.ts.
+ * gemini-3.5-transcribe through the Interactions API: the only Gemini API endpoint where smart mode
+ * works (on :generateContent it parses, then returns an empty text). Vertex AI has no Interactions
+ * for this model but takes smart mode on :generateContent (transcribeFileVertex). Never add language
+ * codes, see core/gemini.ts.
  */
 async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
+  const { vertexProject } = await geminiEndpoint(apiKey).catch(() => {
+    throw new Error(t().errors.cannotReach("Gemini"));
+  });
+  if (vertexProject) return transcribeFileVertex(apiKey, vertexProject, pcm, settings);
   const config: Record<string, unknown> = {};
   if (settings.smart) config.mode = "smart";
   const terms = vocabulary(settings.keywords);
@@ -233,5 +267,49 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
 interface GeminiInteraction {
   status?: string;
   steps?: { type?: string; content?: { type?: string; text?: string }[] }[];
+  error?: { message?: string };
+}
+
+/** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. */
+async function transcribeFileVertex(apiKey: string, project: string, pcm: Buffer, settings: Settings): Promise<string> {
+  const config: Record<string, unknown> = { mode: settings.smart ? "SMART" : "VERBATIM" };
+  const terms = vocabulary(settings.keywords);
+  if (terms.length) config.customVocabulary = terms;
+  const texts: string[] = [];
+  for (const part of splitPcm(pcm, GEMINI_MAX_PART_MS)) {
+    const request = JSON.stringify({
+      contents: [{ role: "user", parts: [{ inlineData: { mimeType: "audio/wav", data: Buffer.from(wav(part)).toString("base64") } }] }],
+      generationConfig: { audioTranscriptionConfig: config },
+    });
+    let res: Response;
+    let first: VertexResponse | undefined;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(vertexFileUrl(project), {
+        method: "POST",
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        body: request,
+      });
+      const body = (await res.json().catch(() => ({}))) as VertexResponse | VertexResponse[];
+      first = Array.isArray(body) ? body[0] : body;
+      // The preview models share Google's capacity: "Resource exhausted" passes in a while.
+      if (res.status !== 429 || attempt === 2) break;
+      await new Promise((r) => setTimeout(r, 20_000));
+    }
+    if (!res.ok) throw new Error(first?.error?.message ?? t().errors.status("Gemini", res.status));
+    const candidate = first?.candidates?.[0];
+    // No candidate (a blocked prompt) or one cut short: say so rather than pass for silence.
+    if (!candidate || (candidate.finishReason && candidate.finishReason !== "STOP")) {
+      const why = candidate?.finishReason ?? first?.promptFeedback?.blockReason;
+      throw new Error(why ? t().errors.status("Gemini", why) : t().errors.noFinalText);
+    }
+    const text = (candidate.content?.parts ?? []).map((p) => p.text ?? "").join("");
+    texts.push(text.trim());
+  }
+  return texts.filter(Boolean).join(" ");
+}
+
+interface VertexResponse {
+  candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[];
+  promptFeedback?: { blockReason?: string };
   error?: { message?: string };
 }

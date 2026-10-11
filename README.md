@@ -146,6 +146,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     in the history therefore sends a recording at 4× its speed with Gemini, one
     at a time, and *More accurate* waits and tries again when a long recording
     runs into the limit.
+  - A Google Cloud key for Vertex AI works in the same field: Ciao tells it from
+    an AI Studio key by itself and sends the audio to Vertex AI in the key's
+    project. Vertex has no AI Studio tiers (Tier 1 allows the file model only 100
+    requests a day) and bills the project's Cloud billing account.
 
 ## Requirements
 
@@ -155,7 +159,13 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   updates by hand.
 - An OpenAI API key with access to `gpt-live-transcribe` and `gpt-transcribe`, or a
   Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) (a
-  project with billing on; new accounts prepay at least $5).
+  project with billing on; new accounts prepay at least $5), or a Vertex AI key:
+  in a Google Cloud project with billing on, enable the Vertex AI API, give a
+  service account the *Vertex AI User* role and create an API key bound to it and
+  limited to the Vertex AI API (`gcloud services api-keys create
+  --api-target=service=aiplatform.googleapis.com --service-account=…`). Vertex
+  refuses a key not bound to a service account, and a key that may also call the
+  Gemini API is taken for an AI Studio key.
 
 Pricing is per minute of audio:
 
