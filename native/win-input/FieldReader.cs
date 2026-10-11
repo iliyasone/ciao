@@ -36,7 +36,10 @@ static class FieldReader
         lock (Lock) w = _worker;
         w.Post(uia =>
         {
-            if (!done.Task.IsCompleted) done.TrySetResult(ReadFocused(uia)); // skip reads that already timed out
+            if (done.Task.IsCompleted) return; // timed out already
+            // Again here: an earlier slow read may have kept this one waiting while the user switched apps.
+            if (wanted != IntPtr.Zero && Native.GetForegroundWindow() != wanted) done.TrySetResult(new Result(null, "focus-changed"));
+            else done.TrySetResult(ReadFocused(uia));
         });
         Task.Delay(Timeout).ContinueWith(_ =>
         {

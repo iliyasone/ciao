@@ -74,7 +74,7 @@ export function findCorrections(inserted: string, field: string): Correction[] |
       // A case-only change counts when it is a term's spelling: "Github" → "GitHub", "api" → "API".
       const was = a[op.a]!.text;
       const now = bw[op.b]!.text;
-      if (was !== now && looksLikeTerm(now) && !looksLikeTerm(was)) add(was, now);
+      if (was !== now && worthSuggesting(was, now, sentenceStart(field, bw[op.b]!.start))) add(was, now);
       i++;
       continue;
     }
@@ -181,9 +181,14 @@ function align(a: Word[], b: Word[]): Op[] {
 
 // ── Is it a term? ───────────────────────────────────────────────────────
 
-/** Spelled like a name or an identifier: a capital inside ("GitHub"), all capitals ("API"), or a digit with letters ("T3"). */
+/**
+ * Spelled like a name or an identifier: a capital inside ("GitHub"), a short word in capitals ("API",
+ * "HTTPS", "ИИ"; a longer one is emphasis: "ОЧЕНЬ"), or a digit with letters ("T3").
+ */
 function looksLikeTerm(word: string): boolean {
-  return /\p{Ll}\p{Lu}/u.test(word) || (/^\p{Lu}{2,}$/u.test(word.replace(/[^\p{L}]/gu, "")) && word.length >= 2) || (/\p{N}/u.test(word) && /\p{L}/u.test(word));
+  const letters = word.replace(/[^\p{L}]/gu, "");
+  const acronym = /^\p{Lu}{2,}$/u.test(letters) && letters.length <= (/\p{Script=Latin}/u.test(letters) ? 5 : 4);
+  return /\p{Ll}\p{Lu}/u.test(word) || acronym || (/\p{N}/u.test(word) && /\p{L}/u.test(word));
 }
 
 /** Nothing but spaces, quotes or brackets since the start of the text or the end of a sentence. */

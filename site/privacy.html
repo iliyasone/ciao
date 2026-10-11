@@ -66,7 +66,9 @@
       <p>
         To offer the words you correct in a pasted dictation for your terms, Ciao reads the focused text field of the
         window it pasted into (or, if the text went to the clipboard, the one you paste it into yourself),
-        for two minutes after the paste and only while that window is in front (on Linux with Wayland: that app), through the system's accessibility interface (password fields never). That text
+        for two minutes after the paste (when the text went to the clipboard, Ciao first waits up to a minute for you to
+        paste it, noting only that a paste key was pressed) and only while that window is in front (on Linux with
+        Wayland: that app), through the system's accessibility interface (password fields never). That text
         is compared with the dictation on your device and dropped: it is not stored, logged or sent anywhere. You can turn
         this off in <i>Settings → Behavior → Suggest new words</i>.
       </p>

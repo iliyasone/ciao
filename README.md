@@ -69,8 +69,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   [sync](#sync)). For that it reads the focused field of the window it pasted
   into, for two minutes after the paste and only while that window is in front:
   after you type in it, and as you press Enter (a chat app
-  sends and clears the field then). If the text went to the clipboard instead,
-  the field you paste it into yourself with Ctrl+V (⌘V) is watched the same way.
+  sends and clears the field then). If the text went to the clipboard instead
+  (the window changed, or *Paste text right away* is off), the field you paste
+  it into yourself with Ctrl+V (⌘V) within a minute is watched the same way.
   Only words that sound like what was heard and look like a term (Latin letters
   in Russian speech, capitals, digits) are offered; rewrites, added sentences and
   typo fixes are not. The text is compared on your computer and never stored or

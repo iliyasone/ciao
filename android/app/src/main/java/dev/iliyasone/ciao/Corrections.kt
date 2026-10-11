@@ -60,7 +60,7 @@ object Corrections {
                 // A case-only change counts when it is a term's spelling: "Github" → "GitHub", "api" → "API".
                 val was = a[op.a].text
                 val now = bw[op.b].text
-                if (was != now && looksLikeTerm(now) && !looksLikeTerm(was)) add(was, now)
+                if (was != now && worthSuggesting(was, now, sentenceStart(field, bw[op.b].start))) add(was, now)
                 i++
                 continue
             }
@@ -169,8 +169,11 @@ object Corrections {
     /** Spelled like a name or an identifier: a capital inside ("GitHub"), all capitals ("API"), or a digit with letters ("T3"). */
     internal fun looksLikeTerm(word: String): Boolean =
         LOWER_UPPER.containsMatchIn(word) ||
-            (ALL_CAPS.containsMatchIn(word.replace(NOT_LETTER, "")) && word.length >= 2) ||
+            acronym(word.replace(NOT_LETTER, "")) ||
             (DIGIT.containsMatchIn(word) && LETTER.containsMatchIn(word))
+
+    /** A short word in capitals ("API", "HTTPS", "ИИ"); a longer one is emphasis ("ОЧЕНЬ"). */
+    private fun acronym(letters: String) = ALL_CAPS.containsMatchIn(letters) && letters.length <= (if (hasLatin(letters)) 5 else 4)
 
     /** JS's \s (one UTF-16 unit), spelled out: Kotlin's isWhitespace counts a few other characters. */
     private fun jsSpace(c: Char) = c in "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF" || c in '\u2000'..'\u200A'

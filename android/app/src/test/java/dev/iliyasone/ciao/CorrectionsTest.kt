@@ -64,6 +64,12 @@ class CorrectionsTest {
         check("Скажи окей гуглу", "Скажи OK гуглу", listOf())
         // окей spelled differently
         check("Ну ок давай", "Ну Окей давай", listOf())
+        // capitals alone: an acronym is a term, "OK" and emphasis are not
+        check("Скажи ok гуглу", "Скажи OK гуглу", listOf())
+        check("ну ок давай", "ну ОК давай", listOf())
+        check("это очень важно для нас", "это ОЧЕНЬ важно для нас", listOf())
+        check("открой https ссылку", "открой HTTPS ссылку", listOf(Correction("https", "HTTPS")))
+        check("спроси у ии", "спроси у ИИ", listOf(Correction("ии", "ИИ")))
         // a grammar ending
         check("Поговори с Иваном завтра", "Поговори с Ивановым завтра", listOf())
         // a letter changed, same length

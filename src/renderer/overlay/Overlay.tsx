@@ -255,6 +255,8 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
     onPointerMove: (e: React.PointerEvent) => {
       const p = press.current;
       if (!p) return;
+      // Released somewhere we never heard of (off the pill, before it was a drag): over.
+      if (e.buttons === 0) return end(false);
       const dx = e.screenX - p.x;
       const dy = e.screenY - p.y;
       if (!p.moved) {
