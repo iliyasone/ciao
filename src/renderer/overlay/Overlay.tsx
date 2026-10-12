@@ -186,8 +186,11 @@ function useDrawn(ref: React.RefObject<HTMLElement | null>, hovered: React.RefOb
     reportRegion();
     const ro = new ResizeObserver(reportRegion);
     ro.observe(el);
+    // Measured mid-animation the rect includes the entering transform; the animation's end doesn't resize it.
+    el.addEventListener("animationend", reportRegion);
     return () => {
       ro.disconnect();
+      el.removeEventListener("animationend", reportRegion);
       drawn.delete(el);
       reportRegion();
       // It may vanish under the pointer, which then never "leaves" it.

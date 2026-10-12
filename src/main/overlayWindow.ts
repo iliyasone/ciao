@@ -27,8 +27,9 @@ const MAX_CARD_WIDTH = 1400;
 export const MIN_LINES = 3;
 export const MAX_LINES = 24;
 const LINUX = process.platform === "linux";
-/** How often the cursor is checked against what is drawn (Windows, macOS). */
+/** How often the cursor is checked against what is drawn (Windows, macOS): a card or suggestion is up, or just the pill. */
 const POINTER_POLL_MS = 50;
+const PILL_POLL_MS = 200;
 
 export interface OverlayPlacement {
   /** The middle of the card's bottom edge on screen; null = bottom-centre of the display under the cursor. */
@@ -53,6 +54,7 @@ export class OverlayWindow implements OverlayPort {
   private hovered = false;
   private ignoring = true;
   private poll: ReturnType<typeof setInterval> | null = null;
+  private pollMs = 0;
 
   constructor(
     preload: string,
@@ -97,7 +99,11 @@ export class OverlayWindow implements OverlayPort {
     screen.on("display-removed", replace);
     screen.on("display-metrics-changed", replace);
     void this.win.loadFile(path.join(rendererDir, "overlay.html"));
+    this.win.on("closed", () => this.stopPoll());
     this.win.webContents.on("did-finish-load", () => {
+      // A reloaded page reports what it draws afresh.
+      this.hovered = false;
+      this.setRegion([]);
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
       if (this.pill) this.win.showInactive();
@@ -138,12 +144,22 @@ export class OverlayWindow implements OverlayPort {
       this.win.setShape(rects.map((r) => ({ x: Math.floor(r.x - 30), y: Math.floor(r.y - 20), width: Math.ceil(r.width + 60), height: Math.ceil(r.height + 76) })));
       return;
     }
-    if (rects.length && !this.poll) this.poll = setInterval(() => this.updateMouse(), POINTER_POLL_MS);
-    else if (!rects.length && this.poll) {
-      clearInterval(this.poll);
-      this.poll = null;
-    }
+    this.updatePoll();
     this.updateMouse();
+  }
+
+  private updatePoll(): void {
+    const ms = LINUX || !this.region.length ? 0 : this.busy ? POINTER_POLL_MS : PILL_POLL_MS;
+    if (ms === this.pollMs) return;
+    this.stopPoll();
+    this.pollMs = ms;
+    if (ms) this.poll = setInterval(() => this.updateMouse(), ms);
+  }
+
+  private stopPoll(): void {
+    if (this.poll) clearInterval(this.poll);
+    this.poll = null;
+    this.pollMs = 0;
   }
 
   /** Windows, macOS: clicks and wheel scrolling land on the window while the pointer is over what it draws, or a drag is on. */
@@ -170,6 +186,7 @@ export class OverlayWindow implements OverlayPort {
   /** The renderer shows a card or a suggestion (true), or nothing but maybe the pill (false). */
   setBusy(on: boolean): void {
     this.busy = on;
+    this.updatePoll();
     // A card that folded away may report after the next one was already shown: keep that one up.
     if (on && !this.win.isVisible()) this.win.showInactive();
     else if (!on && !this.pill && this.visibleSeq === -1) this.win.hide();
