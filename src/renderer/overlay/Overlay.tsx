@@ -187,10 +187,14 @@ function useDrawn(ref: React.RefObject<HTMLElement | null>, hovered: React.RefOb
     const ro = new ResizeObserver(reportRegion);
     ro.observe(el);
     // Measured mid-animation the rect includes the entering transform; the animation's end doesn't resize it.
-    el.addEventListener("animationend", reportRegion);
+    // Its own animation only: the words' animations bubble up from inside.
+    const onAnimationEnd = (e: AnimationEvent) => {
+      if (e.target === el) reportRegion();
+    };
+    el.addEventListener("animationend", onAnimationEnd);
     return () => {
       ro.disconnect();
-      el.removeEventListener("animationend", reportRegion);
+      el.removeEventListener("animationend", onAnimationEnd);
       drawn.delete(el);
       reportRegion();
       // It may vanish under the pointer, which then never "leaves" it.

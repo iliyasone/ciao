@@ -103,6 +103,7 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.on("did-finish-load", () => {
       // A reloaded page reports what it draws afresh.
       this.hovered = false;
+      this.drag0 = null;
       this.setRegion([]);
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
@@ -165,17 +166,17 @@ export class OverlayWindow implements OverlayPort {
   /** Windows, macOS: clicks and wheel scrolling land on the window while the pointer is over what it draws, or a drag is on. */
   private updateMouse(): void {
     if (LINUX || this.win.isDestroyed()) return;
-    const interactive = this.hovered || this.drag0 !== null || this.pointerOverRegion();
+    let interactive = this.drag0 !== null;
+    if (!interactive && this.win.isVisible()) {
+      const b = this.win.getBounds();
+      const p = screen.getCursorScreenPoint();
+      // A hover the renderer missed the end of doesn't count once the pointer is off the window.
+      interactive =
+        (this.hovered && contains(b, p)) || this.region.some((r) => contains({ x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height }, p));
+    }
     if (interactive !== this.ignoring) return;
     this.ignoring = !interactive;
     this.win.setIgnoreMouseEvents(this.ignoring, { forward: true });
-  }
-
-  private pointerOverRegion(): boolean {
-    if (!this.region.length || !this.win.isVisible()) return false;
-    const b = this.win.getBounds();
-    const p = screen.getCursorScreenPoint();
-    return this.region.some((r) => contains({ x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height }, p));
   }
 
   /** The renderer finished folding away the card for `seq`. */
