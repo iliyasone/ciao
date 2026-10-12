@@ -142,7 +142,6 @@ function LiveText({ text, withLayout }: { text: TextState; withLayout: boolean }
 const LINE = 25; // px, matches leading below
 /** Window height minus the text lines (CHROME_HEIGHT in src/main/overlayWindow.ts). */
 const CHROME_HEIGHT = 170;
-const LINUX = ciao.platform === "linux";
 const DRAG_THRESHOLD = 4; // px: less is a click
 
 /** Lines the card shows before it scrolls: the window is sized for them (Settings.overlayLines). */
@@ -157,27 +156,26 @@ function useMaxLines(): number {
   return n;
 }
 
-// Linux lets clicks through only outside the window's shape, so the shape follows what is drawn:
-// the pill, the card, a suggestion, with room for their shadows.
+// What is drawn (the pill, the card, a suggestion), in window pixels: on Linux the window's shape
+// follows it; on Windows and macOS the main process lets the mouse in while the pointer is over it.
 const drawn = new Set<HTMLElement>();
 let reportQueued = false;
 // Resizing the window moves what sits on its bottom edge without resizing it.
-if (LINUX) window.addEventListener("resize", () => reportRegion());
+window.addEventListener("resize", () => reportRegion());
 function reportRegion(): void {
-  if (!LINUX || reportQueued) return;
+  if (reportQueued) return;
   reportQueued = true;
   setTimeout(() => {
     reportQueued = false;
-    // Room for the shadows (0 14px 44px): the shape clips drawing too.
     ciao.overlay.setRegion([...drawn].map((el) => {
       const r = el.getBoundingClientRect();
-      return { x: r.x - 30, y: r.y - 20, width: r.width + 60, height: r.height + 20 + 56 };
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
     }));
   });
 }
 
 /**
- * Registers what `ref` draws as part of the window's shape (Linux), and lets clicks through again
+ * Registers what `ref` draws as part of the window's drawn region, and lets clicks through again
  * when it goes away. `mounted` changes whenever the element is replaced.
  */
 function useDrawn(ref: React.RefObject<HTMLElement | null>, hovered: React.RefObject<boolean>, mounted?: unknown): void {
@@ -186,10 +184,17 @@ function useDrawn(ref: React.RefObject<HTMLElement | null>, hovered: React.RefOb
     if (!el) return;
     drawn.add(el);
     reportRegion();
-    const ro = LINUX ? new ResizeObserver(reportRegion) : null;
-    ro?.observe(el);
+    const ro = new ResizeObserver(reportRegion);
+    ro.observe(el);
+    // Measured mid-animation the rect includes the entering transform; the animation's end doesn't resize it.
+    // Its own animation only: the words' animations bubble up from inside.
+    const onAnimationEnd = (e: AnimationEvent) => {
+      if (e.target === el) reportRegion();
+    };
+    el.addEventListener("animationend", onAnimationEnd);
     return () => {
-      ro?.disconnect();
+      ro.disconnect();
+      el.removeEventListener("animationend", onAnimationEnd);
       drawn.delete(el);
       reportRegion();
       // It may vanish under the pointer, which then never "leaves" it.
