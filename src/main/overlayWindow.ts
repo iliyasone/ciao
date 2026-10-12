@@ -219,7 +219,6 @@ export class OverlayWindow implements OverlayPort {
   dragEnd(): void {
     if (!this.drag0) return;
     this.drag0 = null;
-    this.updateMouse();
     const save = () => {
       const b = this.win.getBounds();
       this.savePlacement({
@@ -232,15 +231,16 @@ export class OverlayWindow implements OverlayPort {
     // Dropped (partly) off the screen: back into it, and remember where it ended up.
     this.place();
     save();
+    this.updateMouse();
     console.log("overlay moved to", JSON.stringify(this.win.getBounds()));
   }
 
   /** Back to bottom-centre at the default size. */
   resetPlacement(): void {
     this.drag0 = null;
-    this.updateMouse();
     this.savePlacement({ anchor: null, cardWidth: DEFAULT_CARD_WIDTH, lines: 6 });
     this.place();
+    this.updateMouse();
   }
 
   // ── OverlayPort ─────────────────────────────────────────────────────────
