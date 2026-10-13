@@ -279,7 +279,7 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   }
 }).on("close", () => {
   // The parent closed the pipe. process.exit() would wait for the libuv threads, which are blocked
-  // reading the devices; a signal ends the process at once.
-  process.kill(process.pid, "SIGTERM");
+  // reading the devices; a signal ends the process at once, after the music it paused plays on.
+  void media.drain(1500).then(() => process.kill(process.pid, "SIGTERM"));
 });
 emit({ type: "ready", triggers: triggers.map((t) => t.spec) });

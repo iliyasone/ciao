@@ -53,9 +53,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   appears and disappears.
 - **Music pauses while you dictate**, if you turn on *Settings → Behavior → Pause
   music while you dictate* (off by default). Once a recording has gone on for
-  0.35 s (so a stray click or a shortcut leaves the music alone), the players that
-  are playing pause; when the recording ends, those of them still paused play on.
-  A player you started or stopped yourself meanwhile is left as it is.
+  0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into
+  Ctrl+C until then), the players that are playing pause, so a stray click or a
+  shortcut leaves the music alone. When the recording ends, or Ciao quits, those of
+  them still paused play on. A player you started or stopped yourself meanwhile is
+  left as it is.
   - Windows: any player in the system media controls (Spotify, a video in a
     browser, the Media Player).
   - Linux: any MPRIS player (the same ones, on most desktops), through `dbus-send`.

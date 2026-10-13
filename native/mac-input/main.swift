@@ -586,8 +586,11 @@ Thread.detachNewThread {
     while let line = readLine() {
         DispatchQueue.main.async { handle(line) }
     }
-    // The parent closed the pipe: answer what is queued, flush, quit.
+    // The parent closed the pipe: answer what is queued, resume the music it paused, flush, quit.
     DispatchQueue.main.async {
+        let media = DispatchGroup()
+        mediaQueue.async(group: media) {}
+        _ = media.wait(timeout: .now() + 1.5)
         outQueue.sync {}
         exit(0)
     }

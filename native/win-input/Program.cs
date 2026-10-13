@@ -89,7 +89,8 @@ static class Program
                 try { Handle(line); }
                 catch (Exception e) { Emit(new JsonObject { ["type"] = "log", ["message"] = e.Message }); }
             }
-            Application.Exit(); // parent closed the pipe
+            Media.Drain(1500); // parent closed the pipe: the music Ciao paused plays on first
+            Application.Exit();
         }) { IsBackground = true }.Start();
 
         Emit(new JsonObject { ["type"] = "ready", ["triggers"] = new JsonArray(_triggers.Select(t => (JsonNode)t.Spec).ToArray()) });

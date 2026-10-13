@@ -29,9 +29,16 @@ export class Media {
       .catch((e: Error) => this.log(`media: ${e.message}`));
   }
 
+  /** Resolves once the queued commands ran, or after `ms`. */
+  drain(ms: number): Promise<void> {
+    return Promise.race([this.queue, new Promise<void>((resolve) => setTimeout(resolve, ms))]);
+  }
+
   private async pause(): Promise<void> {
     const names = await dbus("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus.ListNames");
     for (const [, name] of names.matchAll(/"(org\.mpris\.MediaPlayer2\.[^"]+)"/g)) {
+      // playerctld only mirrors a real player, and later forwards Play to whichever one it then thinks is active.
+      if (name!.endsWith(".playerctld")) continue;
       try {
         if ((await status(name!)) !== "Playing") continue;
         await dbus(name!, "/org/mpris/MediaPlayer2", `${PLAYER}.Pause`);

@@ -455,7 +455,15 @@ app.on("activate", () => {
 app.on("window-all-closed", () => {
   // Keep running in the tray.
 });
-app.on("will-quit", () => {
+let resumingMedia = false;
+app.on("will-quit", (e) => {
+  // Mid-dictation with the music paused: the input helper resumes it first (it dies with Ciao on Windows).
+  if (!resumingMedia && dictation?.quitting()) {
+    e.preventDefault();
+    resumingMedia = true;
+    void input.finish(2000).then(() => app.quit());
+    return;
+  }
   globalShortcut.unregisterAll();
   updater.stop();
   input?.stop();

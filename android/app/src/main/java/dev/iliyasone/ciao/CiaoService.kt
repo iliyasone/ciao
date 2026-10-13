@@ -521,7 +521,8 @@ class CiaoService : AccessibilityService() {
             return
         }
         d.recorder = recorder
-        if (prefs.pauseMedia) d.audioFocus = takeAudioFocus()
+        // As on the desktop, a moment in: a slip of a press doesn't stop the music for an instant.
+        if (prefs.pauseMedia) main.postDelayed({ if (dictation === d && d.phase == Phase.RECORDING) d.audioFocus = takeAudioFocus() }, 350)
         // The previous field is left behind, and the card takes the suggestion's place.
         stopWatch()
         hideSuggestion()

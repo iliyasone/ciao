@@ -111,6 +111,24 @@ export class InputHelper extends EventEmitter<InputEvents> {
     this.child?.kill();
   }
 
+  /** Stop, but let the helper finish the commands it was sent (resuming the music) first: at most `ms`. */
+  finish(ms: number): Promise<void> {
+    this.stopped = true;
+    const child = this.child;
+    if (!child) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        child.kill();
+        resolve();
+      }, ms);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      child.stdin?.end(); // every helper finishes its queued media commands, then exits
+    });
+  }
+
   arm(on: boolean): void {
     this.send({ cmd: "arm", on });
     // The Linux helper only listens, so Esc would also reach the app in front. On X11 a global

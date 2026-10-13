@@ -24,6 +24,9 @@ export function triggerParts(spec: string, keyNames: Strings["keyNames"]): strin
   return spec.split("+").map((p) => names[p] ?? TRIGGER_NAMES[p] ?? p.replace(/^D(\d)$/, "$1").replace(/^NumPad/, "Num "));
 }
 
+/** A modifier on its own (Right Ctrl, Right Option): another key while it is held makes it a shortcut instead. */
+export const isLoneModifierTrigger = (spec: string) => /^([LR]?(ControlKey|ShiftKey|Menu|Win)|Fn)$/.test(spec);
+
 export const isMouseTrigger = (spec: string) => /(^|\+)(MButton|XButton1|XButton2)$/.test(spec);
 
 // ── Electron accelerators (used for "paste last") ─────────────────────────

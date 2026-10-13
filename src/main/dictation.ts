@@ -13,6 +13,7 @@ import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voic
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
 import { revisePauses } from "../core/revision";
+import { isLoneModifierTrigger } from "../core/triggers";
 
 /** What the controller needs from the overlay window. */
 export interface OverlayPort {
@@ -359,13 +360,22 @@ export class DictationController {
       a.shown = true;
       this.push(a);
     }, SHOW_AFTER_MS);
-    // Only once it is clearly a dictation: a shortcut or a stray click doesn't stop the music for a moment.
+    // Only once it is clearly a dictation: a stray click, or a held Ctrl that turns into Ctrl+C (see
+    // onOtherKey), doesn't stop the music for a moment.
     if (!replay && settings.pauseMedia)
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;
         a.pausedMedia = true;
         this.deps.input.media(true);
-      }, TAP_MS);
+      }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
+  }
+
+  /** Ciao quits: resume the music this dictation paused. True if there was any to resume. */
+  quitting(): boolean {
+    const a = this.active;
+    if (!a?.pausedMedia) return false;
+    this.resumeMedia(a);
+    return true;
   }
 
   private resumeMedia(a: Active): void {
