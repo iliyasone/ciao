@@ -93,13 +93,20 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
       isn't put back;
   - *Bring T3 Code forward when dictating* (on by default): once a hold lasts past a
     tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
-    then), the T3 Code window comes forward on the chat it shows, so you can dictate
-    from any app. T3 Code puts focus back into its chat box when its window is
-    activated. Not on a Wayland desktop, where no app may bring another forward;
+    then), or on a click on the pill, the T3 Code window comes forward on the chat
+    it shows, so you can dictate from any app. Not when T3 Code is in front already,
+    and not for the wake word. T3 Code puts focus back into its chat box when its
+    window is activated, unless a dialog, the command palette or its terminal had
+    it. Ciao waits up to 0.4 s at the end of the hold for the switch. Not on a
+    Wayland desktop, where no app may bring another forward;
   - *Send right away* (off by default): Ciao presses Enter once it has seen the
-    text in the chat box, and never when it isn't sure. A prompt said in several
-    holds goes out in parts. T3 Code has to send on Enter (its *Settings → General →
-    Send shortcut*), and an open `@` or `/` menu in the box would take the Enter;
+    text in the chat box, and never when it isn't sure, or while a trigger is still
+    held (Right Ctrl would make it Ctrl+Enter). A prompt said in several holds goes
+    out in parts. T3 Code has to send on Enter (its *Settings → General → Send
+    shortcut*; with *Ctrl+Enter for multi-line*, a prompt with paragraphs gets a new
+    line instead). An open `@` or `/` menu, dialog or command palette takes the
+    Enter. On Linux, Ciao sees T3 Code's chat box only with desktop accessibility on
+    (see [Linux](#linux)); otherwise it never sends. Not on Wayland;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
     is empty (or can't be read), so a prompt said in several holds gets them once:
     the suffix then follows the first hold's words, and the later holds start with

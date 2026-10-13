@@ -186,7 +186,9 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
               {canBringForward && (
                 <Toggle label={tr.t3.forward} hint={tr.t3.forwardHint} value={s.t3Forward} onChange={(v) => update({ t3Forward: v })} />
               )}
-              <Toggle label={tr.t3.send} hint={tr.t3.sendHint} value={s.t3Send} onChange={(v) => update({ t3Send: v })} />
+              {canBringForward && (
+                <Toggle label={tr.t3.send} hint={tr.t3.sendHint} value={s.t3Send} onChange={(v) => update({ t3Send: v })} />
+              )}
               <Row label={tr.t3.prefix} hint={tr.t3.affixHint}>
                 <input
                   value={s.t3Prefix}

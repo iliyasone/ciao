@@ -210,9 +210,9 @@ const ru = {
       modeHint:
         "Для диктовки промптов в T3 Code. Диктует удержание клавиши или кнопки, короткое нажатие ничего не делает. Текст вставляется только в окно T3 Code, которое впереди, и Ciao читает поле ввода до и после вставки, чтобы проверить, что текст там. Если нет — текст остаётся в буфере и в истории.",
       forward: "Показывать T3 Code при диктовке",
-      forwardHint: "Когда удержание длится дольше короткого нажатия, окно T3 Code выходит вперёд на том чате, который в нём открыт, и текст попадает туда.",
+      forwardHint: "Когда удержание длится дольше короткого нажатия (или по клику на значок), окно T3 Code выходит вперёд на том чате, который в нём открыт, и текст попадает туда. С правым Ctrl — через секунду: до этого он может оказаться сочетанием клавиш.",
       send: "Сразу отправлять",
-      sendHint: "Ciao нажимает Enter, когда увидел текст в поле ввода; если не уверен, не отправляет. Промпт из нескольких удержаний уйдёт по частям. В T3 Code отправка должна быть по Enter (Настройки → General → Send shortcut).",
+      sendHint: "Ciao нажимает Enter, когда увидел текст в поле ввода; если не уверен, не отправляет. Промпт из нескольких удержаний уйдёт по частям. В T3 Code отправка должна быть по Enter (Settings → General → Send shortcut). Если в T3 Code открыта палитра команд, диалог или меню @ или /, Enter достанется им.",
       prefix: "Перед промптом",
       suffix: "После промпта",
       affixHint: "Добавляются, когда поле ввода пустое или его не прочитать: промпт из нескольких удержаний получит их один раз, а «После промпта» встанет после слов первого удержания. Например «Клауди,», чтобы агент ответил голосом.",
@@ -511,9 +511,9 @@ const en: Strings = {
       modeHint:
         "For dictating prompts into T3 Code. Holding a key or button dictates; a short press does nothing. The text is pasted only into the T3 Code window in front, and Ciao reads the chat box before and after pasting to check it's there. If not, it stays on the clipboard and in history.",
       forward: "Bring T3 Code forward when dictating",
-      forwardHint: "Once a hold lasts longer than a tap, the T3 Code window comes forward on the chat it shows, and the text goes there.",
+      forwardHint: "Once a hold lasts longer than a tap (or on a click on the pill), the T3 Code window comes forward on the chat it shows, and the text goes there. With Right Ctrl, after a second: until then it may turn out to be a shortcut.",
       send: "Send right away",
-      sendHint: "Ciao presses Enter once it sees the text in the chat box; when unsure, it doesn't send. A prompt said in several holds goes out in parts. T3 Code must send on Enter (Settings → General → Send shortcut).",
+      sendHint: "Ciao presses Enter once it sees the text in the chat box; when unsure, it doesn't send. A prompt said in several holds goes out in parts. T3 Code must send on Enter (Settings → General → Send shortcut). With the command palette, a dialog or an @ or / menu open in T3 Code, the Enter goes to that.",
       prefix: "Before the prompt",
       suffix: "After the prompt",
       affixHint: "Added when the chat box is empty or can't be read: a prompt said in several holds gets them once, and the suffix follows the first hold's words. E.g. “Claudie,” to have the agent answer by voice.",

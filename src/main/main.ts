@@ -419,7 +419,7 @@ function registerIpc(): void {
   });
   ipcMain.handle("settings:has-key", (_e, provider: Settings["provider"]) => loadApiKey(provider) !== null);
   ipcMain.handle("settings:wake-available", () => WakeWord.available());
-  // A Wayland desktop lets no app bring another one forward.
+  // A Wayland desktop lets no app bring another one forward, or tell which window a key would go to.
   ipcMain.handle("settings:can-bring-forward", () => process.platform !== "linux" || (process.env.XDG_SESSION_TYPE !== "wayland" && !(process.env.WAYLAND_DISPLAY && process.env.XDG_SESSION_TYPE !== "x11")));
   ipcMain.handle("settings:capture-trigger", () => input.capture());
   ipcMain.handle("settings:accessibility", () => (MAC ? accessibility : null));

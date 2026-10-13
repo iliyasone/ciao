@@ -279,6 +279,10 @@ static class Native
     [DllImport("kernel32.dll")]
     static extern uint GetCurrentThreadId();
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsHungAppWindow(IntPtr hWnd);
+
     /// <summary>
     /// Brings the main window of a running app whose process name matches to the front, restoring it if
     /// minimized; Zero if there is none, or Windows kept another window in front. A background process
@@ -302,7 +306,8 @@ static class Native
         if (front == hwnd) return hwnd;
         IsGUIThread(true); // AttachThreadInput needs this thread to have a message queue
         uint me = GetCurrentThreadId(), theirs = GetWindowThreadProcessId(front, out _);
-        bool attached = theirs != 0 && theirs != me && AttachThreadInput(me, theirs, true);
+        // Not to a hung window's thread: the switch would wait on it, and so would every later command.
+        bool attached = theirs != 0 && theirs != me && !IsHungAppWindow(front) && AttachThreadInput(me, theirs, true);
         try
         {
             if (IsIconic(hwnd)) ShowWindow(hwnd, 9); // SW_RESTORE
