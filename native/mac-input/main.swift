@@ -15,6 +15,8 @@
 // - "field" answers "unsupported" without Accessibility. Chromium and Electron apps expose their
 //   fields only to an assistive client that asks, so the first read in such an app turns that on
 //   (AXManualAccessibility) and, if nothing showed yet, tries once more a moment later.
+// - "media" pauses only Music and Spotify, through AppleScript (macOS asks the user once per app).
+//   Extra command {"cmd":"media-ask"}: ask that permission now for the players that are running.
 // - "key" events: "paste" is ⌘V or ⌘⇧V, by the key where QWERTY has V (so it holds in the Russian
 //   layout too); Enter is Return or the keypad's Enter.
 
@@ -377,6 +379,55 @@ func sendPaste() {
     }
 }
 
+// MARK: - Media ("media")
+
+/// The players "media" pauses: macOS has no public way to pause any app, so it asks these apps by AppleScript.
+/// The first time, macOS asks the user to let Ciao control the app; refused, that app is left playing.
+let mediaApps = ["com.apple.Music", "com.spotify.client"]
+/// Runs the scripts in turn, off the main run loop: a script waits for the app, and the first one for the user's answer.
+let mediaQueue = DispatchQueue(label: "ciao.media")
+var mediaPaused: [String] = [] // mediaQueue only
+
+/// Runs `body` in the app with this bundle id through osascript; false if the app isn't running (a script would
+/// launch it), the script fails, or it doesn't answer true.
+func tellApp(_ bundle: String, _ body: [String]) -> Bool {
+    guard !NSRunningApplication.runningApplications(withBundleIdentifier: bundle).isEmpty else { return false }
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    p.arguments = (["tell application id \"\(bundle)\""] + body + ["end tell"]).flatMap { ["-e", $0] }
+    let out = Pipe(), err = Pipe()
+    p.standardOutput = out
+    p.standardError = err
+    do { try p.run() } catch { return false }
+    let answer = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let problem = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    p.waitUntilExit()
+    if p.terminationStatus != 0 { logLine("media: \(bundle): \(problem.trimmingCharacters(in: .whitespacesAndNewlines))") }
+    return answer.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
+}
+
+/// "media-ask": a harmless question to each running player, so macOS asks its permission now (in Settings, as the
+/// option is turned on) rather than over the first dictation, where the text would be pasted into its alert.
+func askMedia() {
+    mediaQueue.async {
+        for bundle in mediaApps { _ = tellApp(bundle, ["get player state"]) }
+    }
+}
+
+func setMedia(pause: Bool) {
+    mediaQueue.async {
+        if pause {
+            for bundle in mediaApps where tellApp(bundle, ["if player state is playing then", "pause", "repeat 10 times", "if player state is not playing then exit repeat", "delay 0.05", "end repeat", "return true", "end if"]) {
+                mediaPaused.append(bundle)
+            }
+        } else {
+            // Still paused: the user didn't start or stop it themselves meanwhile.
+            for bundle in mediaPaused { _ = tellApp(bundle, ["if player state is paused then play"]) }
+            mediaPaused = []
+        }
+    }
+}
+
 // MARK: - Field text ("field", and Enter while watching)
 
 /// Longer than this it is a log or a document rather than a message, and copying it costs too much.
@@ -519,6 +570,10 @@ func handle(_ line: String) {
         if msg["on"] as? Bool ?? false { startCapture() } else { capturing = false }
     case "field":
         answerField(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
+    case "media":
+        setMedia(pause: msg["pause"] as? Bool ?? false)
+    case "media-ask":
+        askMedia()
     case "watch":
         watching = msg["on"] as? Bool ?? false
         watchPid = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0
@@ -542,7 +597,12 @@ Thread.detachNewThread {
     while let line = readLine() {
         DispatchQueue.main.async { handle(line) }
     }
-    // The parent closed the pipe: answer what is queued, flush, quit.
+    // The parent closed the pipe: answer what is queued, resume the music it paused, flush, quit. The wait
+    // for the music is here, not on the main thread, which runs the event tap.
+    DispatchQueue.main.sync {}
+    let media = DispatchGroup()
+    mediaQueue.async(group: media) {}
+    _ = media.wait(timeout: .now() + 1.5)
     DispatchQueue.main.async {
         outQueue.sync {}
         exit(0)

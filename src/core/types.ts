@@ -50,6 +50,8 @@ export interface Settings {
   showDelay: boolean;
   /** Paragraphs after long pauses and numbered lists for "первое… второе…", live and in the pasted text. */
   formatText: boolean;
+  /** Music and videos that play when a dictation starts are paused, and those of them still paused play on after it. */
+  pauseMedia: boolean;
   /** Saying "чао" starts a hands-free dictation (the mic stays open; detection is local). */
   wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */

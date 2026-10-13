@@ -115,7 +115,8 @@
       "hardenedRuntime": false,
       "extendInfo": {
         "LSUIElement": true,
-        "NSMicrophoneUsageDescription": "Ciao records your voice while you dictate."
+        "NSMicrophoneUsageDescription": "Ciao records your voice while you dictate.",
+        "NSAppleEventsUsageDescription": "Ciao pauses Music and Spotify while you dictate, if you turn that on."
       },
       "extraResources": [
         {

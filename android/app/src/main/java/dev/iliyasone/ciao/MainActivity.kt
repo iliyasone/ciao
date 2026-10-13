@@ -57,6 +57,7 @@ class MainActivity : Activity() {
         bindSwitch(R.id.learnCorrections, prefs.learnCorrections) { prefs.learnCorrections = it }
         bindSwitch(R.id.formatText, prefs.formatText) { prefs.formatText = it }
         bindSwitch(R.id.stopPhrase, prefs.stopPhrase) { prefs.stopPhrase = it }
+        bindSwitch(R.id.pauseMedia, prefs.pauseMedia) { prefs.pauseMedia = it }
         bindSwitch(R.id.showCost, prefs.showCost) { prefs.showCost = it }
         bindText(R.id.languages, prefs.languages.joinToString(", ")) { s -> prefs.languages = s.split(",") }
         bindSwitch(R.id.autoPaste, prefs.autoPaste) { prefs.autoPaste = it }

@@ -167,6 +167,10 @@ const ru = {
       openAtLogin: "Запускать при входе в систему",
       pill: "Значок на экране",
       pillHint: "Маленький значок Ciao остаётся на экране и между диктовками: нажми — начнётся диктовка, перетащи — подвинется. Карточка записи раскрывается из него.",
+      pauseMedia: "Ставить музыку на паузу, пока диктуешь",
+      pauseMediaHint: isMac
+        ? "Music и Spotify. После записи играет дальше то, что поставил на паузу Ciao. В первый раз macOS спросит, можно ли Ciao ими управлять."
+        : "Любой плеер с кнопками управления в системе: Spotify, видео в браузере. После записи играет дальше то, что поставил на паузу Ciao.",
       learn: "Предлагать новые слова",
       learnHint:
         "Если исправишь слово во вставленном тексте (например, «постхок» на «PostHog»), Ciao предложит добавить его в термины. Для этого пару минут после вставки он читает поле, куда вставил текст, — только на этом компьютере, никуда не отправляет. Исправления в Истории тоже считаются.",
@@ -448,6 +452,10 @@ const en: Strings = {
       openAtLogin: "Start when you sign in",
       pill: "Pill on screen",
       pillHint: "A small Ciao pill stays on screen between dictations: click it to dictate, drag it to move it. The recording card unfolds from it.",
+      pauseMedia: "Pause music while you dictate",
+      pauseMediaHint: isMac
+        ? "Music and Spotify. After the recording, what Ciao paused plays on. The first time, macOS asks whether Ciao may control them."
+        : "Any player with system media controls: Spotify, a video in the browser. After the recording, what Ciao paused plays on.",
       learn: "Suggest new words",
       learnHint:
         "When you correct a word in a pasted dictation, Ciao offers to add it to your terms. For that it reads the field it pasted into for a couple of minutes, on this computer only; nothing is sent anywhere. Edits in History count too.",

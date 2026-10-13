@@ -207,6 +207,8 @@ function applySettings(next: Settings): void {
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   if (prev.provider !== next.provider) pool.refill();
+  // macOS asks once whether Ciao may control each player: let it ask now, in Settings, not over a dictation.
+  if (next.pauseMedia && !prev.pauseMedia) input.askMedia();
   overlay.setPill(next.overlayPill);
   if (!next.learnCorrections) corrections?.stop();
   // No detector in this build (macOS for now): keep the mic closed rather than listen for nothing.
@@ -454,7 +456,23 @@ app.on("activate", () => {
 app.on("window-all-closed", () => {
   // Keep running in the tray.
 });
-app.on("will-quit", () => {
+let helperFinishing = false;
+let helperFinished = false;
+app.on("will-quit", (e) => {
+  // With "pause music" on, the input helper gets to resume what it paused before Ciao goes: the resume of a
+  // dictation that just ended may still be queued, and on Windows the helper dies with Ciao.
+  const resume = dictation?.quitting() ?? false;
+  if (input && !helperFinished && (resume || settings.pauseMedia)) {
+    e.preventDefault();
+    if (!helperFinishing) {
+      helperFinishing = true;
+      void input.finish(2000).then(() => {
+        helperFinished = true;
+        app.quit();
+      });
+    }
+    return;
+  }
   globalShortcut.unregisterAll();
   updater.stop();
   input?.stop();

@@ -7,6 +7,9 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
@@ -79,6 +82,8 @@ class CiaoService : AccessibilityService() {
         val audioFile = history.audioFile(entry.id)
         val audio = BufferedOutputStream(FileOutputStream(audioFile))
         var recorder: Recorder? = null
+        /** Held while recording with "pause music" on: players pause for it and play on once it is given back. */
+        var audioFocus: AudioFocusRequest? = null
         var phase = Phase.RECORDING
         val liveText = StringBuilder()
         val pauses = mutableListOf<Pause>()
@@ -516,6 +521,8 @@ class CiaoService : AccessibilityService() {
             return
         }
         d.recorder = recorder
+        // As on the desktop, a moment in: a slip of a press doesn't stop the music for an instant.
+        if (prefs.pauseMedia) main.postDelayed({ if (dictation === d && d.phase == Phase.RECORDING) d.audioFocus = takeAudioFocus() }, 350)
         // The previous field is left behind, and the card takes the suggestion's place.
         stopWatch()
         hideSuggestion()
@@ -538,6 +545,24 @@ class CiaoService : AccessibilityService() {
         }
     }
 
+    /**
+     * A transient focus: Android tells the players to pause, and each resumes by itself when it gets the focus back,
+     * so only what was playing plays on. Null if Android refused it.
+     */
+    private fun takeAudioFocus(): AudioFocusRequest? {
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            .setOnAudioFocusChangeListener {}
+            .build()
+        val granted = getSystemService(AudioManager::class.java).requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        return request.takeIf { granted }
+    }
+
+    private fun giveBackAudioFocus(d: Dictation) {
+        d.audioFocus?.let { getSystemService(AudioManager::class.java).abandonAudioFocusRequest(it) }
+        d.audioFocus = null
+    }
+
     private fun stop(by: String) {
         val d = dictation ?: return
         if (d.phase != Phase.RECORDING) return
@@ -545,6 +570,7 @@ class CiaoService : AccessibilityService() {
         d.endedAt = SystemClock.elapsedRealtime()
         d.endedBy = by
         d.recorder?.stop()
+        giveBackAudioFocus(d)
         runCatching { d.audio.close() }
         d.session.commit()
         RecordingService.show(this, 0, finishing = true)
@@ -660,6 +686,7 @@ class CiaoService : AccessibilityService() {
     private fun cancel() {
         val d = dictation ?: return
         d.recorder?.stop()
+        giveBackAudioFocus(d)
         d.session.close()
         closeAudio(d)
         // A failed one is in the history already; a cancelled one stays there too, unless it was a slip.

@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stopPhrase: true,
   tapHandsFree: true,
   wakeWord: false,
+  pauseMedia: false,
   formatText: true,
   telemetry: true,
   syncKeys: true,

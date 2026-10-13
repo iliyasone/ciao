@@ -111,6 +111,24 @@ export class InputHelper extends EventEmitter<InputEvents> {
     this.child?.kill();
   }
 
+  /** Stop, but let the helper finish the commands it was sent (resuming the music) first: at most `ms`. */
+  finish(ms: number): Promise<void> {
+    this.stopped = true;
+    const child = this.child;
+    if (!child) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        child.kill();
+        resolve();
+      }, ms);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      child.stdin?.end(); // every helper finishes its queued media commands, then exits
+    });
+  }
+
   arm(on: boolean): void {
     this.send({ cmd: "arm", on });
     // The Linux helper only listens, so Esc would also reach the app in front. On X11 a global
@@ -177,6 +195,16 @@ export class InputHelper extends EventEmitter<InputEvents> {
     return { text: null, reason: typeof r.reason === "string" ? (r.reason as FieldMiss) : "no-helper" };
   }
 
+  /** Pause the media players that are playing, or (false) resume those of them still paused. */
+  media(pause: boolean): void {
+    this.send({ cmd: "media", pause });
+  }
+
+  /** macOS: let the system ask now whether Ciao may control the players (the other helpers ignore it). */
+  askMedia(): void {
+    this.send({ cmd: "media-ask" });
+  }
+
   /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */
   watch(on: boolean, hwnd = 0): void {
     this.watching = { on, hwnd };
@@ -200,7 +228,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
   }
 
   private send(msg: Record<string, unknown>): void {
-    this.child?.stdin?.write(`${JSON.stringify(msg)}\n`);
+    if (this.child?.stdin?.writable) this.child.stdin.write(`${JSON.stringify(msg)}\n`); // not once finish() closed it
   }
 
   private onLine(line: string): void {
@@ -215,6 +243,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
       this.pending.delete(msg.id);
       return;
     }
+    if (this.stopped) return; // quitting: a trigger pressed while the helper finishes starts nothing
     // Trigger presses are too chatty to log; key events may carry the text of a field.
     if (msg.type !== "trigger" && msg.type !== "key") console.log("input:", line);
     switch (msg.type) {

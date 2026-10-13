@@ -343,6 +343,11 @@
                 android:text="@string/stop_phrase" />
 
             <Switch
+                android:id="@+id/pauseMedia"
+                style="@style/Toggle"
+                android:text="@string/pause_media" />
+
+            <Switch
                 android:id="@+id/showCost"
                 style="@style/Toggle"
                 android:text="@string/show_cost" />

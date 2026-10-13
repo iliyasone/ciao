@@ -55,6 +55,22 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen, rather than on the screen under the pointer.
   Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
   appears and disappears.
+- **Music pauses while you dictate**, if you turn on *Settings → Behavior → Pause
+  music while you dictate* (off by default). Once a recording has gone on for
+  0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into
+  Ctrl+C until then), the players that are playing pause, so a shortcut leaves the
+  music alone. A short tap starts hands-free mode, so it pauses the music too,
+  unless *A short press starts hands-free mode* is off: then the tap is dropped
+  before the music pauses. When
+  the recording ends, or Ciao quits, those of them still paused play on. A player
+  you started or stopped yourself meanwhile is left as it is.
+  - Windows: any player in the system media controls (Spotify, a video in a
+    browser, the Media Player). Needs Windows 10 1809 or later; on older ones
+    nothing pauses.
+  - Linux: any MPRIS player (the same ones, on most desktops), through `dbus-send`.
+  - macOS: only Music and Spotify, by AppleScript: macOS has no public way to
+    pause other apps. macOS asks once whether Ciao may control each of them: as you
+    turn the option on for the ones running then, otherwise at the first dictation.
 - **The card stays out of your way.**
   - Moving the pointer over it makes it see-through, so you can read what's
     underneath; scroll it or start dragging it and it turns solid again.
@@ -447,8 +463,9 @@ once to allow notifications; without them the dictation still goes on with the
 screen off, just without the buttons.
 
 The settings match the desktop's: *Languages* (OpenAI), *Insert the text right
-away* (off: the clipboard only), *Restore the clipboard*, *Anonymous usage
-counts*, the interface language and the theme (*As the system*, light, dark), and
+away* (off: the clipboard only), *Restore the clipboard*, *Pause music while you
+dictate* (Ciao takes the audio focus while recording: players pause and play on by
+themselves afterwards), *Anonymous usage counts*, the interface language and the theme (*As the system*, light, dark), and
 under *For developers* the delay level. *Paste last* is a quick-settings tile:
 add it once (pull the shade down twice, then the pencil); tapping it closes the
 shade and puts the last dictation into the field you were typing in, or onto the
@@ -677,12 +694,15 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `history/` — the history and settings window.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#); it also reads
-  the focused field through UI Automation (`FieldReader.cs`).
+  the focused field through UI Automation (`FieldReader.cs`) and pauses the music
+  through the system media sessions (`Media.cs`).
 - `src/linux-input/` — the Linux one, with the same protocol: evdev for the keys,
   X11 (libX11/libXtst through koffi) for the active window and Ctrl+V, uinput for
-  Ctrl+V on Wayland, and AT-SPI (libatspi) for the focused field. Electron runs it as plain Node.
+  Ctrl+V on Wayland, AT-SPI (libatspi) for the focused field, and MPRIS over D-Bus
+  for pausing the music (`media.ts`). Electron runs it as plain Node.
 - `native/mac-input/` — the macOS one (Swift), same protocol: an event tap for
-  the keys, the frontmost app, ⌘V, and the Accessibility API for the focused field.
+  the keys, the frontmost app, ⌘V, the Accessibility API for the focused field, and
+  AppleScript to pause Music and Spotify.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.
 - `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app), and
