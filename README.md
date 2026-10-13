@@ -42,6 +42,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
     or say **"ciao ciao"** ("чао-чао"; the words themselves are not pasted; toggle in
     *Settings → Voice*).
+    Turn off *Settings → Keys → A short press starts hands-free mode* to dictate only
+    while holding: a short tap then starts nothing (useful when a mouse or trackpad
+    button is a trigger and gets clicked by accident). The short click still doesn't
+    reach other apps, except on Linux, where trigger buttons are never held back.
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
 - **A pill between dictations.** A small Ciao pill stays at the bottom of the

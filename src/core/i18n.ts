@@ -185,7 +185,9 @@ const ru = {
     keys: {
       title: "Клавиши",
       dictation: "Диктовка",
-      dictationHint: "Держи и говори. Короткое нажатие — режим без рук, ещё одно — готово. Назначенные кнопки мыши другие приложения не получают.",
+      dictationHint: "Держи и говори. Назначенные кнопки мыши другие приложения не получают.",
+      tapHandsFree: "Короткое нажатие включает режим без рук",
+      tapHandsFreeHint: "Ещё одно нажатие — готово. Если выключить, запись идёт только пока клавиша или кнопка зажата, а случайный короткий клик ничего не запускает.",
       cancel: "Отмена",
       cancelHint: "Запись всё равно сохранится в истории.",
       pasteLast: "Вставить последнее",
@@ -464,7 +466,9 @@ const en: Strings = {
     keys: {
       title: "Keys",
       dictation: "Dictation",
-      dictationHint: "Hold and speak. A short press starts hands-free mode, another one finishes. Other apps don't receive the mouse buttons assigned here.",
+      dictationHint: "Hold and speak. Other apps don't receive the mouse buttons assigned here.",
+      tapHandsFree: "A short press starts hands-free mode",
+      tapHandsFreeHint: "Another press finishes. Turn it off to record only while the key or button is held; an accidental short click then starts nothing.",
       cancel: "Cancel",
       cancelHint: "The recording is still saved in history.",
       pasteLast: "Paste last",
