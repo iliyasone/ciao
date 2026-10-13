@@ -745,11 +745,13 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   the focused field through UI Automation (`FieldReader.cs`) and pauses the music
   through the system media sessions (`Media.cs`).
 - `src/linux-input/` — the Linux one, with the same protocol: evdev for the keys,
-  X11 (libX11/libXtst through koffi) for the active window and Ctrl+V, uinput for
+  X11 (libX11/libXtst through koffi) for the active window, bringing an app forward
+  (`_NET_ACTIVE_WINDOW`), Ctrl+V and Enter, uinput for
   Ctrl+V on Wayland, AT-SPI (libatspi) for the focused field, and MPRIS over D-Bus
   for pausing the music (`media.ts`). Electron runs it as plain Node.
 - `native/mac-input/` — the macOS one (Swift), same protocol: an event tap for
-  the keys, the frontmost app, ⌘V, the Accessibility API for the focused field, and
+  the keys, the frontmost app, bringing an app forward (Launch Services), ⌘V and
+  Return, the Accessibility API for the focused field, and
   AppleScript to pause Music and Spotify.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.

@@ -85,8 +85,8 @@ interface Active {
   target: Promise<ForegroundWindow | null>;
   /** The window in front when the dictation was stopped: where the text goes (see stop()). */
   stopTarget?: Promise<ForegroundWindow | null>;
-  /** T3 mode: T3 Code was called forward (done when the helper answered). */
-  forwarded?: Promise<void>;
+  /** T3 mode: T3 Code is being called forward; true once a window was. */
+  forwarded?: Promise<boolean>;
   targetMoved?: boolean;
   phase: "recording" | "finishing";
   shown: boolean;
@@ -392,16 +392,20 @@ export class DictationController {
     if (!replay && settings.t3Mode && settings.t3Forward && trigger !== "wake_word")
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;
-        a.forwarded = this.bringT3Forward();
+        a.forwarded = this.bringT3Forward(a);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
   }
 
-  /** T3 Code to the front, unless it is there already (another T3 window or tab may be the one in use). */
-  private async bringT3Forward(): Promise<void> {
+  /**
+   * T3 Code to the front, unless it is there already (another T3 window or tab may be the one in use)
+   * or the dictation was cancelled meanwhile. Whether a window was called forward.
+   */
+  private async bringT3Forward(a: Active): Promise<boolean> {
     const front = await this.deps.input.foreground();
-    if (front && isT3Code(front)) return;
+    if ((front && isT3Code(front)) || !this.active || this.active.seq !== a.seq) return false;
     const hwnd = await this.deps.input.activate(T3_PROCESS);
     console.log("t3: brought forward", hwnd || "nothing");
+    return hwnd !== 0;
   }
 
   /**
@@ -409,8 +413,7 @@ export class DictationController {
    * may not have switched yet: wait for it a moment, so the text doesn't miss it.
    */
   private async stopTarget(a: Active): Promise<ForegroundWindow | null> {
-    if (!a.forwarded) return this.deps.input.foreground();
-    await a.forwarded;
+    if (!a.forwarded || !(await a.forwarded)) return this.deps.input.foreground();
     let front = await this.deps.input.foreground();
     for (const until = Date.now() + FORWARD_WAIT_MS; !(front && isT3Code(front)) && Date.now() < until; ) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -596,7 +599,7 @@ export class DictationController {
         // a held Right Ctrl would make it Ctrl+Enter, which T3 Code takes as steering the running turn.
         if (r.delivery === "pasted" && r.check === "landed" && settings.t3Send && target.hwnd !== 0 && !this.hotkeyDown) {
           await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
-          a.sent = await this.deps.input.enter(target.hwnd);
+          if (!this.hotkeyDown) a.sent = await this.deps.input.enter(target.hwnd); // pressed again meanwhile
         }
         this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
       } else if (settings.autoPaste && target) {

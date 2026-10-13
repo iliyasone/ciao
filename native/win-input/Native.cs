@@ -258,11 +258,11 @@ static class Native
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    static extern bool BringWindowToTop(IntPtr hWnd);
+    static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    static extern bool ShowWindow(IntPtr hWnd, int cmd);
+    static extern bool ShowWindowAsync(IntPtr hWnd, int cmd);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -301,7 +301,7 @@ static class Native
             finally { p.Dispose(); }
             if (hwnd != IntPtr.Zero) break;
         }
-        if (hwnd == IntPtr.Zero) return IntPtr.Zero;
+        if (hwnd == IntPtr.Zero || IsHungAppWindow(hwnd)) return IntPtr.Zero;
         var front = GetForegroundWindow();
         if (front == hwnd) return hwnd;
         IsGUIThread(true); // AttachThreadInput needs this thread to have a message queue
@@ -310,8 +310,9 @@ static class Native
         bool attached = theirs != 0 && theirs != me && !IsHungAppWindow(front) && AttachThreadInput(me, theirs, true);
         try
         {
-            if (IsIconic(hwnd)) ShowWindow(hwnd, 9); // SW_RESTORE
-            BringWindowToTop(hwnd);
+            // The async forms: a call into another app's window waits for its thread otherwise.
+            if (IsIconic(hwnd)) ShowWindowAsync(hwnd, 9); // SW_RESTORE
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x4000); // HWND_TOP; NOSIZE | NOMOVE | ASYNCWINDOWPOS
             SetForegroundWindow(hwnd);
         }
         finally

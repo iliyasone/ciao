@@ -339,8 +339,14 @@ static class Program
                 break;
             case "activate":
             {
-                var re = new System.Text.RegularExpressions.Regex(msg["process"]?.GetValue<string>() ?? "$^", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                Emit(new JsonObject { ["id"] = id, ["hwnd"] = Native.Activate(re).ToInt64() });
+                long hwnd = 0;
+                try
+                {
+                    var re = new System.Text.RegularExpressions.Regex(msg["process"]?.GetValue<string>() ?? "$^", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    hwnd = Native.Activate(re).ToInt64();
+                }
+                catch (ArgumentException) { } // a bad pattern matches nothing
+                Emit(new JsonObject { ["id"] = id, ["hwnd"] = hwnd });
                 break;
             }
             case "key":
