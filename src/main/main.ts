@@ -476,17 +476,31 @@ let helperFinished = false;
  * (TrackpadClicks turns a single click into a stop while it says hands-free). Written whole and renamed
  * into place, so a reader never sees half a file.
  */
+let stateNow = "";
+let stateRetry: ReturnType<typeof setTimeout> | undefined;
 function writeState(recording: boolean, handsFree: boolean): void {
+  stateNow = JSON.stringify({ recording, handsFree, pid: process.pid });
+  clearTimeout(stateRetry);
+  flushState(0);
+}
+
+/**
+ * Windows refuses the rename while a reader has the file open: try again shortly, always with the
+ * latest state, so the file never stays saying "recording" after a stop.
+ */
+function flushState(attempt: number): void {
   const file = path.join(app.getPath("userData"), "state.json");
   try {
-    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ recording, handsFree, pid: process.pid }));
+    fs.writeFileSync(`${file}.tmp`, stateNow);
     fs.renameSync(`${file}.tmp`, file);
   } catch (e) {
-    console.warn("state.json:", (e as Error).message);
+    if (attempt < 20) stateRetry = setTimeout(() => flushState(attempt + 1), 25);
+    else console.warn("state.json:", (e as Error).message);
   }
 }
 
 app.on("will-quit", (e) => {
+  writeState(false, false); // at once, also when quitting waits for the music to resume
   // With "pause music" on, the input helper gets to resume what it paused before Ciao goes: the resume of a
   // dictation that just ended may still be queued, and on Windows the helper dies with Ciao.
   const resume = dictation?.quitting() ?? false;
@@ -501,7 +515,6 @@ app.on("will-quit", (e) => {
     }
     return;
   }
-  writeState(false, false);
   globalShortcut.unregisterAll();
   updater.stop();
   input?.stop();

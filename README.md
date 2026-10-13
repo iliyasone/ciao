@@ -57,10 +57,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   appears and disappears.
 - **Sounds when it listens.** A soft rising two-note sound when Ciao starts
   listening, a falling one when it stops (*Settings → Behavior → Start and stop
-  sounds*, on by default). The start sound plays at once, except with a trigger like
-  Right Ctrl (0.15 s later, so a Ctrl+C makes none) or when short presses are
-  dropped (0.35 s); the mic audio for the next 0.28 s is silenced so the sound isn't
-  in the recording. After the wake word nothing is silenced: you are speaking.
+  sounds*, on by default; desktop only: on Android the bubble buzzes instead). The
+  start sound plays at once, except with a trigger like Right Ctrl (0.15 s later, so
+  a Ctrl+C makes none) or when short presses are dropped (0.35 s); the mic audio for
+  the next 0.28 s is silenced so the sound isn't in the recording, unless you are
+  speaking already (after the wake word, or when you started before the sound).
 - **Music pauses while you dictate**, if you turn on *Settings → Behavior → Pause
   music while you dictate* (off by default). Once a recording has gone on for
   0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into

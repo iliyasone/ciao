@@ -8,9 +8,15 @@ const NOTE_S = 0.085;
 const GAP_S = 0.015;
 const VOLUME = 0.07;
 
-export function playSound(kind: "start" | "stop"): void {
+/** Opens the sound output ahead of the first sound: opening it takes a moment, which would put the first one late. */
+export function warmUp(): void {
   ctx ??= new AudioContext({ latencyHint: "interactive" });
   if (ctx.state === "suspended") void ctx.resume();
+}
+
+export function playSound(kind: "start" | "stop"): void {
+  warmUp();
+  if (!ctx) return;
   const t0 = ctx.currentTime + 0.005;
   NOTES[kind].forEach((freq, i) => {
     const at = t0 + i * (NOTE_S + GAP_S);

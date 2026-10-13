@@ -408,12 +408,14 @@ export class DictationController {
     // At once, so you hear that it listens; later only where the press may still turn out to be nothing:
     // a tap that is dropped, or a held Ctrl that becomes Ctrl+C (the card waits for the same reason).
     if (!replay && settings.sounds) {
-      const delay = dropsTaps(settings) ? TAP_MS : isLoneModifierTrigger(trigger) ? SHOW_AFTER_MS : 0;
+      // The pill and the wake word can't turn out to be a dropped tap or a shortcut.
+      const sure = trigger === "pill" || trigger === "wake_word";
+      const delay = sure ? 0 : dropsTaps(settings) ? TAP_MS : isLoneModifierTrigger(trigger) ? SHOW_AFTER_MS : 0;
       const beep = () => {
         if (this.active !== a || a.phase !== "recording") return;
         a.beeped = true;
-        // Not after the wake word: you are speaking already, and nothing of it may be lost.
-        if (trigger !== "wake_word") a.muteUntil = Date.now() + START_SOUND_MUTE_MS;
+        // Not once you are speaking (after the wake word, or a late sound): no word may be lost to it.
+        if (trigger !== "wake_word" && a.voiceOnsetAt === undefined) a.muteUntil = Date.now() + START_SOUND_MUTE_MS;
         this.deps.overlay.sound("start");
       };
       if (delay) setTimeout(beep, delay);
@@ -848,6 +850,7 @@ export class DictationController {
 
   /** Tells other apps (state.json) when recording or hands-free changed. */
   private report(): void {
+    if (this.active?.replay) return;
     const recording = this.active?.phase === "recording";
     const handsFree = recording && this.handsFree;
     if (recording === this.reported.recording && handsFree === this.reported.handsFree) return;

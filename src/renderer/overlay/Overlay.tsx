@@ -6,7 +6,7 @@ import { revisePauses } from "../../core/revision";
 import type { OverlayState, TermSuggestion } from "../../core/types";
 import { useStrings } from "../lang";
 import { meter, setWake, startCapture, stopCapture } from "./capture";
-import { playSound } from "./sounds";
+import { playSound, warmUp } from "./sounds";
 
 // ── Text model ────────────────────────────────────────────────────────────
 // New tokens stay individual spans (animated) for FRESH_MS, then merge into one
@@ -511,6 +511,7 @@ export function Overlay() {
   const tr = useStrings().overlay;
 
   useEffect(() => {
+    warmUp(); // the first start sound mustn't wait for the output to open
     const offs = [
       ciao.overlay.onState((s) => {
         if (s.seq === closedSeq.current) return;
