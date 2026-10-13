@@ -14,6 +14,12 @@ import type { OverlayPort } from "./dictation";
 // that here: the hovers it reports come from mouse moves forwarded to a click-through window, which
 // don't always arrive (a suggestion that came up while you typed elsewhere let its clicks through).
 // Linux can't forward them at all, so there the window's shape is cut to what is drawn instead.
+// A press that comes while the window still lets clicks through goes to the app below and is lost,
+// so near what is drawn the check runs every 25 ms; far from it, less often (by how soon the pointer
+// could get there), so an idle pill doesn't wake the app 40 times a second.
+//
+// Dragging follows the cursor from here, not the pointer positions the renderer sees: those are
+// measured against a window that is itself moving, and stall or jump while it does.
 const LINE = 25; // px, one line of the card's text
 /** Window height minus the text lines: the card's header, padding and shadow room. */
 const CHROME_HEIGHT = 170;
@@ -27,9 +33,13 @@ const MAX_CARD_WIDTH = 1400;
 export const MIN_LINES = 3;
 export const MAX_LINES = 24;
 const LINUX = process.platform === "linux";
-/** How often the cursor is checked against what is drawn (Windows, macOS): a card or suggestion is up, or just the pill. */
-const POINTER_POLL_MS = 50;
-const PILL_POLL_MS = 200;
+/** How often the cursor is checked against what is drawn, near it and far from it (Windows, macOS). */
+const POLL_MIN_MS = 25;
+const POLL_MAX_MS = 250;
+/** A fast flick of the pointer, px per ms: the next check comes before it could reach what is drawn. */
+const POINTER_SPEED = 4;
+/** How often a drag moves the window after the cursor (about a frame). */
+const DRAG_MS = 16;
 
 export interface OverlayPlacement {
   /** The middle of the card's bottom edge on screen; null = bottom-centre of the display under the cursor. */
@@ -43,7 +53,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export class OverlayWindow implements OverlayPort {
   readonly win: BrowserWindow;
   private visibleSeq = -1;
-  private drag0: { bounds: Rectangle; lines: number } | null = null;
+  private drag0: { mode: "move" | "resize"; bounds: Rectangle; lines: number; cursor: { x: number; y: number } } | null = null;
+  private dragTimer: ReturnType<typeof setInterval> | null = null;
+  private dragAt = { x: NaN, y: NaN };
   private wake = false;
   private pill: boolean;
   /** The renderer shows a card or a suggestion; without the pill the window hides when it shows nothing. */
@@ -53,8 +65,7 @@ export class OverlayWindow implements OverlayPort {
   /** The renderer saw the pointer over something it draws. */
   private hovered = false;
   private ignoring = true;
-  private poll: ReturnType<typeof setInterval> | null = null;
-  private pollMs = 0;
+  private poll: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     preload: string,
@@ -78,6 +89,8 @@ export class OverlayWindow implements OverlayPort {
       focusable: false,
       hasShadow: false,
       alwaysOnTop: true,
+      // macOS: the first click on it is a click, not one that only activates it (it never is active).
+      acceptFirstMouse: true,
       // macOS: a non-activating panel, so showing it never takes focus from the app being dictated into.
       ...(process.platform === "darwin" && { type: "panel" }),
       backgroundColor: "#00000000",
@@ -99,11 +112,15 @@ export class OverlayWindow implements OverlayPort {
     screen.on("display-removed", replace);
     screen.on("display-metrics-changed", replace);
     void this.win.loadFile(path.join(rendererDir, "overlay.html"));
-    this.win.on("closed", () => this.stopPoll());
+    this.win.on("closed", () => {
+      this.stopPoll();
+      this.stopDragTimer();
+    });
     this.win.webContents.on("did-finish-load", () => {
       // A reloaded page reports what it draws afresh.
       this.hovered = false;
       this.drag0 = null;
+      this.stopDragTimer();
       this.setRegion([]);
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
@@ -134,7 +151,7 @@ export class OverlayWindow implements OverlayPort {
   /** Windows, macOS: the renderer saw the pointer come over the pill or a card (or leave it). */
   setInteractive(on: boolean): void {
     this.hovered = on;
-    this.updateMouse();
+    this.check();
   }
 
   /** What the renderer draws (the pill, a card), in window pixels; the rest lets clicks through. */
@@ -145,38 +162,51 @@ export class OverlayWindow implements OverlayPort {
       this.win.setShape(rects.map((r) => ({ x: Math.floor(r.x - 30), y: Math.floor(r.y - 20), width: Math.ceil(r.width + 60), height: Math.ceil(r.height + 76) })));
       return;
     }
-    this.updatePoll();
-    this.updateMouse();
+    this.check();
   }
 
-  private updatePoll(): void {
-    const ms = LINUX || !this.region.length ? 0 : this.busy ? POINTER_POLL_MS : PILL_POLL_MS;
-    if (ms === this.pollMs) return;
+  /** Checks the cursor now, and schedules the next check by what is drawn now: a timeout queued for the old drawing may be far off. */
+  private check(): void {
     this.stopPoll();
-    this.pollMs = ms;
-    if (ms) this.poll = setInterval(() => this.updateMouse(), ms);
+    if (!LINUX && this.region.length) this.tick();
+    else this.updateMouse();
+  }
+
+  private tick(): void {
+    const distance = this.updateMouse();
+    this.poll = setTimeout(() => this.tick(), clamp(distance / POINTER_SPEED, POLL_MIN_MS, POLL_MAX_MS));
   }
 
   private stopPoll(): void {
-    if (this.poll) clearInterval(this.poll);
+    if (this.poll) clearTimeout(this.poll);
     this.poll = null;
-    this.pollMs = 0;
   }
 
-  /** Windows, macOS: clicks and wheel scrolling land on the window while the pointer is over what it draws, or a drag is on. */
-  private updateMouse(): void {
-    if (LINUX || this.win.isDestroyed()) return;
+  /**
+   * Windows, macOS: clicks and wheel scrolling land on the window while the pointer is over what it draws, or a drag is on.
+   * Returns how far the pointer is from what is drawn, px (0 over it; Infinity with nothing to check).
+   */
+  private updateMouse(): number {
+    if (LINUX || this.win.isDestroyed()) return Infinity;
     let interactive = this.drag0 !== null;
+    let distance = interactive ? 0 : Infinity;
     if (!interactive && this.win.isVisible()) {
       const b = this.win.getBounds();
       const p = screen.getCursorScreenPoint();
+      for (const r of this.region) {
+        const dx = Math.max(b.x + r.x - p.x, 0, p.x - (b.x + r.x + r.width));
+        const dy = Math.max(b.y + r.y - p.y, 0, p.y - (b.y + r.y + r.height));
+        distance = Math.min(distance, Math.hypot(dx, dy));
+      }
       // A hover the renderer missed the end of doesn't count once the pointer is off the window.
-      interactive =
-        (this.hovered && contains(b, p)) || this.region.some((r) => contains({ x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height }, p));
+      interactive = (this.hovered && contains(b, p)) || this.region.some((r) => contains({ x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height }, p));
+      if (interactive) distance = 0;
     }
-    if (interactive !== this.ignoring) return;
-    this.ignoring = !interactive;
-    this.win.setIgnoreMouseEvents(this.ignoring, { forward: true });
+    if (interactive === this.ignoring) {
+      this.ignoring = !interactive;
+      this.win.setIgnoreMouseEvents(this.ignoring, { forward: true });
+    }
+    return distance;
   }
 
   /** The renderer finished folding away the card for `seq`. */
@@ -187,7 +217,6 @@ export class OverlayWindow implements OverlayPort {
   /** The renderer shows a card or a suggestion (true), or nothing but maybe the pill (false). */
   setBusy(on: boolean): void {
     this.busy = on;
-    this.updatePoll();
     // A card that folded away may report after the next one was already shown: keep that one up.
     if (on && !this.win.isVisible()) this.win.showInactive();
     else if (!on && !this.pill && this.visibleSeq === -1) this.win.hide();
@@ -195,16 +224,39 @@ export class OverlayWindow implements OverlayPort {
 
   // ── Moving and resizing ─────────────────────────────────────────────────
 
-  dragStart(): void {
-    this.drag0 = { bounds: this.win.getBounds(), lines: this.placement().lines };
+  /**
+   * x/y: where the press was on screen (a move starts once the pointer went a few pixels from it;
+   * the window hasn't moved yet, so the renderer's reading is right). From here the window follows
+   * the cursor until dragEnd.
+   */
+  dragStart(mode: "move" | "resize", x: number, y: number): void {
+    // A resize starts at the press itself: from the cursor, or a fractional screenX would size the card by a pixel on a click.
+    const cursor = mode === "resize" ? screen.getCursorScreenPoint() : { x, y };
+    this.drag0 = { mode, bounds: this.win.getBounds(), lines: this.placement().lines, cursor };
+    this.dragAt = { x: NaN, y: NaN };
+    this.updateMouse();
+    this.drag();
+    this.stopDragTimer();
+    this.dragTimer = setInterval(() => this.drag(), DRAG_MS);
   }
 
-  /** dx/dy: pointer offset since dragStart. "move" shifts the window; "resize" widens the card (both ways) and adds lines (upwards). */
-  drag(mode: "move" | "resize", dx: number, dy: number): void {
+  private stopDragTimer(): void {
+    if (this.dragTimer) clearInterval(this.dragTimer);
+    this.dragTimer = null;
+  }
+
+  /** Puts the window where the cursor says. "move" shifts it; "resize" widens the card (both ways) and adds lines (upwards). */
+  private drag(): void {
     const d = this.drag0;
-    if (!d) return;
+    if (!d || this.win.isDestroyed()) return;
+    const c = screen.getCursorScreenPoint();
+    if (c.x === this.dragAt.x && c.y === this.dragAt.y) return;
+    this.dragAt = c;
+    // Whole pixels: the press point may be fractional (screenX at 125% scaling), and setBounds takes integers.
+    const dx = Math.round(c.x - d.cursor.x);
+    const dy = Math.round(c.y - d.cursor.y);
     const o = d.bounds;
-    if (mode === "move") {
+    if (d.mode === "move") {
       this.win.setBounds({ ...o, x: Math.round(o.x + dx), y: Math.round(o.y + dy) });
       return;
     }
@@ -217,7 +269,9 @@ export class OverlayWindow implements OverlayPort {
   }
 
   dragEnd(): void {
+    this.stopDragTimer();
     if (!this.drag0) return;
+    this.drag();
     this.drag0 = null;
     const save = () => {
       const b = this.win.getBounds();
@@ -231,16 +285,15 @@ export class OverlayWindow implements OverlayPort {
     // Dropped (partly) off the screen: back into it, and remember where it ended up.
     this.place();
     save();
-    this.updateMouse();
     console.log("overlay moved to", JSON.stringify(this.win.getBounds()));
   }
 
   /** Back to bottom-centre at the default size. */
   resetPlacement(): void {
     this.drag0 = null;
+    this.stopDragTimer();
     this.savePlacement({ anchor: null, cardWidth: DEFAULT_CARD_WIDTH, lines: 6 });
     this.place();
-    this.updateMouse();
   }
 
   // ── OverlayPort ─────────────────────────────────────────────────────────
@@ -311,6 +364,7 @@ export class OverlayWindow implements OverlayPort {
 
   private place(): void {
     this.win.setBounds(this.bounds());
+    this.check();
   }
 }
 

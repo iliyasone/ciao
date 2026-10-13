@@ -366,8 +366,7 @@ function registerIpc(): void {
   ipcMain.on("capture:error", (_e, seq: number, message: string) => dictation.onCaptureError(seq, message));
   ipcMain.on("overlay:interactive", (_e, on: boolean) => overlay.setInteractive(on));
   ipcMain.on("overlay:hidden", (_e, seq: number) => overlay.hidden(seq));
-  ipcMain.on("overlay:drag-start", () => overlay.dragStart());
-  ipcMain.on("overlay:drag", (_e, mode: "move" | "resize", dx: number, dy: number) => overlay.drag(mode, dx, dy));
+  ipcMain.on("overlay:drag-start", (_e, mode: "move" | "resize", x: number, y: number) => overlay.dragStart(mode, x, y));
   ipcMain.on("overlay:drag-end", () => overlay.dragEnd());
   ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());
   ipcMain.handle("overlay:copy", (_e, text: string) => clipboard.writeText(text));
