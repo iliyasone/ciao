@@ -162,16 +162,41 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           <Field label={tr.keys.dictation} hint={tr.keys.dictationHint}>
             <TriggerList value={s.triggers} onChange={(triggers) => update({ triggers })} />
           </Field>
-          <Toggle
-            label={tr.keys.tapHandsFree}
-            hint={tr.keys.tapHandsFreeHint}
-            value={s.tapHandsFree}
-            onChange={(v) => update({ tapHandsFree: v })}
-          />
+          {/* T3 mode drops short presses whatever this says. */}
+          {!s.t3Mode && (
+            <Toggle
+              label={tr.keys.tapHandsFree}
+              hint={tr.keys.tapHandsFreeHint}
+              value={s.tapHandsFree}
+              onChange={(v) => update({ tapHandsFree: v })}
+            />
+          )}
           <Keys label={tr.keys.cancel} keys={["Esc"]} hint={tr.keys.cancelHint} />
           <Row label={tr.keys.pasteLast} hint={tr.keys.pasteLastHint}>
             <AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />
           </Row>
+        </Card>
+
+        <Card title={tr.t3.title}>
+          <Toggle label={tr.t3.mode} hint={tr.t3.modeHint} value={s.t3Mode} onChange={(v) => update({ t3Mode: v })} />
+          {s.t3Mode && (
+            <>
+              <Row label={tr.t3.prefix} hint={tr.t3.affixHint}>
+                <input
+                  value={s.t3Prefix}
+                  onChange={(e) => update({ t3Prefix: e.target.value }, true)}
+                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                />
+              </Row>
+              <Row label={tr.t3.suffix}>
+                <input
+                  value={s.t3Suffix}
+                  onChange={(e) => update({ t3Suffix: e.target.value }, true)}
+                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                />
+              </Row>
+            </>
+          )}
         </Card>
 
         {updateState && <UpdateCard state={updateState} />}

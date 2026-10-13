@@ -6,13 +6,14 @@ import { models, PROVIDERS } from "../core/providers";
 import type { LiveSession } from "../core/realtime";
 import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
-import { pasteText } from "./paste";
+import { cancelRestore, pasteIntoT3, pasteText, type T3Check } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
 import { revisePauses } from "../core/revision";
+import { isT3Code, t3Prompt } from "../core/t3";
 import { isLoneModifierTrigger } from "../core/triggers";
 
 /** What the controller needs from the overlay window. */
@@ -27,8 +28,10 @@ export interface OverlayPort {
   stopCapture(seq: number): void;
 }
 
-const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, with tapHandsFree off)
+const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, see dropsTaps)
 const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
+/** A short press starts nothing: tapHandsFree is off, or T3 mode is on (only a hold dictates there). */
+const dropsTaps = (s: Settings) => !s.tapHandsFree || s.t3Mode;
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
@@ -99,6 +102,8 @@ interface Active {
   trigger: string;
   endedBy?: DictationReport["ended_by"];
   miss?: PasteMiss;
+  /** T3 mode: how the paste was checked (src/main/paste.ts). */
+  check?: T3Check;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
   /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
@@ -143,7 +148,7 @@ export class DictationController {
 
   // ── Keyboard and mouse ──────────────────────────────────────────────────
   // Right Ctrl and the middle mouse button share one state machine:
-  // hold = push-to-talk, a short press = hands-free until the next press (or nothing, with tapHandsFree off).
+  // hold = push-to-talk, a short press = hands-free until the next press (or nothing, see dropsTaps).
 
   onHotkey(down: boolean, spec = ""): void {
     const now = Date.now();
@@ -160,7 +165,7 @@ export class DictationController {
     if (a?.phase !== "recording" || this.handsFree) return;
     if (now - this.pressedAt < TAP_MS) {
       // Off: a press too short to be speech (an accidental click) leaves nothing behind.
-      if (!a.settings.tapHandsFree) return this.cancel(false);
+      if (dropsTaps(a.settings)) return this.cancel(false);
       this.handsFree = true;
       this.push(a);
     } else {
@@ -254,7 +259,10 @@ export class DictationController {
     // Whatever is in front, unless there is nothing to paste into (see InputHelper.foreground).
     const target = await this.deps.input.foreground();
     const r = target ? await pasteText(this.deps.input, text, target.hwnd, this.deps.settings().restoreClipboard) : null;
-    if (r?.delivery !== "pasted") await clipboard.writeText(text);
+    if (r?.delivery !== "pasted") {
+      await cancelRestore();
+      await clipboard.writeText(text);
+    }
     this.deps.delivered(text, r?.delivery === "pasted" ? target!.hwnd : null);
   }
 
@@ -361,9 +369,9 @@ export class DictationController {
       if (this.active !== a || a.phase !== "recording") return;
       a.shown = true;
       this.push(a);
-    }, settings.tapHandsFree ? SHOW_AFTER_MS : TAP_MS); // with taps dropped, a tap shows nothing at all
+    }, dropsTaps(settings) ? TAP_MS : SHOW_AFTER_MS); // with taps dropped, a tap shows nothing at all
     // Only once it is clearly a dictation: a held Ctrl that turns into Ctrl+C (see onOtherKey), or a tap
-    // dropped with tapHandsFree off, doesn't stop the music for a moment.
+    // dropped (see dropsTaps), doesn't stop the music for a moment.
     if (!replay && settings.pauseMedia)
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;
@@ -414,6 +422,7 @@ export class DictationController {
   private cancel(keep: boolean, error?: string): void {
     const a = this.active;
     if (!a) return;
+    console.log("dictation", a.entry.id, keep ? "cancelled" : "dropped", error ?? "", `${Date.now() - a.startedAt}ms`);
     this.active = null;
     this.deps.idle();
     this.deps.input.arm(false);
@@ -463,7 +472,8 @@ export class DictationController {
       entry.transcripts.push(t);
     };
 
-    let live = (a.final ?? a.liveText).trim();
+    // An empty final with live text shown (Gemini drops a last guess it didn't confirm) keeps the live text.
+    let live = (a.final?.trim() ? a.final : a.liveText).trim();
     if (a.stoppedByPhrase) live = stripStopPhrase(live);
     if (a.wakeStarted) live = stripWakeWord(live);
     if (live || a.final !== undefined) add("live", model.live, live);
@@ -512,6 +522,7 @@ export class DictationController {
     let delivery: Delivery = "none";
     if (!text) {
       if (entry.durationMs < 1500 && !entry.error) {
+        console.log("dictation", entry.id, "dropped", "empty", `${entry.durationMs}ms`);
         this.deps.store.delete(entry.id); // an accidental tap, nothing worth keeping
         this.active = null;
         this.deps.idle();
@@ -521,26 +532,46 @@ export class DictationController {
       entry.status = entry.error ? "failed" : "done";
       phase = entry.error ? "saved" : "empty";
     } else {
-      this.lastText = text;
       this.deps.overlay.final(a.seq, text);
       const target = await this.target(a);
+      const t3 = settings.t3Mode;
+      // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
+      this.lastText = text;
       if (a.replay) {
         delivery = "none";
+      } else if (t3 && settings.autoPaste && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
+        // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
+        const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
+        await cancelRestore();
+        await clipboard.writeText(out);
+        delivery = "clipboard";
+        a.miss = { reason: "not-t3", foregroundProcess: target.process };
+        this.deps.delivered(out, null);
+      } else if (t3 && settings.autoPaste && target) {
+        const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
+        delivery = r.delivery;
+        if (r.delivery === "clipboard") a.miss = r.miss;
+        else a.check = r.check;
+        this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
       } else if (settings.autoPaste && target) {
         const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
         delivery = r.delivery;
         if (r.delivery === "clipboard") a.miss = r.miss;
         this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
-        await clipboard.writeText(text);
+        const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
+        await cancelRestore();
+        await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };
-        this.deps.delivered(text, null);
+        this.deps.delivered(out, null);
       }
       entry.status = "done";
       phase = delivery === "clipboard" ? "clipboard" : "done";
     }
     entry.delivery = delivery;
+    // What happened, without the text: the only way to tell later why a dictation didn't show up.
+    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", entry.target?.process ?? "", `${entry.durationMs}ms`);
     this.deps.store.save(entry);
     this.deps.changed(entry);
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
@@ -551,7 +582,7 @@ export class DictationController {
       phase,
       message:
         phase === "clipboard"
-          ? a.miss?.reason === "no-permission" ? t().overlay.noPermission : t().overlay.clipboard
+          ? missMessage(a.miss?.reason)
           : phase === "saved"
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
@@ -619,4 +650,14 @@ export class DictationController {
   private push(a: Active): void {
     if (a.shown) this.deps.overlay.state(this.baseState(a));
   }
+}
+
+/** What the card says when the text went to the clipboard instead. */
+function missMessage(reason: string | undefined): string {
+  const o = t().overlay;
+  if (reason === "no-permission") return o.noPermission;
+  if (reason === "not-t3") return o.notT3;
+  if (reason === "not-in-field") return o.notInField;
+  if (reason === "no-field") return o.noField;
+  return o.clipboard;
 }

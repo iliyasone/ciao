@@ -586,7 +586,8 @@ class CiaoService : AccessibilityService() {
         if (dictation !== d || d.phase != Phase.FINISHING) return
         d.phase = Phase.DONE
         d.session.close()
-        val live = d.final
+        // An empty final with live text shown (Gemini drops a last guess it didn't confirm) keeps the live text.
+        val live = d.final?.let { if (it.isBlank() && d.liveText.isNotBlank()) d.liveText.toString() else it }
         if (live != null && !timedOut) return deliver(d, live)
         transcribeFile(d)
     }

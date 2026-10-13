@@ -51,6 +51,9 @@ const ru = {
     cancelled: "Отменено — запись в истории",
     clipboard: `Окно сменилось — текст в буфере, ${PASTE}`,
     noPermission: "Нет Универсального доступа — текст в буфере. Включи его: Настройки → Доступ",
+    notT3: `Впереди не T3 Code — текст в буфере, ${PASTE}`,
+    notInField: `Текст не появился в поле ввода T3 Code — он в буфере, ${PASTE}, если его там нет`,
+    noField: `Не видно, чтобы текст попал в поле ввода T3 Code — он в буфере: кликни в поле и нажми ${PASTE}, если его там нет`,
     saved: "Не распозналось — аудио сохранено в истории",
     recovered: "Запись прервалась при перезапуске — вот что ты сказал",
     recoveredSaved: "Запись прервалась при перезапуске — аудио сохранено в истории",
@@ -201,6 +204,15 @@ const ru = {
       capturing: "Нажми клавишу, сочетание или кнопку мыши… Esc — отмена",
       recording: "Нажми сочетание… Esc — отмена",
     },
+    t3: {
+      title: "T3 Code",
+      mode: "Режим T3",
+      modeHint:
+        "Для диктовки промптов в T3 Code. Диктует удержание клавиши или кнопки, короткое нажатие ничего не делает. Текст вставляется только в окно T3 Code, которое впереди, и Ciao читает поле ввода до и после вставки, чтобы проверить, что текст там. Если нет — текст остаётся в буфере и в истории.",
+      prefix: "Перед промптом",
+      suffix: "После промпта",
+      affixHint: "Добавляются, когда поле ввода пустое или его не прочитать: промпт из нескольких удержаний получит их один раз, а «После промпта» встанет после слов первого удержания. Например «Клауди,», чтобы агент ответил голосом.",
+    },
     updates: {
       title: "Обновления",
       version: (v: string) => `Версия ${v}`,
@@ -336,6 +348,9 @@ const en: Strings = {
     cancelled: "Cancelled — the recording is in history",
     clipboard: `The window changed — the text is on the clipboard, press ${PASTE} to paste`,
     noPermission: "No Accessibility permission — the text is on the clipboard. Turn it on: Settings → Permissions",
+    notT3: `T3 Code wasn't in front — the text is on the clipboard, press ${PASTE} to paste`,
+    notInField: `The text didn't show up in T3 Code's chat box — it's on the clipboard, press ${PASTE} if it's missing`,
+    noField: `Couldn't see the text reach T3 Code's chat box — it's on the clipboard: click into the box and press ${PASTE} if it's missing`,
     saved: "Couldn't transcribe — the audio is saved in history",
     recovered: "The recording was cut short by a restart — here's what you said",
     recoveredSaved: "The recording was cut short by a restart — the audio is saved in history",
@@ -485,6 +500,15 @@ const en: Strings = {
       add: "Add",
       capturing: "Press a key, a combination or a mouse button… Esc to cancel",
       recording: "Press a shortcut… Esc to cancel",
+    },
+    t3: {
+      title: "T3 Code",
+      mode: "T3 mode",
+      modeHint:
+        "For dictating prompts into T3 Code. Holding a key or button dictates; a short press does nothing. The text is pasted only into the T3 Code window in front, and Ciao reads the chat box before and after pasting to check it's there. If not, it stays on the clipboard and in history.",
+      prefix: "Before the prompt",
+      suffix: "After the prompt",
+      affixHint: "Added when the chat box is empty or can't be read: a prompt said in several holds gets them once, and the suffix follows the first hold's words. E.g. “Claudie,” to have the agent answer by voice.",
     },
     updates: {
       title: "Updates",
