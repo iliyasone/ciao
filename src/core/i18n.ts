@@ -211,7 +211,7 @@ const ru = {
         "Для диктовки промптов в T3 Code. Диктует удержание клавиши или кнопки, короткое нажатие ничего не делает. Текст вставляется только в окно T3 Code, которое впереди, и Ciao читает поле ввода до и после вставки, чтобы проверить, что текст там. Если нет — текст остаётся в буфере и в истории.",
       prefix: "Перед промптом",
       suffix: "После промпта",
-      affixHint: "Добавляется, когда поле ввода пустое или его не прочитать (промпт из нескольких удержаний получит его один раз). Например «Клауди,», чтобы агент ответил голосом.",
+      affixHint: "Добавляется, когда поле ввода пустое или его не прочитать: промпт из нескольких удержаний получит его один раз, после слов первого удержания. Например «Клауди,», чтобы агент ответил голосом.",
     },
     updates: {
       title: "Обновления",
@@ -508,7 +508,7 @@ const en: Strings = {
         "For dictating prompts into T3 Code. Holding a key or button dictates; a short press does nothing. The text is pasted only into the T3 Code window in front, and Ciao reads the chat box before and after pasting to check it's there. If not, it stays on the clipboard and in history.",
       prefix: "Before the prompt",
       suffix: "After the prompt",
-      affixHint: "Added when the chat box is empty or can't be read, so a prompt said in several holds gets it once. E.g. “Claudie,” to have the agent answer by voice.",
+      affixHint: "Added when the chat box is empty or can't be read: a prompt said in several holds gets it once, after the first hold's words. E.g. “Claudie,” to have the agent answer by voice.",
     },
     updates: {
       title: "Updates",

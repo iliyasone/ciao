@@ -133,8 +133,12 @@ export async function pasteIntoT3(
   if (pre.text !== null && hwnd !== 0) readableWindows.add(hwnd);
   // Nothing focused where boxes read fine: watch for the box T3 Code moves the paste into.
   const unfocused = pre.text === null && pre.reason === "no-field" && hwnd !== 0 && readableWindows.has(hwnd);
-  // A box with text gets a space first: a prompt said in several holds doesn't run together.
-  const text = pre.text === null || !pre.text.trim() ? t3Prompt(raw, affix.prefix, affix.suffix) : /\s$/.test(pre.text) ? raw : ` ${raw}`;
+  // A box with text gets a space first: a prompt said in several holds doesn't run together. With
+  // nothing focused, T3 Code adds the paste after whatever the box holds, so it gets one too.
+  const text =
+    pre.text === null || !pre.text.trim()
+      ? `${unfocused ? " " : ""}${t3Prompt(raw, affix.prefix, affix.suffix)}`
+      : /\s$/.test(pre.text) ? raw : ` ${raw}`;
   await clipboard.writeText(text);
   const r = await input.paste(hwnd);
   if (!r.ok) {

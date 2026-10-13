@@ -92,8 +92,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
       the text stays on the clipboard, so it is never lost, and your old clipboard
       isn't put back;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
-    is empty (or can't be read), so a prompt said in several holds gets them once;
-    the later holds start with a space. For example
+    is empty (or can't be read), so a prompt said in several holds gets them once:
+    the suffix then follows the first hold's words, and the later holds start with
+    a space. The box is judged by all its text, wherever the cursor is. For example
     "Клауди," when your agent answers by voice to that name.
 
   T3 Code doesn't tell other apps which chat is open (its window is always titled
