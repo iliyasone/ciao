@@ -67,6 +67,11 @@ export interface DictationReport {
   voice_onset_ms?: number;
   first_text_ms?: number;
   final_after_release_ms?: number;
+  /**
+   * From the stop (release, press, stop phrase) until the text was pasted or put on the clipboard, or Ciao
+   * gave up with none: how long the user waited. Also when the saved file had to be transcribed instead.
+   */
+  ready_after_release_ms?: number;
   cost_usd: number;
   /** The app it was meant for, from a closed list (core/apps.ts): "terminal", "vscode", … or "other". */
   target_app?: string;
@@ -107,6 +112,8 @@ interface Active {
   liveText: string;
   final?: string;
   completedAt?: number;
+  /** The text was pasted or put on the clipboard. */
+  deliveredAt?: number;
   offline: string | null;
   /** Started by the wake word; its audio (with "чао") was prepended. */
   wakeStarted?: boolean;
@@ -655,11 +662,13 @@ export class DictationController {
         sent = out;
         await cancelRestore();
         await clipboard.writeText(out);
+        a.deliveredAt = Date.now();
         delivery = "clipboard";
         a.miss = { reason: "not-t3", foregroundProcess: target.process };
         this.deps.delivered(out, null);
       } else if (t3 && settings.autoPaste && target) {
         const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
+        a.deliveredAt = r.pastedAt; // not the check that it landed, nor a send's pause
         delivery = r.delivery;
         sent = r.text;
         a.boxBefore = r.before;
@@ -680,6 +689,7 @@ export class DictationController {
         this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
       } else if (settings.autoPaste && target) {
         const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
+        a.deliveredAt = Date.now();
         delivery = r.delivery;
         if (r.delivery === "clipboard") a.miss = r.miss;
         this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
@@ -688,6 +698,7 @@ export class DictationController {
         sent = out;
         await cancelRestore();
         await clipboard.writeText(out);
+        a.deliveredAt = Date.now();
         delivery = "clipboard";
         a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };
         this.deps.delivered(out, null);
@@ -816,6 +827,7 @@ export class DictationController {
       voice_onset_ms: a.wakeStarted ? undefined : timings?.voiceOnsetMs,
       first_text_ms: timings?.firstTextMs,
       final_after_release_ms: timings?.finalAfterReleaseMs,
+      ready_after_release_ms: outcome !== "cancelled" && a.releasedAt ? (a.deliveredAt ?? Date.now()) - a.releasedAt : undefined,
       cost_usd: Math.round(entry.transcripts.reduce((sum, x) => sum + x.costUsd, 0) * 10_000) / 10_000,
       target_app: entry.target?.process ? appLabel(entry.target.process) : undefined,
       paste_miss: miss?.reason,
