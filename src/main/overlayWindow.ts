@@ -151,7 +151,7 @@ export class OverlayWindow implements OverlayPort {
   /** Windows, macOS: the renderer saw the pointer come over the pill or a card (or leave it). */
   setInteractive(on: boolean): void {
     this.hovered = on;
-    this.updateMouse();
+    this.check();
   }
 
   /** What the renderer draws (the pill, a card), in window pixels; the rest lets clicks through. */
@@ -162,15 +162,14 @@ export class OverlayWindow implements OverlayPort {
       this.win.setShape(rects.map((r) => ({ x: Math.floor(r.x - 30), y: Math.floor(r.y - 20), width: Math.ceil(r.width + 60), height: Math.ceil(r.height + 76) })));
       return;
     }
-    this.updatePoll();
-    this.updateMouse();
+    this.check();
   }
 
-  private updatePoll(): void {
-    const on = !LINUX && this.region.length > 0;
-    if (on === (this.poll !== null)) return;
+  /** Checks the cursor now, and schedules the next check by what is drawn now: a timeout queued for the old drawing may be far off. */
+  private check(): void {
     this.stopPoll();
-    if (on) this.tick();
+    if (!LINUX && this.region.length) this.tick();
+    else this.updateMouse();
   }
 
   private tick(): void {
@@ -251,8 +250,9 @@ export class OverlayWindow implements OverlayPort {
     const c = screen.getCursorScreenPoint();
     if (c.x === this.dragAt.x && c.y === this.dragAt.y) return;
     this.dragAt = c;
-    const dx = c.x - d.cursor.x;
-    const dy = c.y - d.cursor.y;
+    // Whole pixels: the press point may be fractional (screenX at 125% scaling), and setBounds takes integers.
+    const dx = Math.round(c.x - d.cursor.x);
+    const dy = Math.round(c.y - d.cursor.y);
     const o = d.bounds;
     if (d.mode === "move") {
       this.win.setBounds({ ...o, x: Math.round(o.x + dx), y: Math.round(o.y + dy) });
@@ -283,7 +283,6 @@ export class OverlayWindow implements OverlayPort {
     // Dropped (partly) off the screen: back into it, and remember where it ended up.
     this.place();
     save();
-    this.updateMouse();
     console.log("overlay moved to", JSON.stringify(this.win.getBounds()));
   }
 
@@ -293,7 +292,6 @@ export class OverlayWindow implements OverlayPort {
     this.stopDragTimer();
     this.savePlacement({ anchor: null, cardWidth: DEFAULT_CARD_WIDTH, lines: 6 });
     this.place();
-    this.updateMouse();
   }
 
   // ── OverlayPort ─────────────────────────────────────────────────────────
@@ -364,6 +362,7 @@ export class OverlayWindow implements OverlayPort {
 
   private place(): void {
     this.win.setBounds(this.bounds());
+    this.check();
   }
 }
 
