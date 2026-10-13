@@ -156,6 +156,8 @@ export class DictationController {
     const a = this.active;
     if (a?.phase !== "recording" || this.handsFree) return;
     if (now - this.pressedAt < TAP_MS) {
+      // Off: a press too short to be speech (an accidental click) leaves nothing behind.
+      if (!a.settings.tapHandsFree) return this.cancel(false);
       this.handsFree = true;
       this.push(a);
     } else {
