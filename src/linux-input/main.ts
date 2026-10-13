@@ -279,6 +279,8 @@ function handle(msg: Record<string, unknown>): void {
     case "key": {
       const wanted = typeof msg.hwnd === "number" ? msg.hwnd : 0;
       if (msg.key !== "enter") return emit({ id, ok: false });
+      // A modifier still held would make it Ctrl+Enter or Shift+Enter: XTest can't lift the user's own keys.
+      if ([...held].some(isModifier)) return emit({ id, ok: false });
       if (!wayland && x11) {
         if (wanted !== 0 && x11.activeWindow() !== wanted) return emit({ id, ok: false });
         x11.enter();

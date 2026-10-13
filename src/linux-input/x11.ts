@@ -141,7 +141,8 @@ export class X11 {
    * it names none, title) matches; its id, 0 if there is no such window.
    */
   activate(match: RegExp): number {
-    const list = this.property(this.root, "_NET_CLIENT_LIST");
+    // Bottom to top: the last match is the one used most recently.
+    const list = this.property(this.root, "_NET_CLIENT_LIST_STACKING") ?? this.property(this.root, "_NET_CLIENT_LIST");
     if (!Array.isArray(list)) return 0;
     const window = [...list].reverse().find((w) => {
       const d = this.describe(w);

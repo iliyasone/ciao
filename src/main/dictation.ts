@@ -13,7 +13,7 @@ import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voic
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
 import { revisePauses } from "../core/revision";
-import { isT3Code, T3_PROCESS, t3Prompt } from "../core/t3";
+import { isT3Code, occurrences, T3_PROCESS, t3Prompt } from "../core/t3";
 import { isLoneModifierTrigger } from "../core/triggers";
 
 /** What the controller needs from the overlay window. */
@@ -110,7 +110,7 @@ interface Active {
   miss?: PasteMiss;
   /** T3 mode: how the paste was checked (src/main/paste.ts). */
   check?: T3Check;
-  /** T3 mode: Enter was pressed to send it. */
+  /** T3 mode: Enter was pressed and the box gave the text up (false: it stayed; unset: not pressed, or unreadable). */
   sent?: boolean;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
@@ -599,7 +599,12 @@ export class DictationController {
         // a held Right Ctrl would make it Ctrl+Enter, which T3 Code takes as steering the running turn.
         if (r.delivery === "pasted" && r.check === "landed" && settings.t3Send && target.hwnd !== 0 && !this.hotkeyDown) {
           await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
-          if (!this.hotkeyDown) a.sent = await this.deps.input.enter(target.hwnd); // pressed again meanwhile
+          if (!this.hotkeyDown && (await this.deps.input.enter(target.hwnd))) {
+            // Sent: the box gave the text up. (A T3 window under 640 px takes Enter as a new line.)
+            await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
+            const box = await this.deps.input.field(target.hwnd);
+            a.sent = box.text === null ? undefined : occurrences(box.text, r.text) === 0;
+          }
         }
         this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
       } else if (settings.autoPaste && target) {
@@ -620,7 +625,7 @@ export class DictationController {
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
-    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", a.sent ? "sent" : "", entry.target?.process ?? "", `${entry.durationMs}ms`);
+    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", a.sent === undefined ? "" : a.sent ? "sent" : "not-sent", entry.target?.process ?? "", `${entry.durationMs}ms`);
     this.deps.store.save(entry);
     this.deps.changed(entry);
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
@@ -648,7 +653,7 @@ export class DictationController {
     let stop = a.stopTarget ? await a.stopTarget : null;
     if (stop && this.deps.isOwnWindow(stop.hwnd)) stop = null;
     if (!stop || !start || stop.hwnd === start.hwnd) return stop ?? start;
-    a.targetMoved = true;
+    a.targetMoved = !(a.forwarded && isT3Code(stop)); // not when Ciao itself brought T3 Code forward
     a.entry.target = { title: stop.title, process: stop.process };
     return stop;
   }

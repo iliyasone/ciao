@@ -105,7 +105,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     out in parts. T3 Code has to send on Enter (its *Settings → General → Send
     shortcut*; with *Ctrl+Enter for multi-line*, a prompt with paragraphs gets a new
     line instead). An open `@` or `/` menu, dialog or command palette takes the
-    Enter. On Linux, Ciao sees T3 Code's chat box only with desktop accessibility on
+    Enter, and a T3 Code window narrower than 640 px takes it as a new line (such a
+    window doesn't put focus back into the chat box either). `ciao.log` says
+    whether the box gave the text up. On Linux, Ciao sees T3 Code's chat box only with desktop accessibility on
     (see [Linux](#linux)); otherwise it never sends. Not on Wayland;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
     is empty (or can't be read), so a prompt said in several holds gets them once:
