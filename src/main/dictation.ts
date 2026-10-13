@@ -259,7 +259,10 @@ export class DictationController {
     // Whatever is in front, unless there is nothing to paste into (see InputHelper.foreground).
     const target = await this.deps.input.foreground();
     const r = target ? await pasteText(this.deps.input, text, target.hwnd, this.deps.settings().restoreClipboard) : null;
-    if (r?.delivery !== "pasted") await clipboard.writeText(text);
+    if (r?.delivery !== "pasted") {
+      await cancelRestore();
+      await clipboard.writeText(text);
+    }
     this.deps.delivered(text, r?.delivery === "pasted" ? target!.hwnd : null);
   }
 
@@ -419,6 +422,7 @@ export class DictationController {
   private cancel(keep: boolean, error?: string): void {
     const a = this.active;
     if (!a) return;
+    console.log("dictation", a.entry.id, keep ? "cancelled" : "dropped", error ?? "", `${Date.now() - a.startedAt}ms`);
     this.active = null;
     this.deps.idle();
     this.deps.input.arm(false);
@@ -518,6 +522,7 @@ export class DictationController {
     let delivery: Delivery = "none";
     if (!text) {
       if (entry.durationMs < 1500 && !entry.error) {
+        console.log("dictation", entry.id, "dropped", "empty", `${entry.durationMs}ms`);
         this.deps.store.delete(entry.id); // an accidental tap, nothing worth keeping
         this.active = null;
         this.deps.idle();
@@ -537,7 +542,7 @@ export class DictationController {
       } else if (t3 && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
         // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
         const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
-        cancelRestore();
+        await cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: "not-t3", foregroundProcess: target.process };
@@ -555,7 +560,7 @@ export class DictationController {
         this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
         const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
-        cancelRestore();
+        await cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };

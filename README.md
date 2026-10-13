@@ -80,10 +80,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     clipboard;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
-    - focus on a message rather than the chat box (once this T3 Code window's box
-      has been read): nothing is pasted, and the card says to click into the box
-      and paste;
-    - the text shows up in the box: done, and your clipboard comes back at once;
+    - the text shows up in the box: done, and your clipboard comes back at once.
+      That includes a paste made after a click into the chat's timeline: T3 Code
+      moves it into the box itself;
+    - no box turns up at all (say, a dialog had focus): the card says to click into
+      the box and paste, and the text stays on the clipboard;
     - the box had text and stays just as it was: the card says so, and the text
       stays on the clipboard;
     - anything else (the field can't be read, you switched away or sent it at once):

@@ -18,6 +18,7 @@ import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings } from "./settings";
 import { GoogleSync } from "./sync";
+import { cancelRestore } from "./paste";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
@@ -384,7 +385,10 @@ function registerIpc(): void {
   ipcMain.handle("history:list", () => store.list());
   ipcMain.handle("history:remove", (_e, id: string) => store.delete(id));
   ipcMain.handle("history:retry", (_e, id: string, mode: RetryMode, provider?: Provider) => retry(id, mode, provider));
-  ipcMain.handle("history:copy", (_e, text: string) => clipboard.writeText(text));
+  ipcMain.handle("history:copy", async (_e, text: string) => {
+    await cancelRestore(); // a paste's restore would put the old clipboard over it
+    clipboard.writeText(text);
+  });
   ipcMain.handle("history:open-folder", (_e, id?: string) => shell.openPath(id ? path.dirname(store.audioPath(id)) : store.dir));
   /** `base`: the transcript the user edited (History shows any of them). */
   ipcMain.handle("history:edit", (_e, id: string, base: string, text: string) => {
