@@ -254,7 +254,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
       if (mode === "resize") {
         e.currentTarget.setPointerCapture(e.pointerId);
         dragging.current = true;
-        ciao.overlay.dragStart();
+        ciao.overlay.dragStart(mode, 0, 0);
       }
     },
     onPointerMove: (e: React.PointerEvent) => {
@@ -269,9 +269,11 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
         e.currentTarget.setPointerCapture(e.pointerId);
         p.moved = true;
         dragging.current = true;
-        ciao.overlay.dragStart();
+        // The main process moves the window after the cursor from here on.
+        ciao.overlay.dragStart(mode, dx, dy);
+        return;
       }
-      ciao.overlay.drag(mode, dx, dy);
+      ciao.overlay.drag();
     },
     onPointerUp: () => end(true),
     onPointerCancel: () => end(false),
