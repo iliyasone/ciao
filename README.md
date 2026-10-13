@@ -54,16 +54,17 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Music pauses while you dictate**, if you turn on *Settings → Behavior → Pause
   music while you dictate* (off by default). Once a recording has gone on for
   0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into
-  Ctrl+C until then), the players that are playing pause, so a stray click or a
-  shortcut leaves the music alone. When the recording ends, or Ciao quits, those of
-  them still paused play on. A player you started or stopped yourself meanwhile is
-  left as it is.
+  Ctrl+C until then), the players that are playing pause, so a shortcut leaves the
+  music alone. A short tap starts hands-free mode, so it pauses the music too. When
+  the recording ends, or Ciao quits, those of them still paused play on. A player
+  you started or stopped yourself meanwhile is left as it is.
   - Windows: any player in the system media controls (Spotify, a video in a
     browser, the Media Player). Needs Windows 10 1809 or later; on older ones
     nothing pauses.
   - Linux: any MPRIS player (the same ones, on most desktops), through `dbus-send`.
   - macOS: only Music and Spotify, by AppleScript: macOS has no public way to
-    pause other apps. The first time, it asks whether Ciao may control each of them.
+    pause other apps. macOS asks once whether Ciao may control each of them: as you
+    turn the option on for the ones running then, otherwise at the first dictation.
 - **The card stays out of your way.**
   - Moving the pointer over it makes it see-through, so you can read what's
     underneath; scroll it or start dragging it and it turns solid again.

@@ -16,6 +16,7 @@
 //   fields only to an assistive client that asks, so the first read in such an app turns that on
 //   (AXManualAccessibility) and, if nothing showed yet, tries once more a moment later.
 // - "media" pauses only Music and Spotify, through AppleScript (macOS asks the user once per app).
+//   Extra command {"cmd":"media-ask"}: ask that permission now for the players that are running.
 // - "key" events: "paste" is ⌘V or ⌘⇧V, by the key where QWERTY has V (so it holds in the Russian
 //   layout too); Enter is Return or the keypad's Enter.
 
@@ -405,10 +406,18 @@ func tellApp(_ bundle: String, _ body: [String]) -> Bool {
     return answer.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
 }
 
+/// "media-ask": a harmless question to each running player, so macOS asks its permission now (in Settings, as the
+/// option is turned on) rather than over the first dictation, where the text would be pasted into its alert.
+func askMedia() {
+    mediaQueue.async {
+        for bundle in mediaApps { _ = tellApp(bundle, ["get player state"]) }
+    }
+}
+
 func setMedia(pause: Bool) {
     mediaQueue.async {
         if pause {
-            for bundle in mediaApps where tellApp(bundle, ["if player state is playing then", "pause", "return true", "end if"]) {
+            for bundle in mediaApps where tellApp(bundle, ["if player state is playing then", "pause", "repeat 10 times", "if player state is not playing then exit repeat", "delay 0.05", "end repeat", "return true", "end if"]) {
                 mediaPaused.append(bundle)
             }
         } else {
@@ -563,6 +572,8 @@ func handle(_ line: String) {
         answerField(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
     case "media":
         setMedia(pause: msg["pause"] as? Bool ?? false)
+    case "media-ask":
+        askMedia()
     case "watch":
         watching = msg["on"] as? Bool ?? false
         watchPid = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0

@@ -39,6 +39,7 @@ namespace Ciao.Input;
 ///                                           field only while window "hwnd" is in front; otherwise (or hwnd 0) its text is null
 ///   {"cmd":"media","pause":true}          pause the media players that are playing (music, a video in a browser);
 ///   {"cmd":"media","pause":false}         resume those of them still paused, and forget them. Commands run in order
+///   {"cmd":"media-ask"}                   macOS helper only (others ignore it): ask now for the permission to control them
 ///
 /// "field" and "watch" let Ciao see how the user corrected a pasted dictation (src/main/corrections.ts): the text
 /// is compared on this machine and never stored or sent anywhere.

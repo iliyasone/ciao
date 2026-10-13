@@ -200,6 +200,11 @@ export class InputHelper extends EventEmitter<InputEvents> {
     this.send({ cmd: "media", pause });
   }
 
+  /** macOS: let the system ask now whether Ciao may control the players (the other helpers ignore it). */
+  askMedia(): void {
+    this.send({ cmd: "media-ask" });
+  }
+
   /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */
   watch(on: boolean, hwnd = 0): void {
     this.watching = { on, hwnd };

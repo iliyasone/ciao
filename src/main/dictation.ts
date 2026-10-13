@@ -360,8 +360,8 @@ export class DictationController {
       a.shown = true;
       this.push(a);
     }, SHOW_AFTER_MS);
-    // Only once it is clearly a dictation: a stray click, or a held Ctrl that turns into Ctrl+C (see
-    // onOtherKey), doesn't stop the music for a moment.
+    // Only once it is clearly a dictation: a held Ctrl that turns into Ctrl+C (see onOtherKey) doesn't
+    // stop the music for a moment.
     if (!replay && settings.pauseMedia)
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;

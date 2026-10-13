@@ -207,6 +207,8 @@ function applySettings(next: Settings): void {
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   if (prev.provider !== next.provider) pool.refill();
+  // macOS asks once whether Ciao may control each player: let it ask now, in Settings, not over a dictation.
+  if (next.pauseMedia && !prev.pauseMedia) input.askMedia();
   overlay.setPill(next.overlayPill);
   if (!next.learnCorrections) corrections?.stop();
   // No detector in this build (macOS for now): keep the mic closed rather than listen for nothing.
