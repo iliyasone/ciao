@@ -1,10 +1,12 @@
+import { appLabel } from "./apps";
+
 // T3 mode (Settings → T3 Code): dictation for the T3 Code app's chat box. T3 Code tells other apps
 // nothing about which chat is open (its window title is always the app's name), so the text goes in
 // by pasting into the T3 Code window in front, and only there.
 
-/** The T3 Code app, by its process ("T3 Code (Nightly)" on Windows and macOS, "t3code" on Linux) or its window title. */
+/** The T3 Code app, by its process ("T3 Code (Nightly)" on Windows and macOS, "t3code" on Linux), or its web app in a browser tab. */
 export function isT3Code(w: { process: string; title: string }): boolean {
-  return /^t3[ -]?code\b/i.test(w.process.replace(/\.exe$/i, "")) || /^T3 Code\b/.test(w.title);
+  return /^t3[ -]?code\b/i.test(w.process.replace(/\.exe$/i, "")) || (appLabel(w.process) === "browser" && /^T3 Code\b/.test(w.title));
 }
 
 /** The prompt as pasted: the user's words between the optional prefix and suffix (say, "Клауди," to get a spoken answer). */

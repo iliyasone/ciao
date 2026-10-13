@@ -539,7 +539,7 @@ export class DictationController {
       this.lastText = text;
       if (a.replay) {
         delivery = "none";
-      } else if (t3 && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
+      } else if (t3 && settings.autoPaste && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
         // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
         const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
         await cancelRestore();

@@ -80,7 +80,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     clipboard;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
-    - the text shows up in the box: done, and your clipboard comes back at once.
+    - the text shows up in the box: done, and your clipboard comes back at once
+      (any focused field counts: with the command palette open, the text lands there).
       That includes a paste made after a click into the chat's timeline: T3 Code
       moves it into the box itself;
     - no box turns up at all (say, a dialog had focus): the card says to click into
@@ -91,7 +92,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
       the text stays on the clipboard, so it is never lost, and your old clipboard
       isn't put back;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
-    is empty (or can't be read), so a prompt said in several holds gets them once. For example
+    is empty (or can't be read), so a prompt said in several holds gets them once;
+    the later holds start with a space. For example
     "Клауди," when your agent answers by voice to that name.
 
   T3 Code doesn't tell other apps which chat is open (its window is always titled

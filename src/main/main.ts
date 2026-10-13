@@ -372,7 +372,10 @@ function registerIpc(): void {
   ipcMain.on("overlay:drag-start", (_e, mode: "move" | "resize", x: number, y: number) => overlay.dragStart(mode, x, y));
   ipcMain.on("overlay:drag-end", () => overlay.dragEnd());
   ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());
-  ipcMain.handle("overlay:copy", (_e, text: string) => clipboard.writeText(text));
+  ipcMain.handle("overlay:copy", async (_e, text: string) => {
+    await cancelRestore();
+    clipboard.writeText(text);
+  });
   ipcMain.on("overlay:open-history", () => openHistory());
   ipcMain.on("overlay:pill-click", () => dictation.onPillClick());
   ipcMain.on("overlay:region", (_e, rects: Electron.Rectangle[]) => overlay.setRegion(rects));
