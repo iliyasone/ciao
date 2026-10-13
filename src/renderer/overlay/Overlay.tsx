@@ -501,14 +501,20 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
-  /** A fold under way: a state that arrives meanwhile (a card kept after all) cancels it. */
+  /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
   const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const foldingSeq = useRef(-1);
+  /** The card the user closed, copied or dragged out: later states for it (a late check) don't bring it back. */
+  const closedSeq = useRef(-1);
+  const shownSeq = useRef(-1);
   const tr = useStrings().overlay;
 
   useEffect(() => {
     const offs = [
       ciao.overlay.onState((s) => {
-        clearTimeout(folding.current);
+        if (s.seq === closedSeq.current) return;
+        if (s.seq === foldingSeq.current) clearTimeout(folding.current);
+        shownSeq.current = s.seq;
         dispatch({ type: "reset", seq: s.seq });
         setState(s);
         setLeaving(false);
@@ -550,9 +556,13 @@ export function Overlay() {
   }, [live]);
 
   const fold = useCallback((seq: number) => {
+    // Another card took its place meanwhile (a Copy's delayed close): just say this one is gone.
+    if (shownSeq.current !== seq) return ciao.overlay.hidden(seq);
     setLeaving(true);
     clearTimeout(folding.current);
+    foldingSeq.current = seq;
     folding.current = setTimeout(() => {
+      foldingSeq.current = -1;
       ciao.overlay.hidden(seq);
       setState((s) => (s?.seq === seq ? null : s));
     }, LEAVE_MS);
@@ -640,7 +650,10 @@ export function Overlay() {
   const showText = state.phase !== "empty" || text.final || text.settled || text.fresh.length;
 
   const withActions = state.phase === "recovered" || state.phase === "saved" || !!state.keep;
-  const dismiss = () => fold(state.seq);
+  const dismiss = () => {
+    closedSeq.current = state.seq;
+    fold(state.seq);
+  };
   // Scrolling or dragging means you want the card itself: solid until the pointer leaves.
   const solid = () => {
     solidUntilLeave.current = true;

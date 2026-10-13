@@ -112,6 +112,8 @@ interface Active {
   trigger: string;
   endedBy?: DictationReport["ended_by"];
   miss?: PasteMiss;
+  /** T3 mode: the chat box as read before the paste (null: unreadable). */
+  boxBefore?: string | null;
   /** T3 mode: how the paste was checked (src/main/paste.ts). */
   check?: T3Check;
   /** T3 mode, Enter pressed: the box gave the text up (false: it stayed; null: the box couldn't be read after). */
@@ -319,6 +321,7 @@ export class DictationController {
     const apiKey = this.deps.apiKey();
     const seq = ++this.seq;
     if (!apiKey) {
+      this.kept = null;
       this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint(PROVIDERS[settings.provider].name) });
       return;
     }
@@ -471,6 +474,7 @@ export class DictationController {
     const a = this.active;
     if (!a) return;
     console.log("dictation", a.entry.id, keep ? "cancelled" : "dropped", error ?? "", `${Date.now() - a.startedAt}ms`);
+    if (keep) this.kept = null; // Esc or a mic error put their own card up: a kept one doesn't come back after
     this.active = null;
     this.deps.idle();
     this.deps.input.arm(false);
@@ -605,6 +609,7 @@ export class DictationController {
         const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
         delivery = r.delivery;
         sent = r.text;
+        a.boxBefore = r.before;
         if (r.delivery === "clipboard") a.miss = r.miss;
         else a.check = r.check;
         // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
@@ -675,7 +680,7 @@ export class DictationController {
     if (keep) {
       this.kept = { state, text: keptText };
       // T3 Code busy (an agent streaming) may take the paste in later than the check waited.
-      if (delivery === "pasted" && a.check !== undefined && keptHwnd) void this.recheckT3(a, keptHwnd, keptText);
+      if (delivery === "pasted" && a.boxBefore != null && keptHwnd) void this.recheckT3(a, keptHwnd, keptText, a.boxBefore);
     }
   }
 
@@ -697,11 +702,14 @@ export class DictationController {
     this.deps.overlay.final(a.seq, text);
   }
 
-  /** A T3 paste the check couldn't see land: one more look a moment later, and the card folds if it is there now. */
-  private async recheckT3(a: Active, hwnd: number, text: string): Promise<void> {
+  /**
+   * A T3 paste the check couldn't see land: one more look a moment later, and the card folds if the text
+   * shows up more often than in the box before the paste.
+   */
+  private async recheckT3(a: Active, hwnd: number, text: string, before: string): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, RECHECK_MS));
     const box = await this.deps.input.field(hwnd);
-    if (box.text === null || occurrences(box.text, text) === 0 || this.kept?.state.seq !== a.seq || this.active) return;
+    if (box.text === null || occurrences(box.text, text) <= occurrences(before, text) || this.kept?.state.seq !== a.seq || this.active) return;
     console.log("dictation", a.entry.id, "landed after all: card folds");
     this.kept = null;
     this.deps.overlay.state({ ...this.baseState(a), phase: "done" });

@@ -139,7 +139,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   mouse, or drag all of it with *Drag*, into another app's field; *Copy* puts it on
   the clipboard. It stays until you close it, use it, or start the next dictation
   (a click on its icon starts one, as the pill would; a dictation that comes to
-  nothing gives the card back). It doesn't turn see-through under the pointer. Not when *Paste text right away* is off:
+  nothing, like a brushed trigger or a silent hold, gives the card back, while Esc
+  lets it go). It doesn't turn see-through under the pointer. Not when *Paste text right away* is off:
   then the clipboard is where the text is meant to go.
   The "nothing editable" check runs only in windows whose fields Ciao has read
   before (Chromium apps show theirs only after a first read) and not in terminals,
