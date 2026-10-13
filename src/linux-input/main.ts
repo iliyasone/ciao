@@ -20,7 +20,9 @@
 // - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
 // - "activate" works on X11 only (Wayland lets no app bring another forward): it answers hwnd 0 there.
 //   On X11 it answers the window it asked the window manager to activate, which may still refuse.
-// - "key" presses Enter with XTest on X11 and the uinput keyboard on Wayland (no window check there).
+// - "key" presses Enter with XTest on X11 and the uinput keyboard on Wayland (no window check there). It
+//   answers ok:false while any modifier is held: neither can lift the user's own keys (Windows lifts
+//   them, macOS sends the key without them).
 // - "media" pauses MPRIS players through dbus-send (media.ts); without it, it pauses nothing.
 //
 // Extra event: {"type":"status","reading":N,"denied":M} after every device scan.

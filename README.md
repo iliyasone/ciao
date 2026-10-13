@@ -107,8 +107,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     line instead). An open `@` or `/` menu, dialog or command palette takes the
     Enter, and a T3 Code window narrower than 640 px takes it as a new line (such a
     window doesn't put focus back into the chat box either). `ciao.log` says
-    whether the box gave the text up. On Linux, Ciao sees T3 Code's chat box only with desktop accessibility on
-    (see [Linux](#linux)); otherwise it never sends. Not on Wayland;
+    whether the box gave the text up (`sent`, `not-sent`, or `enter` when it couldn't
+    tell). On Linux, Ciao sees T3 Code's chat box only with desktop accessibility on
+    (see [Linux](#linux)); otherwise it never sends. It doesn't send there while you
+    hold a modifier key either. Not on Wayland;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
     is empty (or can't be read), so a prompt said in several holds gets them once:
     the suffix then follows the first hold's words, and the later holds start with
@@ -627,7 +629,8 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `target_on_other_desktop` (true when you switched to another
     virtual desktop; absent when Windows can't tell). `target_moved` is true when
     the window in front at the end was another one than at the start (the text
-    then goes to the one at the end).
+    then goes to the one at the end), unless it is T3 Code that T3 mode brought
+    forward.
 
 Each event carries a random install id from `telemetry-id` in the [data folder](#where-things-are-stored). It is
 not derived from your machine or accounts. No text, audio, window titles, prompts,

@@ -110,8 +110,8 @@ interface Active {
   miss?: PasteMiss;
   /** T3 mode: how the paste was checked (src/main/paste.ts). */
   check?: T3Check;
-  /** T3 mode: Enter was pressed and the box gave the text up (false: it stayed; unset: not pressed, or unreadable). */
-  sent?: boolean;
+  /** T3 mode, Enter pressed: the box gave the text up (false: it stayed; null: the box couldn't be read after). */
+  sent?: boolean | null;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
   /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
@@ -603,7 +603,7 @@ export class DictationController {
             // Sent: the box gave the text up. (A T3 window under 640 px takes Enter as a new line.)
             await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
             const box = await this.deps.input.field(target.hwnd);
-            a.sent = box.text === null ? undefined : occurrences(box.text, r.text) === 0;
+            a.sent = box.text === null ? null : occurrences(box.text, r.text) === 0;
           }
         }
         this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
@@ -625,7 +625,7 @@ export class DictationController {
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
-    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", a.sent === undefined ? "" : a.sent ? "sent" : "not-sent", entry.target?.process ?? "", `${entry.durationMs}ms`);
+    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", a.sent === undefined ? "" : a.sent === null ? "enter" : a.sent ? "sent" : "not-sent", entry.target?.process ?? "", `${entry.durationMs}ms`);
     this.deps.store.save(entry);
     this.deps.changed(entry);
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
@@ -653,7 +653,7 @@ export class DictationController {
     let stop = a.stopTarget ? await a.stopTarget : null;
     if (stop && this.deps.isOwnWindow(stop.hwnd)) stop = null;
     if (!stop || !start || stop.hwnd === start.hwnd) return stop ?? start;
-    a.targetMoved = !(a.forwarded && isT3Code(stop)); // not when Ciao itself brought T3 Code forward
+    a.targetMoved = !((a.forwarded ? await a.forwarded : false) && isT3Code(stop)); // not when Ciao itself brought T3 Code forward
     a.entry.target = { title: stop.title, process: stop.process };
     return stop;
   }
