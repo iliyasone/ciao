@@ -18,6 +18,14 @@ import type { OverlayPort } from "./dictation";
 // so near what is drawn the check runs every 25 ms; far from it, less often (by how soon the pointer
 // could get there), so an idle pill doesn't wake the app 40 times a second.
 //
+// Windows: a press on a window that can't be activated never reaches the page. Chromium answers the
+// WM_MOUSEACTIVATE that comes before it with "don't activate, and eat the click"
+// (HWNDMessageHandler::OnMouseActivate), so only the release arrives and no button, drag or text
+// selection works. The press is handed to the page from here, where the cursor is as the message
+// comes (a few pixels on from the press after a flick). If a later Electron stops eating it, every
+// press arrives twice: check this on an upgrade. The page's press doesn't capture the mouse, so a
+// release outside the window (a resize stopped by its limits) isn't seen until the pointer is back.
+//
 // Dragging follows the cursor from here, not the pointer positions the renderer sees: those are
 // measured against a window that is itself moving, and stall or jump while it does.
 const LINE = 25; // px, one line of the card's text
@@ -40,6 +48,9 @@ const POLL_MAX_MS = 250;
 const POINTER_SPEED = 4;
 /** How often a drag moves the window after the cursor (about a frame). */
 const DRAG_MS = 16;
+const WM_MOUSEACTIVATE = 0x0021;
+const WM_LBUTTONDOWN = 0x0201;
+const WM_LBUTTONDBLCLK = 0x0203;
 
 export interface OverlayPlacement {
   /** The middle of the card's bottom edge on screen; null = bottom-centre of the display under the cursor. */
@@ -105,6 +116,9 @@ export class OverlayWindow implements OverlayPort {
     if (process.platform === "darwin") this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     if (LINUX) this.win.setShape([]);
     else this.win.setIgnoreMouseEvents(true, { forward: true });
+    if (process.platform === "win32") {
+      this.win.hookWindowMessage(WM_MOUSEACTIVATE, (_wParam, lParam) => this.pressEaten(lParam.readUInt32LE(0) >>> 16));
+    }
     // A monitor went away or changed: bring the pill back onto a screen (not under a running card).
     const replace = () => {
       if (this.pill && !this.busy && this.win.isVisible()) this.place();
@@ -207,6 +221,22 @@ export class OverlayWindow implements OverlayPort {
       this.win.setIgnoreMouseEvents(this.ignoring, { forward: true });
     }
     return distance;
+  }
+
+  /** Windows: the left-button press that Chromium is about to eat (`message` started it), given to the page instead. */
+  private pressEaten(message: number): void {
+    if (message !== WM_LBUTTONDOWN && message !== WM_LBUTTONDBLCLK) return;
+    const c = screen.getCursorScreenPoint();
+    const b = this.win.getBounds();
+    this.win.webContents.sendInputEvent({
+      type: "mouseDown",
+      button: "left",
+      x: c.x - b.x,
+      y: c.y - b.y,
+      globalX: c.x,
+      globalY: c.y,
+      clickCount: message === WM_LBUTTONDBLCLK ? 2 : 1,
+    });
   }
 
   /** The renderer finished folding away the card for `seq`. */
