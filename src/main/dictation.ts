@@ -89,6 +89,8 @@ interface Active {
   target: Promise<ForegroundWindow | null>;
   /** The window in front when the dictation was stopped: where the text goes (see stop()). */
   stopTarget?: Promise<ForegroundWindow | null>;
+  /** T3 mode, hands-free from a tap: T3 Code comes forward once the voice is heard. */
+  forwardOnVoice?: boolean;
   /** T3 mode: T3 Code is being called forward; true once a window was. */
   forwarded?: Promise<boolean>;
   targetMoved?: boolean;
@@ -220,7 +222,13 @@ export class DictationController {
     if (!a || a.seq !== seq) return;
     a.wav.write(pcm); // disk first: the recording survives any failure below
     if (!a.offline) a.session.append(pcm);
-    if (a.voiceOnsetAt === undefined && level(pcm) > VOICE_LEVEL) a.voiceOnsetAt = Date.now();
+    if (a.voiceOnsetAt === undefined && level(pcm) > VOICE_LEVEL) {
+      a.voiceOnsetAt = Date.now();
+      if (a.forwardOnVoice && a.phase === "recording") {
+        a.forwardOnVoice = false;
+        a.forwarded = this.bringT3Forward(a);
+      }
+    }
   }
 
   onCaptureStopped(seq: number): void {
@@ -395,13 +403,15 @@ export class DictationController {
         a.pausedMedia = true;
         this.deps.input.media(true);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
-    // T3 mode: T3 Code comes forward on the chat it shows, so the text goes there when the hold ends. Not
-    // at once: a tap is dropped in T3 mode, and a held Ctrl may still turn into Ctrl+C for the app in front.
-    // Not for the wake word, which may be a false alarm while you type elsewhere.
+    // T3 mode: T3 Code comes forward on the chat it shows, so the text goes there when the dictation ends.
+    // Not at once: a tap may be dropped (tapHandsFree off), and a held Ctrl may still turn into Ctrl+C for
+    // the app in front. After a tap that went hands-free, only once you speak: a stray tap must not take
+    // the focus from what you are typing in. Not for the wake word, which may be a false alarm.
     if (!replay && settings.t3Mode && settings.t3Forward && trigger !== "wake_word")
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;
-        a.forwarded = this.bringT3Forward(a);
+        if (this.handsFree && trigger !== "pill" && a.voiceOnsetAt === undefined) a.forwardOnVoice = true;
+        else a.forwarded = this.bringT3Forward(a);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
   }
 
