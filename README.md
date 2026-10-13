@@ -96,8 +96,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
       isn't put back;
   - *Bring T3 Code forward when dictating* (on by default): once a hold lasts past a
     tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
-    then), after a tap that starts hands-free mode once you start speaking (so a
-    stray tap doesn't take the focus), or on a click on the pill, the T3 Code window
+    then), after a tap that starts hands-free mode, once your first words are
+    transcribed (so a stray tap doesn't take the focus, and with Right Ctrl not
+    before 1 s either), or on a click on the pill, the T3 Code window
     comes forward on the chat it shows, so you can dictate from any app. Not when
     T3 Code is in front already, and not for the wake word. T3 Code puts focus back
     into its chat box when its window is activated, unless a dialog or the command

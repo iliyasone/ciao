@@ -89,7 +89,7 @@ interface Active {
   target: Promise<ForegroundWindow | null>;
   /** The window in front when the dictation was stopped: where the text goes (see stop()). */
   stopTarget?: Promise<ForegroundWindow | null>;
-  /** T3 mode, hands-free from a tap: T3 Code comes forward once the voice is heard. */
+  /** T3 mode, hands-free from a tap: T3 Code comes forward once the first words are transcribed. */
   forwardOnVoice?: boolean;
   /** T3 mode: T3 Code is being called forward; true once a window was. */
   forwarded?: Promise<boolean>;
@@ -222,13 +222,14 @@ export class DictationController {
     if (!a || a.seq !== seq) return;
     a.wav.write(pcm); // disk first: the recording survives any failure below
     if (!a.offline) a.session.append(pcm);
-    if (a.voiceOnsetAt === undefined && level(pcm) > VOICE_LEVEL) {
-      a.voiceOnsetAt = Date.now();
-      if (a.forwardOnVoice && a.phase === "recording") {
-        a.forwardOnVoice = false;
-        a.forwarded = this.bringT3Forward(a);
-      }
-    }
+    if (a.voiceOnsetAt === undefined && level(pcm) > VOICE_LEVEL) a.voiceOnsetAt = Date.now();
+  }
+
+  /** T3 mode, hands-free from a tap: the first words are in (or it stops with some), so T3 Code comes forward now. */
+  private forwardNow(a: Active): void {
+    if (!a.forwardOnVoice) return;
+    a.forwardOnVoice = false;
+    a.forwarded = this.bringT3Forward(a);
   }
 
   onCaptureStopped(seq: number): void {
@@ -359,6 +360,7 @@ export class DictationController {
         a.lastDeltaAt = now;
         a.liveText += text;
         if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = Date.now();
+        if (a.firstTextAt !== undefined && a.phase === "recording") this.forwardNow(a);
         this.deps.overlay.delta(a.seq, text, gapMs);
         this.checkStopPhrase(a);
       },
@@ -369,6 +371,7 @@ export class DictationController {
         a.lastDeltaAt = now;
         a.liveText = text;
         if (a.firstTextAt === undefined && text.trim()) a.firstTextAt = now;
+        if (a.firstTextAt !== undefined && a.phase === "recording") this.forwardNow(a);
         this.deps.overlay.revise(a.seq, text, gapMs);
         this.checkStopPhrase(a);
       },
@@ -405,12 +408,12 @@ export class DictationController {
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
     // T3 mode: T3 Code comes forward on the chat it shows, so the text goes there when the dictation ends.
     // Not at once: a tap may be dropped (tapHandsFree off), and a held Ctrl may still turn into Ctrl+C for
-    // the app in front. After a tap that went hands-free, only once you speak: a stray tap must not take
-    // the focus from what you are typing in. Not for the wake word, which may be a false alarm.
+    // the app in front. After a tap that went hands-free, only once words come in (not just noise, like
+    // keys clicking): a stray tap must not take the focus from what you are typing in. Not for the wake word, which may be a false alarm.
     if (!replay && settings.t3Mode && settings.t3Forward && trigger !== "wake_word")
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;
-        if (this.handsFree && trigger !== "pill" && a.voiceOnsetAt === undefined) a.forwardOnVoice = true;
+        if (this.handsFree && trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
         else a.forwarded = this.bringT3Forward(a);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
   }
@@ -472,6 +475,7 @@ export class DictationController {
     a.shown = true;
     // The text goes where you are when you stop, not where you started: people start talking, go to
     // the window the text is for, and stop there (mostly across virtual desktops, by the usage counts).
+    if (a.liveText.trim()) this.forwardNow(a); // words heard but not yet in when it stopped
     a.stopTarget = this.stopTarget(a);
     this.deps.input.arm(false);
     this.resumeMedia(a);
