@@ -651,7 +651,8 @@ we can see how many people use it. Two events (Android sends the same ones, with
     audio begins with speech), `first_text_ms`, `final_after_release_ms`,
     `ready_after_release_ms` (from the stop until the text was pasted or put on the
     clipboard, or Ciao gave up with none: how long you waited, including the saved
-    audio sent again when the live transcript failed) and `cost_usd`;
+    audio sent again when the live transcript failed; not for cancelled dictations, nor
+    on the desktop for a microphone failure before the stop) and `cost_usd`;
   - where the text went: `target_app`, the kind of app it was meant for, from a
     closed list in [`src/core/apps.ts`](src/core/apps.ts) (`t3code`, `vscode`,
     `terminal`, `browser`, `telegram`, …). Any program not on the list is sent as
