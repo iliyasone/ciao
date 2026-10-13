@@ -19,8 +19,12 @@ import type { OverlayPort } from "./dictation";
 // could get there), so an idle pill doesn't wake the app 40 times a second.
 //
 // Windows: a press on a window that can't be activated never reaches the page. Chromium answers the
-// WM_MOUSEACTIVATE that comes before it with "don't activate, and eat the click", so only the release
-// arrives and no button, drag or text selection works. The press is handed to the page from here.
+// WM_MOUSEACTIVATE that comes before it with "don't activate, and eat the click"
+// (HWNDMessageHandler::OnMouseActivate), so only the release arrives and no button, drag or text
+// selection works. The press is handed to the page from here, where the cursor is as the message
+// comes (a few pixels on from the press after a flick). If a later Electron stops eating it, every
+// press arrives twice: check this on an upgrade. The page's press doesn't capture the mouse, so a
+// release outside the window (a resize stopped by its limits) isn't seen until the pointer is back.
 //
 // Dragging follows the cursor from here, not the pointer positions the renderer sees: those are
 // measured against a window that is itself moving, and stall or jump while it does.
