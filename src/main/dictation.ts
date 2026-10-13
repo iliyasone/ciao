@@ -26,7 +26,7 @@ export interface OverlayPort {
   stopCapture(seq: number): void;
 }
 
-const TAP_MS = 350; // a shorter press is a tap: switch to hands-free
+const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, with tapHandsFree off)
 const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
@@ -140,7 +140,7 @@ export class DictationController {
 
   // ── Keyboard and mouse ──────────────────────────────────────────────────
   // Right Ctrl and the middle mouse button share one state machine:
-  // hold = push-to-talk, a short press = hands-free until the next press.
+  // hold = push-to-talk, a short press = hands-free until the next press (or nothing, with tapHandsFree off).
 
   onHotkey(down: boolean, spec = ""): void {
     const now = Date.now();
