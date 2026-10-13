@@ -142,9 +142,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   nothing, like a brushed trigger or a silent hold, gives the card back, while Esc
   lets it go). It doesn't turn see-through under the pointer. Not when *Paste text
   right away* is off: then the clipboard is where the text is meant to go.
-  The "nothing editable" check runs only in windows whose fields Ciao has read
-  before (Chromium apps show theirs only after a first read) and not in terminals,
-  which take a paste without showing a field.
+  The "nothing editable" check counts only in windows where Ciao has read a field
+  before (Chromium apps show theirs only after a first read; the first paste into a
+  window makes that read) and not in terminals, which take a paste without showing
+  a field.
 - **Learns the words you correct.** When you fix a misheard word in the pasted
   text ("постхок" → "PostHog", "клод код" → "Claude Code"), Ciao offers to add it
   to the terms, in a small card under its own name; one click and recognition

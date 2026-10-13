@@ -600,8 +600,12 @@ void app.whenReady().then(() => {
     try {
       applySettings(next);
     } catch (e) {
-      console.warn("settings: the edited config.json doesn't apply, keeping the settings before it:", (e as Error).message);
-      applySettings(prev);
+      console.warn("settings: the edited config.json doesn't apply; the file is back to the settings before it:", (e as Error).message);
+      try {
+        applySettings(prev);
+      } catch (e2) {
+        console.warn("settings: restoring them failed too:", (e2 as Error).message);
+      }
       return;
     }
     historyWin?.webContents.send("settings:reloaded", settings); // an open Settings page would save its old copy back

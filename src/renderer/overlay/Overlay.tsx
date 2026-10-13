@@ -513,7 +513,10 @@ export function Overlay() {
     const offs = [
       ciao.overlay.onState((s) => {
         if (s.seq === closedSeq.current) return;
-        if (s.seq === foldingSeq.current) clearTimeout(folding.current);
+        if (s.seq === foldingSeq.current) {
+          clearTimeout(folding.current);
+          foldingSeq.current = -1;
+        }
         shownSeq.current = s.seq;
         dispatch({ type: "reset", seq: s.seq });
         setState(s);

@@ -691,10 +691,12 @@ export class DictationController {
    * and not in terminals, which show no field but take the paste.
    */
   private async checkLanded(a: Active, target: ForegroundWindow, text: string): Promise<void> {
-    if (appLabel(target.process) === "terminal" || !this.deps.input.fieldsReadable(target.hwnd)) return;
+    if (appLabel(target.process) === "terminal") return;
+    const readable = this.deps.input.fieldsReadable(target.hwnd);
     await new Promise((resolve) => setTimeout(resolve, LANDED_CHECK_MS));
+    // Read either way: a first read that finds a field marks the window, so the next paste there is checked.
     const r = await this.deps.input.field(target.hwnd);
-    if (r.text !== null || r.reason !== "no-field" || this.active || this.seq !== a.seq) return;
+    if (!readable || r.text !== null || r.reason !== "no-field" || this.active || this.seq !== a.seq) return;
     console.log("dictation", a.entry.id, "pasted where no field had focus: card kept");
     // A card of its own: the done card may be folding, and its fold reporting it hidden would end this one too.
     const state: OverlayState = { ...this.baseState(a), seq: ++this.seq, phase: "done", keep: true, message: t().overlay.noFieldFocused };
