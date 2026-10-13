@@ -96,8 +96,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     then), or on a click on the pill, the T3 Code window comes forward on the chat
     it shows, so you can dictate from any app. Not when T3 Code is in front already,
     and not for the wake word. T3 Code puts focus back into its chat box when its
-    window is activated, unless a dialog, the command palette or its terminal had
-    it. Ciao waits up to 0.4 s at the end of the hold for the switch. Not on a
+    window is activated, unless a dialog or the command palette had it, or its
+    terminal panel is open (then a paste still reaches the box, see above). Ciao waits up to 0.4 s at the end of the hold for the switch. Not on a
     Wayland desktop, where no app may bring another forward;
   - *Send right away* (off by default): Ciao presses Enter once it has seen the
     text in the chat box, and never when it isn't sure, or while a trigger is still
