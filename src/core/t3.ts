@@ -12,9 +12,13 @@ export function t3Prompt(text: string, prefix: string, suffix: string): string {
   return [prefix.trim(), text, suffix.trim()].filter(Boolean).join(" ");
 }
 
-/** Whether `text` shows up in the field's text, whatever the field did to spaces and line breaks. */
-export function fieldHas(field: string, text: string): boolean {
+/** How many times `text` shows up in the field's text, whatever the field did to spaces and line breaks (by its last 80 characters). */
+export function occurrences(field: string, text: string): number {
   const squash = (s: string) => s.replace(/\s+/g, "");
-  const want = squash(text);
-  return want.length > 0 && squash(field).includes(want.slice(-80));
+  const want = squash(text).slice(-80);
+  if (!want) return 0;
+  const hay = squash(field);
+  let n = 0;
+  for (let i = hay.indexOf(want); i >= 0; i = hay.indexOf(want, i + 1)) n++;
+  return n;
 }

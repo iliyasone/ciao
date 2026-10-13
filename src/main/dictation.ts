@@ -6,7 +6,7 @@ import { models, PROVIDERS } from "../core/providers";
 import type { LiveSession } from "../core/realtime";
 import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
-import { pasteText } from "./paste";
+import { pasteIntoT3, pasteText, type T3Check } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
@@ -102,6 +102,8 @@ interface Active {
   trigger: string;
   endedBy?: DictationReport["ended_by"];
   miss?: PasteMiss;
+  /** T3 mode: how the paste was checked (src/main/paste.ts). */
+  check?: T3Check;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
   /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
@@ -528,22 +530,30 @@ export class DictationController {
       this.deps.overlay.final(a.seq, text);
       const target = await this.target(a);
       const t3 = settings.t3Mode;
-      const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
-      this.lastText = out;
+      // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
+      this.lastText = text;
       if (a.replay) {
         delivery = "none";
       } else if (t3 && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
         // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
+        const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
         await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: "not-t3", foregroundProcess: target.process };
         this.deps.delivered(out, null);
-      } else if (settings.autoPaste && target) {
-        const r = await pasteText(this.deps.input, out, target.hwnd, settings.restoreClipboard, t3);
+      } else if (t3 && settings.autoPaste && target) {
+        const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
         delivery = r.delivery;
         if (r.delivery === "clipboard") a.miss = r.miss;
-        this.deps.delivered(out, r.delivery === "pasted" ? target.hwnd : null);
+        else a.check = r.check;
+        this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
+      } else if (settings.autoPaste && target) {
+        const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
+        delivery = r.delivery;
+        if (r.delivery === "clipboard") a.miss = r.miss;
+        this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
+        const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
         await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };
@@ -554,7 +564,7 @@ export class DictationController {
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
-    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? "", entry.target?.process ?? "", `${entry.durationMs}ms`);
+    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", entry.target?.process ?? "", `${entry.durationMs}ms`);
     this.deps.store.save(entry);
     this.deps.changed(entry);
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
@@ -641,5 +651,6 @@ function missMessage(reason: string | undefined): string {
   if (reason === "no-permission") return o.noPermission;
   if (reason === "not-t3") return o.notT3;
   if (reason === "not-in-field") return o.notInField;
+  if (reason === "no-field") return o.noField;
   return o.clipboard;
 }

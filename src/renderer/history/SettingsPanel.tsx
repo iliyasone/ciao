@@ -162,12 +162,15 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           <Field label={tr.keys.dictation} hint={tr.keys.dictationHint}>
             <TriggerList value={s.triggers} onChange={(triggers) => update({ triggers })} />
           </Field>
-          <Toggle
-            label={tr.keys.tapHandsFree}
-            hint={tr.keys.tapHandsFreeHint}
-            value={s.tapHandsFree}
-            onChange={(v) => update({ tapHandsFree: v })}
-          />
+          {/* T3 mode drops short presses whatever this says. */}
+          {!s.t3Mode && (
+            <Toggle
+              label={tr.keys.tapHandsFree}
+              hint={tr.keys.tapHandsFreeHint}
+              value={s.tapHandsFree}
+              onChange={(v) => update({ tapHandsFree: v })}
+            />
+          )}
           <Keys label={tr.keys.cancel} keys={["Esc"]} hint={tr.keys.cancelHint} />
           <Row label={tr.keys.pasteLast} hint={tr.keys.pasteLastHint}>
             <AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />

@@ -73,16 +73,23 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     turn the option on for the ones running then, otherwise at the first dictation.
 - **T3 mode** for dictating prompts into [T3 Code](https://t3.codes), in *Settings →
   T3 Code*. With it on:
-  - only a hold dictates; a short press does nothing;
+  - holding a trigger dictates; a short press does nothing (the pill and the wake
+    word still start hands-free dictations);
   - the text is pasted only into T3 Code, whichever chat is open there. If another
     app is in front when you let go, nothing is pasted, and the text waits on the
     clipboard;
-  - after pasting, Ciao reads T3 Code's focused field to check that the text is
-    there. If the field reads fine but hasn't got it (focus was on a message, not
-    the chat box), the card says so and the text stays on the clipboard. If the
-    field can't be read, the text stays on the clipboard anyway, so it is never lost;
-  - *Before the prompt* and *After the prompt* are added to every prompt, for
-    example "Клауди," when your agent answers by voice to that name.
+  - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
+    new words* off:
+    - focus on a message rather than the chat box: nothing is pasted, and the card
+      says to click into the box and paste;
+    - the text shows up in the box: done, and your clipboard comes back at once;
+    - the box stays as it was: the card says so, and the text stays on the clipboard;
+    - anything else (the field can't be read, you switched away or sent it at once):
+      the text stays on the clipboard, so it is never lost, and your old clipboard
+      isn't put back;
+  - *Before the prompt* and *After the prompt* go around the text when the chat box
+    is empty, so a prompt said in several holds gets them once. For example
+    "Клауди," when your agent answers by voice to that name.
 
   T3 Code doesn't tell other apps which chat is open (its window is always titled
   "T3 Code"), so Ciao goes by the window in front. On a Wayland desktop, where
@@ -97,7 +104,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   you stop the dictation, so you can start talking, go to the window the text is
   for, and stop there. If that window loses focus while the text is being
   finished, nothing is typed anywhere and the text is left on the clipboard. After
-  a successful paste, the clipboard is restored.
+  a successful paste, the clipboard is restored 1.5 s later, unless something else
+  was copied meanwhile (in T3 mode, see above).
 - **Learns the words you correct.** When you fix a misheard word in the pasted
   text ("постхок" → "PostHog", "клод код" → "Claude Code"), Ciao offers to add it
   to the terms, in a small card under its own name; one click and recognition
@@ -587,9 +595,9 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `terminal`, `browser`, `telegram`, …). Any program not on the list is sent as
     `other`, never by name. When the text could not be pasted,
     `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`,
-    `no-permission` (macOS: Ciao has no Accessibility permission), `not-t3` and
-    `not-in-field` (T3 mode: T3 Code wasn't in front, or the text didn't show up in
-    its chat box), or `no-helper` / `timeout` / `unknown` when the input helper
+    `no-permission` (macOS: Ciao has no Accessibility permission), `not-t3`,
+    `no-field` and `not-in-field` (T3 mode: T3 Code wasn't in front, no chat box was
+    focused, or the text didn't show up in it), or `no-helper` / `timeout` / `unknown` when the input helper
     failed. On `focus-changed` and `not-t3` there is also `switched_to_app` (the app
     in front instead, same list); on `focus-changed` also `target_closed` and
     `target_on_other_desktop` (true when you switched to another
