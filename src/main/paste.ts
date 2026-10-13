@@ -54,6 +54,12 @@ async function takeSnapshot(): Promise<ClipboardItem[] | null> {
 
 const sameText = (a: string, b: string) => a.replace(/\r\n/g, "\n") === b.replace(/\r\n/g, "\n");
 
+/** The clipboard now gets other text than the last paste's: that paste's restore must not put the old one over it. */
+export function cancelRestore(): void {
+  if (pending) clearTimeout(pending.timer);
+  pending = null;
+}
+
 /** Puts the old clipboard back, unless something else was copied since (the user, or the next paste). */
 function restoreLater(before: ClipboardItem[], text: string, ms: number): void {
   const timer = setTimeout(async () => {
@@ -73,7 +79,7 @@ export async function pasteText(
   hwnd: number,
   restoreClipboard: boolean,
 ): Promise<{ delivery: "pasted" } | { delivery: "clipboard"; miss: PasteMiss }> {
-  const before = restoreClipboard ? await takeSnapshot() : null;
+  const before = restoreClipboard ? await takeSnapshot() : (cancelRestore(), null);
   await clipboard.writeText(text);
   const r = await input.paste(hwnd);
   if (!r.ok) {
@@ -84,18 +90,22 @@ export async function pasteText(
   return { delivery: "pasted" };
 }
 
-/** Some T3 Code field has been read in this run: from then on, "no field" means focus is really elsewhere. */
-let fieldsReadable = false;
+/**
+ * T3 Code windows whose chat box has been read in this run: there "no field" means focus is really
+ * elsewhere. Elsewhere it may only mean the app doesn't show its fields (Electron on Linux without
+ * desktop accessibility, or a T3 Code just started). Never 0, the window Wayland can't name.
+ */
+const readableWindows = new Set<number>();
 
 /** How the T3 paste was checked: the text showed up; or the field can't be read, or changed in a way that tells nothing. */
 export type T3Check = "landed" | "unreadable" | "unclear";
 
 /**
  * T3 mode. The chat box is read before and after the paste:
- * - focus on a message rather than the chat box (and fields read fine here): nothing is pasted;
- * - the prefix and suffix go around the text only when the box is empty (a prompt said in several holds gets them once);
+ * - focus on a message rather than the chat box (and this window's box has been read before): nothing is pasted;
+ * - the prefix and suffix go around the text only when the box is empty or can't be read (a prompt said in several holds gets them once);
  * - the text shows up in the box: pasted, and the old clipboard comes back at once;
- * - the box is just as it was before: a miss, and the text stays on the clipboard;
+ * - the box had text and is just as it was: a miss, and the text stays on the clipboard;
  * - anything else (it can't be read, the window went, the box was sent and cleared): pasted, but the
  *   text stays on the clipboard so it can't be lost.
  */
@@ -106,12 +116,18 @@ export async function pasteIntoT3(
   hwnd: number,
   restoreClipboard: boolean,
 ): Promise<{ text: string } & ({ delivery: "pasted"; check: T3Check } | { delivery: "clipboard"; miss: PasteMiss })> {
-  const before = restoreClipboard ? await takeSnapshot() : null;
-  const pre = await input.field(hwnd);
-  if (pre.text !== null) fieldsReadable = true;
+  const before = restoreClipboard ? await takeSnapshot() : (cancelRestore(), null);
+  let pre = await input.field(hwnd);
+  const known = hwnd !== 0 && readableWindows.has(hwnd);
+  if (pre.text === null && pre.reason === "no-field" && known) {
+    await new Promise((resolve) => setTimeout(resolve, 250)); // focus may be just settling
+    pre = await input.field(hwnd);
+  }
+  if (pre.text !== null && hwnd !== 0) readableWindows.add(hwnd);
+  // An empty box, or one that can't be read, gets the prefix and suffix.
   const text = pre.text === null || !pre.text.trim() ? t3Prompt(raw, affix.prefix, affix.suffix) : raw;
   await clipboard.writeText(text);
-  if (pre.text === null && pre.reason === "no-field" && fieldsReadable) return { text, delivery: "clipboard", miss: { reason: "no-field" } };
+  if (pre.text === null && pre.reason === "no-field" && known) return { text, delivery: "clipboard", miss: { reason: "no-field" } };
   const r = await input.paste(hwnd);
   if (!r.ok) {
     const { ok: _, ...miss } = r;
@@ -131,6 +147,8 @@ export async function pasteIntoT3(
     if (now.text === null && now.reason === "focus-changed") break; // switched away: nothing more to see
     if (Date.now() >= until) break;
   }
-  if (last === pre.text) return { text, delivery: "clipboard", miss: { reason: "not-in-field" } };
+  // A box that had text and still has just that: the paste went nowhere. (An empty box that is still
+  // empty may have been sent at once, before any read saw the text.)
+  if (pre.text.trim() && last === pre.text) return { text, delivery: "clipboard", miss: { reason: "not-in-field" } };
   return { text, delivery: "pasted", check: "unclear" };
 }

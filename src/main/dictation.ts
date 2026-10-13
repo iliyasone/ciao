@@ -6,7 +6,7 @@ import { models, PROVIDERS } from "../core/providers";
 import type { LiveSession } from "../core/realtime";
 import type { Delivery, DictationOutcome, HistoryEntry, OverlayPhase, OverlayState, Settings, Transcript, TranscriptSource } from "../core/types";
 import { WavWriter, type HistoryStore } from "./history";
-import { pasteIntoT3, pasteText, type T3Check } from "./paste";
+import { cancelRestore, pasteIntoT3, pasteText, type T3Check } from "./paste";
 import { transcribeFile, type SessionPool } from "./transcribe";
 import type { ForegroundWindow, InputHelper, PasteMiss } from "./input";
 import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voiceCommands";
@@ -537,6 +537,7 @@ export class DictationController {
       } else if (t3 && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
         // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
         const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
+        cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: "not-t3", foregroundProcess: target.process };
@@ -554,6 +555,7 @@ export class DictationController {
         this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
         const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
+        cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
         a.miss = { reason: settings.autoPaste ? "no-target" : "auto-paste-off" };
