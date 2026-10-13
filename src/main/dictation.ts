@@ -36,6 +36,10 @@ const dropsTaps = (s: Settings) => !s.tapHandsFree || s.t3Mode;
 const FORWARD_WAIT_MS = 400;
 /** T3 mode, sending: after the text showed up in the box, so the editor has taken it in. */
 const SEND_AFTER_MS = 150;
+/** After a plain paste, before checking that a field had focus: the app needs a moment to take it in. */
+const LANDED_CHECK_MS = 400;
+/** T3 mode: when the paste wasn't seen landing, another look this much later. */
+const RECHECK_MS = 1000;
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
@@ -108,6 +112,8 @@ interface Active {
   trigger: string;
   endedBy?: DictationReport["ended_by"];
   miss?: PasteMiss;
+  /** T3 mode: the chat box as read before the paste (null: unreadable). */
+  boxBefore?: string | null;
   /** T3 mode: how the paste was checked (src/main/paste.ts). */
   check?: T3Check;
   /** T3 mode, Enter pressed: the box gave the text up (false: it stayed; null: the box couldn't be read after). */
@@ -131,6 +137,8 @@ export class DictationController {
   private hotkeyDown = false;
   private pressedAt = 0;
   private lastText: string | null = null;
+  /** The card kept with text that may not have landed, until it is closed or used: a dropped dictation brings it back. */
+  private kept: { state: OverlayState; text: string } | null = null;
 
   constructor(
     private readonly deps: {
@@ -313,6 +321,7 @@ export class DictationController {
     const apiKey = this.deps.apiKey();
     const seq = ++this.seq;
     if (!apiKey) {
+      this.kept = null;
       this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint(PROVIDERS[settings.provider].name) });
       return;
     }
@@ -465,6 +474,7 @@ export class DictationController {
     const a = this.active;
     if (!a) return;
     console.log("dictation", a.entry.id, keep ? "cancelled" : "dropped", error ?? "", `${Date.now() - a.startedAt}ms`);
+    if (keep) this.kept = null; // Esc or a mic error put their own card up: a kept one doesn't come back after
     this.active = null;
     this.deps.idle();
     this.deps.input.arm(false);
@@ -474,7 +484,7 @@ export class DictationController {
     a.wav.close();
     if (!keep) {
       this.deps.store.delete(a.entry.id);
-      if (a.shown) this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
+      if (a.shown) this.emptyOrKept(a);
       return;
     }
     a.entry.durationMs = Math.round(a.wav.bytes / 48);
@@ -562,13 +572,16 @@ export class DictationController {
 
     let phase: OverlayPhase;
     let delivery: Delivery = "none";
+    let keep = false;
+    let keptText = "";
+    let keptHwnd = 0;
     if (!text) {
       if (entry.durationMs < 1500 && !entry.error) {
         console.log("dictation", entry.id, "dropped", "empty", `${entry.durationMs}ms`);
         this.deps.store.delete(entry.id); // an accidental tap, nothing worth keeping
         this.active = null;
         this.deps.idle();
-        this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
+        this.emptyOrKept(a);
         return;
       }
       entry.status = entry.error ? "failed" : "done";
@@ -577,6 +590,8 @@ export class DictationController {
       this.deps.overlay.final(a.seq, text);
       const target = await this.target(a);
       const t3 = settings.t3Mode;
+      /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
+      let sent = text;
       // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
       this.lastText = text;
       if (a.replay) {
@@ -584,6 +599,7 @@ export class DictationController {
       } else if (t3 && settings.autoPaste && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
         // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
         const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
+        sent = out;
         await cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
@@ -592,6 +608,8 @@ export class DictationController {
       } else if (t3 && settings.autoPaste && target) {
         const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
         delivery = r.delivery;
+        sent = r.text;
+        a.boxBefore = r.before;
         if (r.delivery === "clipboard") a.miss = r.miss;
         else a.check = r.check;
         // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
@@ -614,6 +632,7 @@ export class DictationController {
         this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
         const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
+        sent = out;
         await cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
@@ -622,6 +641,16 @@ export class DictationController {
       }
       entry.status = "done";
       phase = delivery === "clipboard" ? "clipboard" : "done";
+      // Not seen where it went: the card keeps the text in reach. A T3 paste the check couldn't see land
+      // counts; a plain paste is checked after the card shows (checkLanded), so nothing waits on it.
+      // Not when the clipboard was asked for (auto-paste off), nor for a T3 window whose box has never
+      // read (Linux without accessibility): that would be every dictation.
+      const unseen = a.check === "unclear" || (a.check === "unreadable" && !!target && this.deps.input.fieldsReadable(target.hwnd));
+      if (!a.replay && ((delivery === "clipboard" && a.miss?.reason !== "auto-paste-off") || (delivery === "pasted" && unseen))) keep = true;
+      else if (!a.replay && delivery === "pasted" && !t3 && target) void this.checkLanded(a, target, sent);
+      keptText = sent.trim();
+      keptHwnd = target?.hwnd ?? 0;
+      if (keep && keptText !== text) this.deps.overlay.final(a.seq, keptText);
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
@@ -631,16 +660,74 @@ export class DictationController {
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
     if (this.active === a) this.active = null;
     this.deps.idle();
-    this.deps.overlay.state({
+    // Nothing said: a kept card from before comes back rather than folding away.
+    if (phase === "empty" && this.kept) return this.emptyOrKept(a);
+    this.kept = null;
+    const state: OverlayState = {
       ...this.baseState(a),
       phase,
+      keep,
       message:
         phase === "clipboard"
           ? missMessage(a.miss?.reason)
+          : keep
+            ? t().overlay.unconfirmed
           : phase === "saved"
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
-    });
+    };
+    this.deps.overlay.state(state);
+    if (keep) {
+      this.kept = { state, text: keptText };
+      // T3 Code busy (an agent streaming) may take the paste in later than the check waited.
+      if (delivery === "pasted" && a.boxBefore != null && keptHwnd) void this.recheckT3(a, keptHwnd, keptText, a.boxBefore);
+    }
+  }
+
+  /**
+   * After a plain paste: if nothing editable had focus (a click had left it on a page, a list, a
+   * picture), the text went nowhere you can see. The card comes back with it, unless a new dictation
+   * started. Only in windows whose fields have been read before (see InputHelper.fieldsReadable),
+   * and not in terminals, which show no field but take the paste.
+   */
+  private async checkLanded(a: Active, target: ForegroundWindow, text: string): Promise<void> {
+    if (appLabel(target.process) === "terminal") return;
+    const readable = this.deps.input.fieldsReadable(target.hwnd);
+    await new Promise((resolve) => setTimeout(resolve, LANDED_CHECK_MS));
+    // Read either way: a first read that finds a field marks the window, so the next paste there is checked.
+    const r = await this.deps.input.field(target.hwnd);
+    if (!readable || r.text !== null || r.reason !== "no-field" || this.active || this.seq !== a.seq) return;
+    console.log("dictation", a.entry.id, "pasted where no field had focus: card kept");
+    // A card of its own: the done card may be folding, and its fold reporting it hidden would end this one too.
+    const state: OverlayState = { ...this.baseState(a), seq: ++this.seq, phase: "done", keep: true, message: t().overlay.noFieldFocused };
+    this.kept = { state, text };
+    this.deps.overlay.state(state);
+    this.deps.overlay.final(state.seq, text);
+  }
+
+  /**
+   * A T3 paste the check couldn't see land: one more look a moment later, and the card folds if the text
+   * shows up more often than in the box before the paste.
+   */
+  private async recheckT3(a: Active, hwnd: number, text: string, before: string): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, RECHECK_MS));
+    const box = await this.deps.input.field(hwnd);
+    if (box.text === null || occurrences(box.text, text) <= occurrences(before, text) || this.kept?.state.seq !== a.seq || this.active) return;
+    console.log("dictation", a.entry.id, "landed after all: card folds");
+    this.kept = null;
+    this.deps.overlay.state({ ...this.baseState(a), phase: "done" });
+  }
+
+  /** A dictation that came to nothing: its card folds away, or gives the screen back to a kept one. */
+  private emptyOrKept(a: Active): void {
+    if (!this.kept) return this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
+    this.deps.overlay.state(this.kept.state);
+    this.deps.overlay.final(this.kept.state.seq, this.kept.text);
+  }
+
+  /** The renderer folded the card for `seq` away (closed, copied, dragged out, or done). */
+  cardHidden(seq: number): void {
+    if (this.kept?.state.seq === seq) this.kept = null;
   }
 
   /**

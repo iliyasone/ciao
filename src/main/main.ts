@@ -16,7 +16,7 @@ import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
-import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings } from "./settings";
+import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
@@ -368,7 +368,11 @@ function registerIpc(): void {
   ipcMain.on("capture:stopped", (_e, seq: number) => dictation.onCaptureStopped(seq));
   ipcMain.on("capture:error", (_e, seq: number, message: string) => dictation.onCaptureError(seq, message));
   ipcMain.on("overlay:interactive", (_e, on: boolean) => overlay.setInteractive(on));
-  ipcMain.on("overlay:hidden", (_e, seq: number) => overlay.hidden(seq));
+  ipcMain.on("overlay:hidden", (_e, seq: number) => {
+    overlay.hidden(seq);
+    dictation.cardHidden(seq);
+  });
+  ipcMain.on("overlay:closed", (_e, seq: number) => dictation.cardHidden(seq));
   ipcMain.on("overlay:drag-start", (_e, mode: "move" | "resize", x: number, y: number) => overlay.dragStart(mode, x, y));
   ipcMain.on("overlay:drag-end", () => overlay.dragEnd());
   ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());
@@ -590,6 +594,22 @@ void app.whenReady().then(() => {
   // applySettings only re-registers the hotkey when it changes, and here prev === next.
   registerPasteLast();
   applySettings(settings);
+  watchSettings((next) => {
+    console.log("settings: config.json was edited outside Ciao, reloaded");
+    const prev = settings;
+    try {
+      applySettings(next);
+    } catch (e) {
+      console.warn("settings: the edited config.json doesn't apply; the file is back to the settings before it:", (e as Error).message);
+      try {
+        applySettings(prev);
+      } catch (e2) {
+        console.warn("settings: restoring them failed too:", (e2 as Error).message);
+      }
+      return;
+    }
+    historyWin?.webContents.send("settings:reloaded", settings); // an open Settings page would save its old copy back
+  });
   nativeTheme.on("updated", () => {
     if (!historyWin || historyWin.isDestroyed()) return;
     const c = chrome();

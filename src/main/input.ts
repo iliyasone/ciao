@@ -48,6 +48,8 @@ export type FieldMiss = "focus-changed" | "no-field" | "too-long" | "timeout" | 
  * the foreground window and types Ctrl+V. Restarted if it dies.
  */
 export class InputHelper extends EventEmitter<InputEvents> {
+  /** Windows whose focused field has been read (see fieldsReadable). */
+  private readonly readable = new Set<number>();
   private child: ChildProcess | null = null;
   private nextId = 1;
   private pending = new Map<number, (reply: Record<string, unknown>) => void>();
@@ -191,7 +193,10 @@ export class InputHelper extends EventEmitter<InputEvents> {
   /** The text of the focused editable field, if `hwnd` is still in front (0 = whatever is). Never a password field. */
   async field(hwnd: number): Promise<{ text: string } | { text: null; reason: FieldMiss }> {
     const r = await this.request({ cmd: "field", hwnd });
-    if (typeof r.text === "string") return { text: lines(r.text) };
+    if (typeof r.text === "string") {
+      if (hwnd !== 0) this.readable.add(hwnd);
+      return { text: lines(r.text) };
+    }
     return { text: null, reason: typeof r.reason === "string" ? (r.reason as FieldMiss) : "no-helper" };
   }
 
@@ -215,6 +220,15 @@ export class InputHelper extends EventEmitter<InputEvents> {
   async enter(hwnd: number): Promise<boolean> {
     const r = await this.request({ cmd: "key", key: "enter", hwnd });
     return r.ok === true;
+  }
+
+  /**
+   * A field of this window has been read before: "no-field" there means nothing editable has focus. An
+   * app may also answer "no-field" because it doesn't show its fields yet (Chromium before its
+   * accessibility is on), so a window never read can't tell.
+   */
+  fieldsReadable(hwnd: number): boolean {
+    return hwnd !== 0 && this.readable.has(hwnd);
   }
 
   /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */

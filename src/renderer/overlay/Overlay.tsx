@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Check, ClipboardCheck, CloudOff, Copy, GripVertical, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
@@ -264,7 +264,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
     onPointerDown: (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      if (mode === "move" && target.closest("button")) return;
+      if (mode === "move" && target.closest("button, [data-selectable], [draggable=true]")) return;
       const scroller = target.closest<HTMLElement>("[data-scroller]");
       if (scroller && e.clientX >= scroller.getBoundingClientRect().left + scroller.clientWidth) return;
       e.stopPropagation();
@@ -501,11 +501,23 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
+  /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
+  const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const foldingSeq = useRef(-1);
+  /** The card the user closed, copied or dragged out: later states for it (a late check) don't bring it back. */
+  const closedSeq = useRef(-1);
+  const shownSeq = useRef(-1);
   const tr = useStrings().overlay;
 
   useEffect(() => {
     const offs = [
       ciao.overlay.onState((s) => {
+        if (s.seq === closedSeq.current) return;
+        if (s.seq === foldingSeq.current) {
+          clearTimeout(folding.current);
+          foldingSeq.current = -1;
+        }
+        shownSeq.current = s.seq;
         dispatch({ type: "reset", seq: s.seq });
         setState(s);
         setLeaving(false);
@@ -547,8 +559,15 @@ export function Overlay() {
   }, [live]);
 
   const fold = useCallback((seq: number) => {
+    // Another card took its place meanwhile (a Copy's delayed close): just say this one is gone.
+    if (shownSeq.current !== seq) return ciao.overlay.hidden(seq);
+    // A fold of another card cut short still reports that card gone.
+    if (foldingSeq.current !== -1 && foldingSeq.current !== seq) ciao.overlay.hidden(foldingSeq.current);
     setLeaving(true);
-    setTimeout(() => {
+    clearTimeout(folding.current);
+    foldingSeq.current = seq;
+    folding.current = setTimeout(() => {
+      foldingSeq.current = -1;
       ciao.overlay.hidden(seq);
       setState((s) => (s?.seq === seq ? null : s));
     }, LEAVE_MS);
@@ -557,7 +576,7 @@ export function Overlay() {
   // Fold away after a terminal phase (not while the pointer is over the card).
   useEffect(() => {
     if (!state) return;
-    const delay = HIDE_AFTER[state.phase];
+    const delay = state.keep ? undefined : HIDE_AFTER[state.phase];
     if (delay === undefined) return;
     let timer = setTimeout(function leave() {
       if (hovered.current) {
@@ -584,7 +603,14 @@ export function Overlay() {
   const finishing = state.phase === "finishing";
 
   let icon: ReactNode;
-  switch (state.phase) {
+  if (state.keep) {
+    // It sits where the pill was: a click on it starts the next dictation, as the pill's would.
+    icon = (
+      <button onClick={() => ciao.overlay.pillClick()} title={tr.dictateAgain} className="-m-1.5 cursor-pointer rounded-full p-1.5 hover:bg-tint/10">
+        <ClipboardCheck className="size-4 text-amber-700 dark:text-amber-300" />
+      </button>
+    );
+  } else switch (state.phase) {
     case "recording":
       // Hands-free there is no key to let go of: the dot finishes it, as a second click on the pill would.
       icon = state.handsFree ? (
@@ -616,7 +642,10 @@ export function Overlay() {
 
   const content =
     text.final !== null ? (
-      <span className="text-settled whitespace-pre-wrap">{text.final}</span>
+      // Kept, it can be selected with the mouse and dragged out, a word or all of it.
+      <span data-selectable={state.keep || undefined} className={`text-settled whitespace-pre-wrap ${state.keep ? "selectable cursor-text" : ""}`}>
+        {text.final}
+      </span>
     ) : text.settled || text.fresh.length ? (
       <LiveText text={text} withLayout={state.layout ?? false} />
     ) : (
@@ -625,8 +654,12 @@ export function Overlay() {
 
   const showText = state.phase !== "empty" || text.final || text.settled || text.fresh.length;
 
-  const withActions = state.phase === "recovered" || state.phase === "saved";
-  const dismiss = () => fold(state.seq);
+  const withActions = state.phase === "recovered" || state.phase === "saved" || !!state.keep;
+  const dismiss = () => {
+    closedSeq.current = state.seq;
+    ciao.overlay.closed(state.seq); // main forgets a kept card now, not after the fold
+    fold(state.seq);
+  };
   // Scrolling or dragging means you want the card itself: solid until the pointer leaves.
   const solid = () => {
     solidUntilLeave.current = true;
@@ -690,7 +723,7 @@ export function Overlay() {
         {state.message && <div className="mt-2 text-[12.5px] text-amber-700 dark:text-amber-200/90">{state.message}</div>}
         {withActions && (
           <div className="mt-2.5 -ml-2 flex gap-1">
-            {state.phase === "recovered" && text.final && (
+            {(state.phase === "recovered" || state.keep) && text.final && (
               <button
                 onClick={async () => {
                   await ciao.overlay.copy(text.final!);
@@ -702,6 +735,24 @@ export function Overlay() {
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 {copied ? tr.copied : tr.copy}
               </button>
+            )}
+            {state.keep && text.final && (
+              // All of the text in one drag, to drop into another app's field; dropped there, the card is done.
+              <span
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", text.final!);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                onDragEnd={(e) => {
+                  if (e.dataTransfer.dropEffect !== "none") dismiss();
+                }}
+                title={tr.dragTitle}
+                className="inline-flex cursor-grab items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] text-muted hover:bg-tint/8 hover:text-fg active:cursor-grabbing"
+              >
+                <GripVertical className="size-3.5" />
+                {tr.drag}
+              </span>
             )}
             <button
               onClick={() => {
