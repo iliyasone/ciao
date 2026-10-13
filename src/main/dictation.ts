@@ -26,10 +26,14 @@ export interface OverlayPort {
   final(seq: number, text: string): void;
   startCapture(seq: number): void;
   stopCapture(seq: number): void;
+  /** The short sound for "listening now" (start) or "done listening" (stop). */
+  sound(kind: "start" | "stop"): void;
 }
 
 const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, see dropsTaps)
 const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
+/** The start sound's length plus the mic's delay: the audio arriving meanwhile is silenced, so the sound isn't in the recording. */
+const START_SOUND_MUTE_MS = 280;
 /** A short press starts nothing (tapHandsFree off); otherwise it starts hands-free, in T3 mode too. */
 const dropsTaps = (s: Settings) => !s.tapHandsFree;
 /** T3 mode: how long the stop waits for T3 Code, just called forward, to be in front. */
@@ -89,6 +93,10 @@ interface Active {
   target: Promise<ForegroundWindow | null>;
   /** The window in front when the dictation was stopped: where the text goes (see stop()). */
   stopTarget?: Promise<ForegroundWindow | null>;
+  /** The start sound played (so the stop one plays too). */
+  beeped?: boolean;
+  /** Mic audio arriving until then is silenced: the start sound playing. */
+  muteUntil?: number;
   /** T3 mode, hands-free from a tap: T3 Code comes forward once the first words are transcribed. */
   forwardOnVoice?: boolean;
   /** T3 mode: T3 Code is being called forward; true once a window was. */
@@ -159,6 +167,8 @@ export class DictationController {
       delivered: (text: string, hwnd: number | null) => void;
       /** A dictation started (whatever was being watched is done). */
       started: () => void;
+      /** Recording or not, hands-free or not, changed (for other apps: state.json). */
+      stateChanged: (recording: boolean, handsFree: boolean) => void;
       /** The window is one of Ciao's own (History, Settings). */
       isOwnWindow: (hwnd: number) => boolean;
     },
@@ -217,9 +227,11 @@ export class DictationController {
 
   // ── Audio from the overlay renderer ─────────────────────────────────────
 
-  onChunk(seq: number, pcm: Uint8Array): void {
+  /** live: from the mic now (not the wake word's pre-roll), so the start sound's moment may be silenced. */
+  onChunk(seq: number, pcm: Uint8Array, live = true): void {
     const a = this.active;
     if (!a || a.seq !== seq) return;
+    if (live && a.muteUntil !== undefined && Date.now() <= a.muteUntil) pcm = new Uint8Array(pcm.byteLength);
     a.wav.write(pcm); // disk first: the recording survives any failure below
     if (!a.offline) a.session.append(pcm);
     if (a.voiceOnsetAt === undefined && level(pcm) > VOICE_LEVEL) a.voiceOnsetAt = Date.now();
@@ -270,7 +282,7 @@ export class DictationController {
     if (!a) return;
     a.wakeStarted = true;
     this.handsFree = true;
-    if (preRoll.byteLength) this.onChunk(a.seq, preRoll);
+    if (preRoll.byteLength) this.onChunk(a.seq, preRoll, false);
     // No shortcut to rule out here (the 150 ms guard is for Ctrl+C-style key combos): show at once.
     a.shown = true;
     this.push(a);
@@ -393,6 +405,21 @@ export class DictationController {
     });
     this.deps.input.arm(true);
     if (!replay) this.deps.overlay.startCapture(seq);
+    // At once, so you hear that it listens; later only where the press may still turn out to be nothing:
+    // a tap that is dropped, or a held Ctrl that becomes Ctrl+C (the card waits for the same reason).
+    if (!replay && settings.sounds) {
+      const delay = dropsTaps(settings) ? TAP_MS : isLoneModifierTrigger(trigger) ? SHOW_AFTER_MS : 0;
+      const beep = () => {
+        if (this.active !== a || a.phase !== "recording") return;
+        a.beeped = true;
+        // Not after the wake word: you are speaking already, and nothing of it may be lost.
+        if (trigger !== "wake_word") a.muteUntil = Date.now() + START_SOUND_MUTE_MS;
+        this.deps.overlay.sound("start");
+      };
+      if (delay) setTimeout(beep, delay);
+      else beep();
+    }
+    this.report();
     setTimeout(() => {
       if (this.active !== a || a.phase !== "recording") return;
       a.shown = true;
@@ -479,6 +506,7 @@ export class DictationController {
     this.deps.input.arm(false);
     this.resumeMedia(a);
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
+    if (a.beeped) this.deps.overlay.sound("stop");
     this.push(a);
   }
 
@@ -493,6 +521,8 @@ export class DictationController {
     this.deps.input.arm(false);
     this.resumeMedia(a);
     this.deps.overlay.stopCapture(a.seq);
+    if (a.beeped) this.deps.overlay.sound("stop");
+    this.report();
     a.session.close();
     a.wav.close();
     if (!keep) {
@@ -810,7 +840,19 @@ export class DictationController {
   }
 
   private push(a: Active): void {
+    this.report();
     if (a.shown) this.deps.overlay.state(this.baseState(a));
+  }
+
+  private reported = { recording: false, handsFree: false };
+
+  /** Tells other apps (state.json) when recording or hands-free changed. */
+  private report(): void {
+    const recording = this.active?.phase === "recording";
+    const handsFree = recording && this.handsFree;
+    if (recording === this.reported.recording && handsFree === this.reported.handsFree) return;
+    this.reported = { recording, handsFree };
+    this.deps.stateChanged(recording, handsFree);
   }
 }
 

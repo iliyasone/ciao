@@ -471,6 +471,21 @@ app.on("window-all-closed", () => {
 });
 let helperFinishing = false;
 let helperFinished = false;
+/**
+ * state.json next to the settings: whether Ciao is recording, and hands-free, for other apps to read
+ * (TrackpadClicks turns a single click into a stop while it says hands-free). Written whole and renamed
+ * into place, so a reader never sees half a file.
+ */
+function writeState(recording: boolean, handsFree: boolean): void {
+  const file = path.join(app.getPath("userData"), "state.json");
+  try {
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ recording, handsFree, pid: process.pid }));
+    fs.renameSync(`${file}.tmp`, file);
+  } catch (e) {
+    console.warn("state.json:", (e as Error).message);
+  }
+}
+
 app.on("will-quit", (e) => {
   // With "pause music" on, the input helper gets to resume what it paused before Ciao goes: the resume of a
   // dictation that just ended may still be queued, and on Windows the helper dies with Ciao.
@@ -486,6 +501,7 @@ app.on("will-quit", (e) => {
     }
     return;
   }
+  writeState(false, false);
   globalShortcut.unregisterAll();
   updater.stop();
   input?.stop();
@@ -494,6 +510,7 @@ app.on("will-quit", (e) => {
 
 void app.whenReady().then(() => {
   settings = loadSettings();
+  writeState(false, false); // a state.json left by a Ciao that didn't quit cleanly
   setLang(settings.language); // before store.recover(), which writes user-facing errors
   if (process.platform === "win32") app.setAppUserModelId("dev.iliyasone.ciao");
 
@@ -544,6 +561,7 @@ void app.whenReady().then(() => {
       else corrections.pasted(text, hwnd);
     },
     started: () => corrections.stop(),
+    stateChanged: writeState,
     isOwnWindow,
   });
   wake.on("wake", (preRoll) => dictation.onWake(preRoll));

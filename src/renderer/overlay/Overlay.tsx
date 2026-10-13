@@ -6,6 +6,7 @@ import { revisePauses } from "../../core/revision";
 import type { OverlayState, TermSuggestion } from "../../core/types";
 import { useStrings } from "../lang";
 import { meter, setWake, startCapture, stopCapture } from "./capture";
+import { playSound } from "./sounds";
 
 // ── Text model ────────────────────────────────────────────────────────────
 // New tokens stay individual spans (animated) for FRESH_MS, then merge into one
@@ -531,6 +532,7 @@ export function Overlay() {
         setSuggestions((list) => (list.some((x) => x.fixed.toLowerCase() === s.fixed.toLowerCase()) ? list : [...list, s])),
       ),
       ciao.capture.onStart((seq) => void startCapture(seq)),
+      ciao.capture.onSound(playSound),
       ciao.capture.onStop((seq) => void stopCapture(seq)),
       ciao.wake.onEnable((on) => void setWake(on)),
     ];

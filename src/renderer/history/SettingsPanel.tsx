@@ -143,6 +143,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           <Toggle label={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
           <Toggle label={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
           <Toggle label={tr.behaviour.pill} hint={tr.behaviour.pillHint} value={s.overlayPill} onChange={(v) => update({ overlayPill: v })} />
+          <Toggle label={tr.behaviour.sounds} hint={tr.behaviour.soundsHint} value={s.sounds} onChange={(v) => update({ sounds: v })} />
           <Toggle label={tr.behaviour.pauseMedia} hint={tr.behaviour.pauseMediaHint} value={s.pauseMedia} onChange={(v) => update({ pauseMedia: v })} />
           <Toggle label={tr.behaviour.learn} hint={tr.behaviour.learnHint} value={s.learnCorrections} onChange={(v) => update({ learnCorrections: v })} />
           <Toggle label={tr.behaviour.openAtLogin} value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />

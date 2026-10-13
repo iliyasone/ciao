@@ -55,6 +55,12 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen, rather than on the screen under the pointer.
   Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
   appears and disappears.
+- **Sounds when it listens.** A soft rising two-note sound when Ciao starts
+  listening, a falling one when it stops (*Settings → Behavior → Start and stop
+  sounds*, on by default). The start sound plays at once, except with a trigger like
+  Right Ctrl (0.15 s later, so a Ctrl+C makes none) or when short presses are
+  dropped (0.35 s); the mic audio for the next 0.28 s is silenced so the sound isn't
+  in the recording. After the wake word nothing is silenced: you are speaking.
 - **Music pauses while you dictate**, if you turn on *Settings → Behavior → Pause
   music while you dictate* (off by default). Once a recording has gone on for
   0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into
@@ -602,6 +608,10 @@ build signed with another key can't sign in.
 Everything is under `%APPDATA%\Ciao` on Windows, `~/Library/Application Support/Ciao`
 on macOS and `~/.config/Ciao` on Linux:
 
+- `state.json` — whether Ciao is recording right now, and hands-free:
+  `{"recording": true, "handsFree": true, "pid": 1234}`, written whole whenever that
+  changes and set to not recording when Ciao quits. Other apps may read it
+  (TrackpadClicks makes a single click stop a hands-free dictation).
 - `config.json` — settings. Most of them are edited in the app. An edit to the file
   while Ciao runs is picked up within 2 s, instead of being overwritten by Ciao's next save.
 - `openai-key.txt`, `gemini-key.txt` — the API keys.

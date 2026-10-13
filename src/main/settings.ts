@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   t3Send: false,
   wakeWord: false,
   pauseMedia: false,
+  sounds: true,
   formatText: true,
   telemetry: true,
   syncKeys: true,
