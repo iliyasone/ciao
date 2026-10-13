@@ -100,12 +100,6 @@ export async function pasteText(
   return { delivery: "pasted" };
 }
 
-/**
- * T3 Code windows whose chat box has been read in this run: there "no field" means focus is really
- * elsewhere. Elsewhere it may only mean the app doesn't show its fields (Electron on Linux without
- * desktop accessibility, or a T3 Code just started). Never 0, the window Wayland can't name.
- */
-const readableWindows = new Set<number>();
 
 /** How the T3 paste was checked: the text showed up; or the field can't be read, or changed in a way that tells nothing. */
 export type T3Check = "landed" | "unreadable" | "unclear";
@@ -130,9 +124,8 @@ export async function pasteIntoT3(
 ): Promise<{ text: string } & ({ delivery: "pasted"; check: T3Check } | { delivery: "clipboard"; miss: PasteMiss })> {
   const before = restoreClipboard ? await takeSnapshot() : (await cancelRestore(), null);
   const pre = await input.field(hwnd);
-  if (pre.text !== null && hwnd !== 0) readableWindows.add(hwnd);
   // Nothing focused where boxes read fine: watch for the box T3 Code moves the paste into.
-  const unfocused = pre.text === null && pre.reason === "no-field" && hwnd !== 0 && readableWindows.has(hwnd);
+  const unfocused = pre.text === null && pre.reason === "no-field" && input.fieldsReadable(hwnd);
   // A box with text gets a space first: a prompt said in several holds doesn't run together. With
   // nothing focused, T3 Code adds the paste after whatever the box holds, so it gets one too.
   const text =

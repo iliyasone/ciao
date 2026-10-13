@@ -122,10 +122,13 @@ export function watchSettings(changed: (s: Settings) => void): void {
     } catch {
       return; // half written: wait for the next change
     }
-    // A value of the wrong kind ("triggers": "XButton2") would break applying it while Ciao runs.
-    const wrong = Object.entries(raw as Record<string, unknown>).find(([k, v]) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return;
+    // A value of the wrong kind ("triggers": "XButton2", or null) would break applying it while Ciao runs.
+    const wrong = Object.entries(raw).find(([k, v]) => {
       const d = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[k];
-      return d !== undefined && d !== null && v !== null && (Array.isArray(d) !== Array.isArray(v) || typeof d !== typeof v);
+      if (d === undefined) return false;
+      if (v === null || d === null) return v !== d && d !== null; // null only where the default is
+      return Array.isArray(d) !== Array.isArray(v) || typeof d !== typeof v;
     });
     if (wrong) {
       known = text; // not again until the file changes
