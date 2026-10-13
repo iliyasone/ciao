@@ -148,6 +148,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("formatText", true)
         set(v) = sp.edit().putBoolean("formatText", v).apply()
 
+    /** Music and videos playing when a dictation starts pause, and play on after it. */
+    var pauseMedia: Boolean
+        get() = sp.getBoolean("pauseMedia", false)
+        set(v) = sp.edit().putBoolean("pauseMedia", v).apply()
+
     var stopPhrase: Boolean
         get() = sp.getBoolean("stopPhrase", true)
         set(v) = sp.edit().putBoolean("stopPhrase", v).apply()

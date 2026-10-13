@@ -52,6 +52,7 @@
     <string name="learn_corrections">Suggest new words</string>
     <string name="learn_corrections_hint">For two minutes after a dictation, Ciao watches the field it went into: fix a misheard word (“posthog” → “PostHog”) and it offers to add the new spelling to the terms. The text is compared on this phone, never stored or sent.</string>
     <string name="format_text">Paragraphs and lists</string>
+    <string name="pause_media">Pause music while you dictate</string>
     <string name="stop_phrase">Say “ciao ciao” to finish</string>
     <string name="show_cost">Show the cost of a dictation</string>
     <string name="smart">Apply spoken corrections</string>

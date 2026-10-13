@@ -18,11 +18,13 @@
 //   On Wayland the watched window has no id, so Enter reads nothing, and "field" sticks with the app
 //   its first read in a watch found in front: in any other app it answers "focus-changed".
 // - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
+// - "media" pauses MPRIS players through dbus-send (media.ts); without it, it pauses nothing.
 //
 // Extra event: {"type":"status","reading":N,"denied":M} after every device scan.
 import readline from "node:readline";
 import { Atspi, type FieldResult } from "./atspi";
 import { Devices } from "./evdev";
+import { Media } from "./media";
 import { isLoneModifier, isModifier, KEY_ESC, keyName, modifierPrefix, modifiersMatch, modifiersOf, MOUSE_BUTTONS, parseTrigger, type Modifiers, type Trigger } from "./keys";
 import { DEVICE_NAME, Uinput } from "./uinput";
 import { X11 } from "./x11";
@@ -215,6 +217,8 @@ const TERMINALS = new Set([
   "xterm", "uxterm", "urxvt", "st", "blackbox",
 ]);
 
+const media = new Media(log);
+
 function handle(msg: Record<string, unknown>): void {
   const id = msg.id;
   switch (msg.cmd) {
@@ -258,6 +262,9 @@ function handle(msg: Record<string, unknown>): void {
       watchWindow = typeof msg.hwnd === "number" ? msg.hwnd : 0;
       watchApp = null;
       if (watching) connectAtspi();
+      return;
+    case "media":
+      media.set(msg.pause === true);
       return;
   }
 }

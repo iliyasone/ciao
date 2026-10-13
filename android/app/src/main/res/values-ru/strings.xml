@@ -47,6 +47,7 @@
     <string name="learn_corrections">Предлагать новые слова</string>
     <string name="learn_corrections_hint">Две минуты после диктовки Ciao следит за полем, куда вставил текст: исправите неверно услышанное слово («постхок» → «PostHog»), и он предложит добавить новое написание в термины. Текст сравнивается на телефоне и нигде не сохраняется и никуда не отправляется.</string>
     <string name="format_text">Абзацы и списки</string>
+    <string name="pause_media">Ставить музыку на паузу, пока диктуешь</string>
     <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
     <string name="show_cost">Показывать стоимость диктовки</string>
     <string name="smart">Понимать поправки</string>

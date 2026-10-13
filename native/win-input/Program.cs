@@ -37,6 +37,8 @@ namespace Ciao.Input;
 ///                                           Line breaks come as "\n" ("text" of "key" events too).
 ///   {"cmd":"watch","on":true,"hwnd":123} start/stop reporting key presses as "key" events (see above). Enter reads the
 ///                                           field only while window "hwnd" is in front; otherwise (or hwnd 0) its text is null
+///   {"cmd":"media","pause":true}          pause the media players that are playing (music, a video in a browser);
+///   {"cmd":"media","pause":false}         resume those of them still paused, and forget them. Commands run in order
 ///
 /// "field" and "watch" let Ciao see how the user corrected a pasted dictation (src/main/corrections.ts): the text
 /// is compared on this machine and never stored or sent anywhere.
@@ -327,6 +329,9 @@ static class Program
             case "capture":
                 if (msg["on"]?.GetValue<bool>() ?? false) StartCapture();
                 else _capturing = false;
+                break;
+            case "media":
+                Media.Set(msg["pause"]?.GetValue<bool>() ?? false, m => Emit(new JsonObject { ["type"] = "log", ["message"] = m }));
                 break;
         }
     }

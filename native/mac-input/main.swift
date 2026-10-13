@@ -15,6 +15,7 @@
 // - "field" answers "unsupported" without Accessibility. Chromium and Electron apps expose their
 //   fields only to an assistive client that asks, so the first read in such an app turns that on
 //   (AXManualAccessibility) and, if nothing showed yet, tries once more a moment later.
+// - "media" pauses only Music and Spotify, through AppleScript (macOS asks the user once per app).
 // - "key" events: "paste" is ⌘V or ⌘⇧V, by the key where QWERTY has V (so it holds in the Russian
 //   layout too); Enter is Return or the keypad's Enter.
 
@@ -377,6 +378,47 @@ func sendPaste() {
     }
 }
 
+// MARK: - Media ("media")
+
+/// The players "media" pauses: macOS has no public way to pause any app, so it asks these apps by AppleScript.
+/// The first time, macOS asks the user to let Ciao control the app; refused, that app is left playing.
+let mediaApps = ["com.apple.Music", "com.spotify.client"]
+/// Runs the scripts in turn, off the main run loop: a script waits for the app, and the first one for the user's answer.
+let mediaQueue = DispatchQueue(label: "ciao.media")
+var mediaPaused: [String] = [] // mediaQueue only
+
+/// Runs `body` in the app with this bundle id through osascript; false if the app isn't running (a script would
+/// launch it), the script fails, or it doesn't answer true.
+func tellApp(_ bundle: String, _ body: [String]) -> Bool {
+    guard !NSRunningApplication.runningApplications(withBundleIdentifier: bundle).isEmpty else { return false }
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    p.arguments = (["tell application id \"\(bundle)\""] + body + ["end tell"]).flatMap { ["-e", $0] }
+    let out = Pipe(), err = Pipe()
+    p.standardOutput = out
+    p.standardError = err
+    do { try p.run() } catch { return false }
+    let answer = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let problem = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    p.waitUntilExit()
+    if p.terminationStatus != 0 { logLine("media: \(bundle): \(problem.trimmingCharacters(in: .whitespacesAndNewlines))") }
+    return answer.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
+}
+
+func setMedia(pause: Bool) {
+    mediaQueue.async {
+        if pause {
+            for bundle in mediaApps where tellApp(bundle, ["if player state is playing then", "pause", "return true", "end if"]) {
+                mediaPaused.append(bundle)
+            }
+        } else {
+            // Still paused: the user didn't start or stop it themselves meanwhile.
+            for bundle in mediaPaused { _ = tellApp(bundle, ["if player state is paused then play"]) }
+            mediaPaused = []
+        }
+    }
+}
+
 // MARK: - Field text ("field", and Enter while watching)
 
 /// Longer than this it is a log or a document rather than a message, and copying it costs too much.
@@ -519,6 +561,8 @@ func handle(_ line: String) {
         if msg["on"] as? Bool ?? false { startCapture() } else { capturing = false }
     case "field":
         answerField(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
+    case "media":
+        setMedia(pause: msg["pause"] as? Bool ?? false)
     case "watch":
         watching = msg["on"] as? Bool ?? false
         watchPid = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0

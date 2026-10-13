@@ -90,6 +90,8 @@ interface Active {
   stoppedByPhrase?: boolean;
   /** Fed from a file by --replay: no mic, nothing pasted. */
   replay: boolean;
+  /** The input helper was told to pause the music; it is told to resume it when the recording ends. */
+  pausedMedia?: boolean;
   /** Was in hands-free mode when it stopped (the controller's flag moves on to the next dictation). */
   handsFree?: boolean;
   /** What started it: a trigger spec or "wake_word". */
@@ -357,6 +359,19 @@ export class DictationController {
       a.shown = true;
       this.push(a);
     }, SHOW_AFTER_MS);
+    // Only once it is clearly a dictation: a shortcut or a stray click doesn't stop the music for a moment.
+    if (!replay && settings.pauseMedia)
+      setTimeout(() => {
+        if (this.active !== a || a.phase !== "recording") return;
+        a.pausedMedia = true;
+        this.deps.input.media(true);
+      }, TAP_MS);
+  }
+
+  private resumeMedia(a: Active): void {
+    if (!a.pausedMedia) return;
+    a.pausedMedia = false;
+    this.deps.input.media(false);
   }
 
   private checkStopPhrase(a: Active): void {
@@ -378,6 +393,7 @@ export class DictationController {
     // the window the text is for, and stop there (mostly across virtual desktops, by the usage counts).
     a.stopTarget = this.deps.input.foreground();
     this.deps.input.arm(false);
+    this.resumeMedia(a);
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
     this.push(a);
   }
@@ -389,6 +405,7 @@ export class DictationController {
     this.active = null;
     this.deps.idle();
     this.deps.input.arm(false);
+    this.resumeMedia(a);
     this.deps.overlay.stopCapture(a.seq);
     a.session.close();
     a.wav.close();

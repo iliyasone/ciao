@@ -177,6 +177,11 @@ export class InputHelper extends EventEmitter<InputEvents> {
     return { text: null, reason: typeof r.reason === "string" ? (r.reason as FieldMiss) : "no-helper" };
   }
 
+  /** Pause the media players that are playing, or (false) resume those of them still paused. */
+  media(pause: boolean): void {
+    this.send({ cmd: "media", pause });
+  }
+
   /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */
   watch(on: boolean, hwnd = 0): void {
     this.watching = { on, hwnd };
