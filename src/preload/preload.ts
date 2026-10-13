@@ -18,8 +18,8 @@ const api = {
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
     hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),
-    dragStart: () => ipcRenderer.send("overlay:drag-start"),
-    drag: (mode: "move" | "resize", dx: number, dy: number) => ipcRenderer.send("overlay:drag", mode, dx, dy),
+    /** x/y: where the press was on screen; the window then follows the cursor until dragEnd. */
+    dragStart: (mode: "move" | "resize", x: number, y: number) => ipcRenderer.send("overlay:drag-start", mode, x, y),
     dragEnd: () => ipcRenderer.send("overlay:drag-end"),
     resetPlacement: () => ipcRenderer.send("overlay:reset-placement"),
     copy: (text: string): Promise<void> => ipcRenderer.invoke("overlay:copy", text),

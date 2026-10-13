@@ -56,6 +56,8 @@ export interface Settings {
   wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
   stopPhrase: boolean;
+  /** A short press of a dictation trigger starts hands-free mode; off, it is dropped and only a hold dictates. */
+  tapHandsFree: boolean;
   /** Send anonymous usage counts (launches, dictations); never text or audio. */
   telemetry: boolean;
   /** With Google sync: the API keys go into the synced file too, so a new device is ready at once. */

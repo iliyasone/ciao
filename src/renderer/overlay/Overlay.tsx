@@ -220,15 +220,21 @@ function hoverHandlers(hovered: React.RefObject<boolean>, dragging: React.RefObj
 
 /**
  * Press and move a few pixels to drag the window ("move") or size the card ("resize", from the
- * corner: at once); a press without moving is a click. Offsets are sent relative to where the
- * press began, so the main process applies them to the window's original bounds. Buttons and the
- * scroll bar keep their own clicks.
+ * corner: at once); a press without moving is a click. Once it is a drag, the main process moves the
+ * window after the cursor from where the press began until the press ends. Buttons and the scroll
+ * bar keep their own clicks.
  */
 function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, hovered: React.RefObject<boolean>, onClick?: () => void) {
   // In a ref: the card re-renders every 200 ms while recording, and handlers recreated mid-drag
   // must still know where the press began.
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  // While a drag is on, its end is also heard on the whole page: when the captured element goes away
+  // (a dictation started and a new card or the card took its place), its own handlers never hear it,
+  // and the window would follow the cursor and take its clicks.
+  const unwatch = useRef<(() => void) | null>(null);
   const end = (click: boolean) => {
+    unwatch.current?.();
+    unwatch.current = null;
     const p = press.current;
     press.current = null;
     if (!p) return;
@@ -240,6 +246,20 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
       onClick?.();
     }
   };
+  const startDrag = (x: number, y: number) => {
+    unwatch.current?.();
+    dragging.current = true;
+    ciao.overlay.dragStart(mode, x, y);
+    const over = () => end(false);
+    for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, over);
+    document.addEventListener("lostpointercapture", over);
+    unwatch.current = () => {
+      for (const type of ["pointerup", "pointercancel"]) window.removeEventListener(type, over);
+      document.removeEventListener("lostpointercapture", over);
+    };
+  };
+  // Unmounted mid-drag (the pill gave way to the card): end it.
+  useEffect(() => () => end(false), []);
   return {
     onPointerDown: (e: React.PointerEvent) => {
       if (e.button !== 0) return;
@@ -253,8 +273,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
       // grip's double-click would never arrive.
       if (mode === "resize") {
         e.currentTarget.setPointerCapture(e.pointerId);
-        dragging.current = true;
-        ciao.overlay.dragStart();
+        startDrag(e.screenX, e.screenY);
       }
     },
     onPointerMove: (e: React.PointerEvent) => {
@@ -268,14 +287,12 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         p.moved = true;
-        dragging.current = true;
-        ciao.overlay.dragStart();
+        // The main process moves the window after the cursor from here on.
+        startDrag(p.x, p.y);
       }
-      ciao.overlay.drag(mode, dx, dy);
     },
     onPointerUp: () => end(true),
     onPointerCancel: () => end(false),
-    // The element went away mid-drag (a new card replaced it): finish the drag, or the window keeps grabbing clicks.
     onLostPointerCapture: () => end(false),
   };
 }

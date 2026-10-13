@@ -42,6 +42,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
     or say **"ciao ciao"** ("чао-чао"; the words themselves are not pasted; toggle in
     *Settings → Voice*).
+    Turn off *Settings → Keys → A short press starts hands-free mode* to dictate only
+    while holding: a short tap then starts nothing (useful when a mouse or trackpad
+    button is a trigger and gets clicked by accident). The short click still doesn't
+    reach other apps, except on Linux, where trigger buttons are never held back.
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
 - **A pill between dictations.** A small Ciao pill stays at the bottom of the
@@ -55,7 +59,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   music while you dictate* (off by default). Once a recording has gone on for
   0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into
   Ctrl+C until then), the players that are playing pause, so a shortcut leaves the
-  music alone. A short tap starts hands-free mode, so it pauses the music too. When
+  music alone. A short tap starts hands-free mode, so it pauses the music too,
+  unless *A short press starts hands-free mode* is off: then the tap is dropped
+  before the music pauses. When
   the recording ends, or Ciao quits, those of them still paused play on. A player
   you started or stopped yourself meanwhile is left as it is.
   - Windows: any player in the system media controls (Spotify, a video in a

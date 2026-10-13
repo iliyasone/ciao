@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayPill: true,
   showDelay: false,
   stopPhrase: true,
+  tapHandsFree: true,
   wakeWord: false,
   pauseMedia: false,
   formatText: true,

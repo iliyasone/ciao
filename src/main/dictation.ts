@@ -27,7 +27,7 @@ export interface OverlayPort {
   stopCapture(seq: number): void;
 }
 
-const TAP_MS = 350; // a shorter press is a tap: switch to hands-free
+const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, with tapHandsFree off)
 const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
@@ -143,7 +143,7 @@ export class DictationController {
 
   // ── Keyboard and mouse ──────────────────────────────────────────────────
   // Right Ctrl and the middle mouse button share one state machine:
-  // hold = push-to-talk, a short press = hands-free until the next press.
+  // hold = push-to-talk, a short press = hands-free until the next press (or nothing, with tapHandsFree off).
 
   onHotkey(down: boolean, spec = ""): void {
     const now = Date.now();
@@ -159,6 +159,8 @@ export class DictationController {
     const a = this.active;
     if (a?.phase !== "recording" || this.handsFree) return;
     if (now - this.pressedAt < TAP_MS) {
+      // Off: a press too short to be speech (an accidental click) leaves nothing behind.
+      if (!a.settings.tapHandsFree) return this.cancel(false);
       this.handsFree = true;
       this.push(a);
     } else {
@@ -359,9 +361,9 @@ export class DictationController {
       if (this.active !== a || a.phase !== "recording") return;
       a.shown = true;
       this.push(a);
-    }, SHOW_AFTER_MS);
-    // Only once it is clearly a dictation: a held Ctrl that turns into Ctrl+C (see onOtherKey) doesn't
-    // stop the music for a moment.
+    }, settings.tapHandsFree ? SHOW_AFTER_MS : TAP_MS); // with taps dropped, a tap shows nothing at all
+    // Only once it is clearly a dictation: a held Ctrl that turns into Ctrl+C (see onOtherKey), or a tap
+    // dropped with tapHandsFree off, doesn't stop the music for a moment.
     if (!replay && settings.pauseMedia)
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording") return;
