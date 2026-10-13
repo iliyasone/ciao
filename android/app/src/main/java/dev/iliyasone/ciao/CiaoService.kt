@@ -748,7 +748,7 @@ class CiaoService : AccessibilityService() {
             "duration_s" to Math.round(seconds * 10) / 10.0,
             "first_text_ms" to if (d.firstTextAt != 0L) d.firstTextAt - d.startedAt else null,
             "final_after_release_ms" to if (d.endedAt != 0L && transcripts.isNotEmpty()) SystemClock.elapsedRealtime() - d.endedAt else null,
-            // The text is in the field or on the clipboard by now, or there is none: how long the user waited.
+            // The text has been inserted, or is about to be copied, or there is none: how long the user waited.
             "ready_after_release_ms" to if (d.endedAt != 0L && outcome != "cancelled") SystemClock.elapsedRealtime() - d.endedAt else null,
             "cost_usd" to Math.round(seconds / 60 * d.provider.pricePerMinute * 10000) / 10000.0,
         ))

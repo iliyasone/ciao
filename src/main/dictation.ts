@@ -668,7 +668,7 @@ export class DictationController {
         this.deps.delivered(out, null);
       } else if (t3 && settings.autoPaste && target) {
         const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
-        a.deliveredAt = Date.now(); // before a send, which waits on purpose
+        a.deliveredAt = r.pastedAt; // not the check that it landed, nor a send's pause
         delivery = r.delivery;
         sent = r.text;
         a.boxBefore = r.before;
