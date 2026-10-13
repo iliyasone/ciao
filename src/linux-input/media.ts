@@ -42,6 +42,9 @@ export class Media {
       try {
         if ((await status(name!)) !== "Playing") continue;
         await dbus(name!, "/org/mpris/MediaPlayer2", `${PLAYER}.Pause`);
+        // A browser answers before it reports itself paused: a resume right after would still read Playing
+        // and leave it paused. Wait for it to settle, up to half a second.
+        for (let i = 0; i < 10 && (await status(name!)) === "Playing"; i++) await new Promise((r) => setTimeout(r, 50));
         this.paused.push(name!);
       } catch {
         // A player that quit or doesn't answer: leave it.

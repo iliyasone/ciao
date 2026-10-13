@@ -59,7 +59,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   them still paused play on. A player you started or stopped yourself meanwhile is
   left as it is.
   - Windows: any player in the system media controls (Spotify, a video in a
-    browser, the Media Player).
+    browser, the Media Player). Needs Windows 10 1809 or later; on older ones
+    nothing pauses.
   - Linux: any MPRIS player (the same ones, on most desktops), through `dbus-send`.
   - macOS: only Music and Spotify, by AppleScript: macOS has no public way to
     pause other apps. The first time, it asks whether Ciao may control each of them.

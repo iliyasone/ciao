@@ -31,7 +31,15 @@ static class Media
         _manager ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         foreach (var s in _manager.GetSessions())
             // A player closing right now throws; the others still pause.
-            try { if (Status(s) == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing && await s.TryPauseAsync()) _paused.Add(s); }
+            try
+            {
+                if (Status(s) != GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing || !await s.TryPauseAsync()) continue;
+                // The request is answered before the player reports it paused (Spotify lags): a resume right
+                // after would still read Playing and leave it paused. Wait for it to settle, up to half a second.
+                for (int i = 0; i < 10 && Status(s) == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; i++)
+                    await Task.Delay(50);
+                _paused.Add(s);
+            }
             catch { }
     }
 

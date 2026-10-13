@@ -223,7 +223,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
   }
 
   private send(msg: Record<string, unknown>): void {
-    this.child?.stdin?.write(`${JSON.stringify(msg)}\n`);
+    if (this.child?.stdin?.writable) this.child.stdin.write(`${JSON.stringify(msg)}\n`); // not once finish() closed it
   }
 
   private onLine(line: string): void {

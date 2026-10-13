@@ -586,11 +586,13 @@ Thread.detachNewThread {
     while let line = readLine() {
         DispatchQueue.main.async { handle(line) }
     }
-    // The parent closed the pipe: answer what is queued, resume the music it paused, flush, quit.
+    // The parent closed the pipe: answer what is queued, resume the music it paused, flush, quit. The wait
+    // for the music is here, not on the main thread, which runs the event tap.
+    DispatchQueue.main.sync {}
+    let media = DispatchGroup()
+    mediaQueue.async(group: media) {}
+    _ = media.wait(timeout: .now() + 1.5)
     DispatchQueue.main.async {
-        let media = DispatchGroup()
-        mediaQueue.async(group: media) {}
-        _ = media.wait(timeout: .now() + 1.5)
         outQueue.sync {}
         exit(0)
     }

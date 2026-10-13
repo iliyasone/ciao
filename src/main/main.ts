@@ -455,13 +455,21 @@ app.on("activate", () => {
 app.on("window-all-closed", () => {
   // Keep running in the tray.
 });
-let resumingMedia = false;
+let helperFinishing = false;
+let helperFinished = false;
 app.on("will-quit", (e) => {
-  // Mid-dictation with the music paused: the input helper resumes it first (it dies with Ciao on Windows).
-  if (!resumingMedia && dictation?.quitting()) {
+  // With "pause music" on, the input helper gets to resume what it paused before Ciao goes: the resume of a
+  // dictation that just ended may still be queued, and on Windows the helper dies with Ciao.
+  const resume = dictation?.quitting() ?? false;
+  if (input && !helperFinished && (resume || settings.pauseMedia)) {
     e.preventDefault();
-    resumingMedia = true;
-    void input.finish(2000).then(() => app.quit());
+    if (!helperFinishing) {
+      helperFinishing = true;
+      void input.finish(2000).then(() => {
+        helperFinished = true;
+        app.quit();
+      });
+    }
     return;
   }
   globalShortcut.unregisterAll();
