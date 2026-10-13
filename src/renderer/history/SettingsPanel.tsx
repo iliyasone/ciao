@@ -50,9 +50,15 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
       latest.current = { ...cur, keywords: [term, ...cur.keywords] };
       setS(latest.current);
     });
+    // config.json edited outside Ciao: this page shows (and saves) the file's settings from now on.
+    const offReloaded = ciao.settings.onReloaded((next) => {
+      latest.current = next;
+      setS(next);
+    });
     return () => {
       offSynced();
       offAdded();
+      offReloaded();
     };
   }, []);
 

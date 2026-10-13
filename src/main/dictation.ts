@@ -632,9 +632,12 @@ export class DictationController {
       phase = delivery === "clipboard" ? "clipboard" : "done";
       // Not seen where it went: the card keeps the text in reach. A T3 paste the check couldn't see land
       // counts; a plain paste is checked after the card shows (checkLanded), so nothing waits on it.
-      if (!a.replay && (delivery === "clipboard" || (delivery === "pasted" && a.check !== undefined && a.check !== "landed"))) keep = true;
+      // Not when the clipboard was asked for (auto-paste off), nor for a T3 window whose box has never
+      // read (Linux without accessibility): that would be every dictation.
+      const unseen = a.check === "unclear" || (a.check === "unreadable" && !!target && this.deps.input.fieldsReadable(target.hwnd));
+      if (!a.replay && ((delivery === "clipboard" && a.miss?.reason !== "auto-paste-off") || (delivery === "pasted" && unseen))) keep = true;
       else if (!a.replay && delivery === "pasted" && !t3 && target) void this.checkLanded(a, target, sent);
-      if (keep && sent !== text) this.deps.overlay.final(a.seq, sent);
+      if (keep && sent.trim() !== text) this.deps.overlay.final(a.seq, sent.trim());
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.

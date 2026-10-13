@@ -593,6 +593,7 @@ void app.whenReady().then(() => {
   watchSettings((next) => {
     console.log("settings: config.json was edited outside Ciao, reloaded");
     applySettings(next);
+    historyWin?.webContents.send("settings:reloaded", settings); // an open Settings page would save its old copy back
   });
   nativeTheme.on("updated", () => {
     if (!historyWin || historyWin.isDestroyed()) return;

@@ -501,11 +501,14 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
+  /** A fold under way: a state that arrives meanwhile (a card kept after all) cancels it. */
+  const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tr = useStrings().overlay;
 
   useEffect(() => {
     const offs = [
       ciao.overlay.onState((s) => {
+        clearTimeout(folding.current);
         dispatch({ type: "reset", seq: s.seq });
         setState(s);
         setLeaving(false);
@@ -548,7 +551,8 @@ export function Overlay() {
 
   const fold = useCallback((seq: number) => {
     setLeaving(true);
-    setTimeout(() => {
+    clearTimeout(folding.current);
+    folding.current = setTimeout(() => {
       ciao.overlay.hidden(seq);
       setState((s) => (s?.seq === seq ? null : s));
     }, LEAVE_MS);
@@ -584,7 +588,14 @@ export function Overlay() {
   const finishing = state.phase === "finishing";
 
   let icon: ReactNode;
-  switch (state.phase) {
+  if (state.keep) {
+    // It sits where the pill was: a click on it starts the next dictation, as the pill's would.
+    icon = (
+      <button onClick={() => ciao.overlay.pillClick()} title={tr.dictateAgain} className="-m-1.5 cursor-pointer rounded-full p-1.5 hover:bg-tint/10">
+        <ClipboardCheck className="size-4 text-amber-700 dark:text-amber-300" />
+      </button>
+    );
+  } else switch (state.phase) {
     case "recording":
       // Hands-free there is no key to let go of: the dot finishes it, as a second click on the pill would.
       icon = state.handsFree ? (

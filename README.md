@@ -137,7 +137,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   while nothing editable had focus (a click had left focus on a page or a list),
   the card stays with the text instead of folding away. Select any of it with the
   mouse, or drag all of it with *Drag*, into another app's field; *Copy* puts it on
-  the clipboard. It stays until you close it, use it, or start the next dictation.
+  the clipboard. It stays until you close it, use it, or start the next dictation
+  (a click on its icon starts one, as the pill would). Not when *Paste text right away* is off:
+  then the clipboard is where the text is meant to go.
   The "nothing editable" check runs only in windows whose fields Ciao has read
   before (Chromium apps show theirs only after a first read) and not in terminals,
   which take a paste without showing a field.
