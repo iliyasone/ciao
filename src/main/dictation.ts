@@ -696,10 +696,11 @@ export class DictationController {
     const r = await this.deps.input.field(target.hwnd);
     if (r.text !== null || r.reason !== "no-field" || this.active || this.seq !== a.seq) return;
     console.log("dictation", a.entry.id, "pasted where no field had focus: card kept");
-    const state: OverlayState = { ...this.baseState(a), phase: "done", keep: true, message: t().overlay.noFieldFocused };
+    // A card of its own: the done card may be folding, and its fold reporting it hidden would end this one too.
+    const state: OverlayState = { ...this.baseState(a), seq: ++this.seq, phase: "done", keep: true, message: t().overlay.noFieldFocused };
     this.kept = { state, text };
     this.deps.overlay.state(state);
-    this.deps.overlay.final(a.seq, text);
+    this.deps.overlay.final(state.seq, text);
   }
 
   /**

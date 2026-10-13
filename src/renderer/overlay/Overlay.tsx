@@ -558,6 +558,8 @@ export function Overlay() {
   const fold = useCallback((seq: number) => {
     // Another card took its place meanwhile (a Copy's delayed close): just say this one is gone.
     if (shownSeq.current !== seq) return ciao.overlay.hidden(seq);
+    // A fold of another card cut short still reports that card gone.
+    if (foldingSeq.current !== -1 && foldingSeq.current !== seq) ciao.overlay.hidden(foldingSeq.current);
     setLeaving(true);
     clearTimeout(folding.current);
     foldingSeq.current = seq;
@@ -652,6 +654,7 @@ export function Overlay() {
   const withActions = state.phase === "recovered" || state.phase === "saved" || !!state.keep;
   const dismiss = () => {
     closedSeq.current = state.seq;
+    ciao.overlay.closed(state.seq); // main forgets a kept card now, not after the fold
     fold(state.seq);
   };
   // Scrolling or dragging means you want the card itself: solid until the pointer leaves.

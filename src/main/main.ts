@@ -372,6 +372,7 @@ function registerIpc(): void {
     overlay.hidden(seq);
     dictation.cardHidden(seq);
   });
+  ipcMain.on("overlay:closed", (_e, seq: number) => dictation.cardHidden(seq));
   ipcMain.on("overlay:drag-start", (_e, mode: "move" | "resize", x: number, y: number) => overlay.dragStart(mode, x, y));
   ipcMain.on("overlay:drag-end", () => overlay.dragEnd());
   ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());
@@ -595,7 +596,14 @@ void app.whenReady().then(() => {
   applySettings(settings);
   watchSettings((next) => {
     console.log("settings: config.json was edited outside Ciao, reloaded");
-    applySettings(next);
+    const prev = settings;
+    try {
+      applySettings(next);
+    } catch (e) {
+      console.warn("settings: the edited config.json doesn't apply, keeping the settings before it:", (e as Error).message);
+      applySettings(prev);
+      return;
+    }
     historyWin?.webContents.send("settings:reloaded", settings); // an open Settings page would save its old copy back
   });
   nativeTheme.on("updated", () => {

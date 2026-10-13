@@ -18,6 +18,8 @@ const api = {
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
     hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),
+    /** The user closed or used the card (it is folding now): a kept one is done with. */
+    closed: (seq: number) => ipcRenderer.send("overlay:closed", seq),
     /** x/y: where the press was on screen; the window then follows the cursor until dragEnd. */
     dragStart: (mode: "move" | "resize", x: number, y: number) => ipcRenderer.send("overlay:drag-start", mode, x, y),
     dragEnd: () => ipcRenderer.send("overlay:drag-end"),
