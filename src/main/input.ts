@@ -243,6 +243,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
       this.pending.delete(msg.id);
       return;
     }
+    if (this.stopped) return; // quitting: a trigger pressed while the helper finishes starts nothing
     // Trigger presses are too chatty to log; key events may carry the text of a field.
     if (msg.type !== "trigger" && msg.type !== "key") console.log("input:", line);
     switch (msg.type) {
