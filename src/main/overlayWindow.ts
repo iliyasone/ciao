@@ -15,8 +15,8 @@ import type { OverlayPort } from "./dictation";
 // don't always arrive (a suggestion that came up while you typed elsewhere let its clicks through).
 // Linux can't forward them at all, so there the window's shape is cut to what is drawn instead.
 // A press that comes while the window still lets clicks through goes to the app below and is lost,
-// so the check runs often and counts a few pixels around what is drawn: the window takes the mouse
-// before the pointer reaches the pill, not some time after.
+// so near what is drawn the check runs every 25 ms; far from it, less often (by how soon the pointer
+// could get there), so an idle pill doesn't wake the app 40 times a second.
 //
 // Dragging follows the cursor from here, not the pointer positions the renderer sees: those are
 // measured against a window that is itself moving, and stall or jump while it does.
@@ -33,10 +33,11 @@ const MAX_CARD_WIDTH = 1400;
 export const MIN_LINES = 3;
 export const MAX_LINES = 24;
 const LINUX = process.platform === "linux";
-/** How often the cursor is checked against what is drawn (Windows, macOS). */
-const POINTER_POLL_MS = 25;
-/** Around what is drawn, px: the window takes the mouse this close to it (Windows, macOS). */
-const HOVER_MARGIN = 6;
+/** How often the cursor is checked against what is drawn, near it and far from it (Windows, macOS). */
+const POLL_MIN_MS = 25;
+const POLL_MAX_MS = 250;
+/** A fast flick of the pointer, px per ms: the next check comes before it could reach what is drawn. */
+const POINTER_SPEED = 4;
 /** How often a drag moves the window after the cursor (about a frame). */
 const DRAG_MS = 16;
 
@@ -64,8 +65,7 @@ export class OverlayWindow implements OverlayPort {
   /** The renderer saw the pointer over something it draws. */
   private hovered = false;
   private ignoring = true;
-  private poll: ReturnType<typeof setInterval> | null = null;
-  private pollMs = 0;
+  private poll: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     preload: string,
@@ -167,35 +167,47 @@ export class OverlayWindow implements OverlayPort {
   }
 
   private updatePoll(): void {
-    const ms = LINUX || !this.region.length ? 0 : POINTER_POLL_MS;
-    if (ms === this.pollMs) return;
+    const on = !LINUX && this.region.length > 0;
+    if (on === (this.poll !== null)) return;
     this.stopPoll();
-    this.pollMs = ms;
-    if (ms) this.poll = setInterval(() => this.updateMouse(), ms);
+    if (on) this.tick();
+  }
+
+  private tick(): void {
+    const distance = this.updateMouse();
+    this.poll = setTimeout(() => this.tick(), clamp(distance / POINTER_SPEED, POLL_MIN_MS, POLL_MAX_MS));
   }
 
   private stopPoll(): void {
-    if (this.poll) clearInterval(this.poll);
+    if (this.poll) clearTimeout(this.poll);
     this.poll = null;
-    this.pollMs = 0;
   }
 
-  /** Windows, macOS: clicks and wheel scrolling land on the window while the pointer is over what it draws, or a drag is on. */
-  private updateMouse(): void {
-    if (LINUX || this.win.isDestroyed()) return;
+  /**
+   * Windows, macOS: clicks and wheel scrolling land on the window while the pointer is over what it draws, or a drag is on.
+   * Returns how far the pointer is from what is drawn, px (0 over it; Infinity with nothing to check).
+   */
+  private updateMouse(): number {
+    if (LINUX || this.win.isDestroyed()) return Infinity;
     let interactive = this.drag0 !== null;
+    let distance = interactive ? 0 : Infinity;
     if (!interactive && this.win.isVisible()) {
       const b = this.win.getBounds();
       const p = screen.getCursorScreenPoint();
+      for (const r of this.region) {
+        const dx = Math.max(b.x + r.x - p.x, 0, p.x - (b.x + r.x + r.width));
+        const dy = Math.max(b.y + r.y - p.y, 0, p.y - (b.y + r.y + r.height));
+        distance = Math.min(distance, Math.hypot(dx, dy));
+      }
       // A hover the renderer missed the end of doesn't count once the pointer is off the window.
-      const m = HOVER_MARGIN;
-      interactive =
-        (this.hovered && contains(b, p)) ||
-        this.region.some((r) => contains({ x: b.x + r.x - m, y: b.y + r.y - m, width: r.width + 2 * m, height: r.height + 2 * m }, p));
+      interactive = (this.hovered && contains(b, p)) || this.region.some((r) => contains({ x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height }, p));
+      if (interactive) distance = 0;
     }
-    if (interactive !== this.ignoring) return;
-    this.ignoring = !interactive;
-    this.win.setIgnoreMouseEvents(this.ignoring, { forward: true });
+    if (interactive === this.ignoring) {
+      this.ignoring = !interactive;
+      this.win.setIgnoreMouseEvents(this.ignoring, { forward: true });
+    }
+    return distance;
   }
 
   /** The renderer finished folding away the card for `seq`. */
@@ -214,12 +226,12 @@ export class OverlayWindow implements OverlayPort {
   // ── Moving and resizing ─────────────────────────────────────────────────
 
   /**
-   * dx/dy: how far the pointer already went since the press (a move starts once it went a few
-   * pixels). From here the window follows the cursor until dragEnd.
+   * x/y: where the press was on screen (a move starts once the pointer went a few pixels from it;
+   * the window hasn't moved yet, so the renderer's reading is right). From here the window follows
+   * the cursor until dragEnd.
    */
-  dragStart(mode: "move" | "resize", dx: number, dy: number): void {
-    const c = screen.getCursorScreenPoint();
-    this.drag0 = { mode, bounds: this.win.getBounds(), lines: this.placement().lines, cursor: { x: c.x - dx, y: c.y - dy } };
+  dragStart(mode: "move" | "resize", x: number, y: number): void {
+    this.drag0 = { mode, bounds: this.win.getBounds(), lines: this.placement().lines, cursor: { x, y } };
     this.dragAt = { x: NaN, y: NaN };
     this.updateMouse();
     this.drag();
@@ -233,7 +245,7 @@ export class OverlayWindow implements OverlayPort {
   }
 
   /** Puts the window where the cursor says. "move" shifts it; "resize" widens the card (both ways) and adds lines (upwards). */
-  drag(): void {
+  private drag(): void {
     const d = this.drag0;
     if (!d || this.win.isDestroyed()) return;
     const c = screen.getCursorScreenPoint();

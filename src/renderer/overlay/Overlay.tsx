@@ -220,14 +220,25 @@ function hoverHandlers(hovered: React.RefObject<boolean>, dragging: React.RefObj
 
 /**
  * Press and move a few pixels to drag the window ("move") or size the card ("resize", from the
- * corner: at once); a press without moving is a click. Offsets are sent relative to where the
- * press began, so the main process applies them to the window's original bounds. Buttons and the
- * scroll bar keep their own clicks.
+ * corner: at once); a press without moving is a click. Once it is a drag, the main process moves the
+ * window after the cursor from where the press began until the press ends. Buttons and the scroll
+ * bar keep their own clicks.
  */
 function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, hovered: React.RefObject<boolean>, onClick?: () => void) {
   // In a ref: the card re-renders every 200 ms while recording, and handlers recreated mid-drag
   // must still know where the press began.
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  // Unmounted mid-drag (a dictation started and the card took the pill's place): its lostpointercapture
+  // never comes, so end the drag here, or the window would follow the cursor and take its clicks.
+  useEffect(
+    () => () => {
+      if (!press.current?.moved) return;
+      press.current = null;
+      dragging.current = false;
+      ciao.overlay.dragEnd();
+    },
+    [],
+  );
   const end = (click: boolean) => {
     const p = press.current;
     press.current = null;
@@ -254,7 +265,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
       if (mode === "resize") {
         e.currentTarget.setPointerCapture(e.pointerId);
         dragging.current = true;
-        ciao.overlay.dragStart(mode, 0, 0);
+        ciao.overlay.dragStart(mode, e.screenX, e.screenY);
       }
     },
     onPointerMove: (e: React.PointerEvent) => {
@@ -270,10 +281,8 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
         p.moved = true;
         dragging.current = true;
         // The main process moves the window after the cursor from here on.
-        ciao.overlay.dragStart(mode, dx, dy);
-        return;
+        ciao.overlay.dragStart(mode, p.x, p.y);
       }
-      ciao.overlay.drag();
     },
     onPointerUp: () => end(true),
     onPointerCancel: () => end(false),
