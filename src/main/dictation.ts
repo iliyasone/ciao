@@ -30,8 +30,8 @@ export interface OverlayPort {
 
 const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, see dropsTaps)
 const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
-/** A short press starts nothing: tapHandsFree is off, or T3 mode is on (only a hold dictates there). */
-const dropsTaps = (s: Settings) => !s.tapHandsFree || s.t3Mode;
+/** A short press starts nothing (tapHandsFree off); otherwise it starts hands-free, in T3 mode too. */
+const dropsTaps = (s: Settings) => !s.tapHandsFree;
 /** T3 mode: how long the stop waits for T3 Code, just called forward, to be in front. */
 const FORWARD_WAIT_MS = 400;
 /** T3 mode, sending: after the text showed up in the box, so the editor has taken it in. */
