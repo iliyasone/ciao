@@ -230,7 +230,9 @@ export class OverlayWindow implements OverlayPort {
    * the cursor until dragEnd.
    */
   dragStart(mode: "move" | "resize", x: number, y: number): void {
-    this.drag0 = { mode, bounds: this.win.getBounds(), lines: this.placement().lines, cursor: { x, y } };
+    // A resize starts at the press itself: from the cursor, or a fractional screenX would size the card by a pixel on a click.
+    const cursor = mode === "resize" ? screen.getCursorScreenPoint() : { x, y };
+    this.drag0 = { mode, bounds: this.win.getBounds(), lines: this.placement().lines, cursor };
     this.dragAt = { x: NaN, y: NaN };
     this.updateMouse();
     this.drag();

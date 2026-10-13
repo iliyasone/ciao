@@ -247,6 +247,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
     }
   };
   const startDrag = (x: number, y: number) => {
+    unwatch.current?.();
     dragging.current = true;
     ciao.overlay.dragStart(mode, x, y);
     const over = () => end(false);
