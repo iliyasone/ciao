@@ -23,6 +23,7 @@ const LANGUAGES: { value: Lang; label: string }[] = [
 export function SettingsPanel({ updateState }: { updateState: UpdateState | null }) {
   const [s, setS] = useState<Settings | null>(null);
   const [wakeAvailable, setWakeAvailable] = useState(false);
+  const [canBringForward, setCanBringForward] = useState(false);
   const [saved, setSaved] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** What a pending save sends: the latest settings, including terms merged by a sync meanwhile. */
@@ -35,6 +36,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
       setS(v);
     });
     void ciao.settings.wakeAvailable().then(setWakeAvailable);
+    void ciao.settings.canBringForward().then(setCanBringForward);
     // Terms and context merged from another device replace what's shown here.
     const offSynced = ciao.settings.onSynced((synced) => {
       if (!latest.current) return;
@@ -181,6 +183,12 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           <Toggle label={tr.t3.mode} hint={tr.t3.modeHint} value={s.t3Mode} onChange={(v) => update({ t3Mode: v })} />
           {s.t3Mode && (
             <>
+              {canBringForward && (
+                <Toggle label={tr.t3.forward} hint={tr.t3.forwardHint} value={s.t3Forward} onChange={(v) => update({ t3Forward: v })} />
+              )}
+              {canBringForward && (
+                <Toggle label={tr.t3.send} hint={tr.t3.sendHint} value={s.t3Send} onChange={(v) => update({ t3Send: v })} />
+              )}
               <Row label={tr.t3.prefix} hint={tr.t3.affixHint}>
                 <input
                   value={s.t3Prefix}

@@ -64,6 +64,10 @@ export interface Settings {
   /** T3 mode: added before and after each prompt (e.g. "Клауди," to have the agent answer by voice). */
   t3Prefix: string;
   t3Suffix: string;
+  /** T3 mode: a dictation held past a tap brings the T3 Code window forward, on the chat it shows. */
+  t3Forward: boolean;
+  /** T3 mode: press Enter once the text is confirmed in the chat box. */
+  t3Send: boolean;
   /** A short press of a dictation trigger starts hands-free mode; off, it is dropped and only a hold dictates. */
   tapHandsFree: boolean;
   /** Send anonymous usage counts (launches, dictations); never text or audio. */

@@ -13,7 +13,7 @@ import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voic
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
 import { revisePauses } from "../core/revision";
-import { isT3Code, t3Prompt } from "../core/t3";
+import { isT3Code, occurrences, T3_PROCESS, t3Prompt } from "../core/t3";
 import { isLoneModifierTrigger } from "../core/triggers";
 
 /** What the controller needs from the overlay window. */
@@ -32,6 +32,10 @@ const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop i
 const SHOW_AFTER_MS = 150; // don't flash the overlay for Ctrl+C-style shortcuts
 /** A short press starts nothing: tapHandsFree is off, or T3 mode is on (only a hold dictates there). */
 const dropsTaps = (s: Settings) => !s.tapHandsFree || s.t3Mode;
+/** T3 mode: how long the stop waits for T3 Code, just called forward, to be in front. */
+const FORWARD_WAIT_MS = 400;
+/** T3 mode, sending: after the text showed up in the box, so the editor has taken it in. */
+const SEND_AFTER_MS = 150;
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
@@ -81,6 +85,8 @@ interface Active {
   target: Promise<ForegroundWindow | null>;
   /** The window in front when the dictation was stopped: where the text goes (see stop()). */
   stopTarget?: Promise<ForegroundWindow | null>;
+  /** T3 mode: T3 Code is being called forward; true once a window was. */
+  forwarded?: Promise<boolean>;
   targetMoved?: boolean;
   phase: "recording" | "finishing";
   shown: boolean;
@@ -104,6 +110,8 @@ interface Active {
   miss?: PasteMiss;
   /** T3 mode: how the paste was checked (src/main/paste.ts). */
   check?: T3Check;
+  /** T3 mode, Enter pressed: the box gave the text up (false: it stayed; null: the box couldn't be read after). */
+  sent?: boolean | null;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
   /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
@@ -378,6 +386,40 @@ export class DictationController {
         a.pausedMedia = true;
         this.deps.input.media(true);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
+    // T3 mode: T3 Code comes forward on the chat it shows, so the text goes there when the hold ends. Not
+    // at once: a tap is dropped in T3 mode, and a held Ctrl may still turn into Ctrl+C for the app in front.
+    // Not for the wake word, which may be a false alarm while you type elsewhere.
+    if (!replay && settings.t3Mode && settings.t3Forward && trigger !== "wake_word")
+      setTimeout(() => {
+        if (this.active !== a || a.phase !== "recording") return;
+        a.forwarded = this.bringT3Forward(a);
+      }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
+  }
+
+  /**
+   * T3 Code to the front, unless it is there already (another T3 window or tab may be the one in use)
+   * or the dictation was cancelled meanwhile. Whether a window was called forward.
+   */
+  private async bringT3Forward(a: Active): Promise<boolean> {
+    const front = await this.deps.input.foreground();
+    if ((front && isT3Code(front)) || !this.active || this.active.seq !== a.seq) return false;
+    const hwnd = await this.deps.input.activate(T3_PROCESS);
+    console.log("t3: brought forward", hwnd || "nothing");
+    return hwnd !== 0;
+  }
+
+  /**
+   * The window in front as the dictation stops. If T3 Code was just called forward, the window manager
+   * may not have switched yet: wait for it a moment, so the text doesn't miss it.
+   */
+  private async stopTarget(a: Active): Promise<ForegroundWindow | null> {
+    if (!a.forwarded || !(await a.forwarded)) return this.deps.input.foreground();
+    let front = await this.deps.input.foreground();
+    for (const until = Date.now() + FORWARD_WAIT_MS; !(front && isT3Code(front)) && Date.now() < until; ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      front = await this.deps.input.foreground();
+    }
+    return front;
   }
 
   /** Ciao quits: resume the music this dictation paused. True if there was any to resume. */
@@ -411,7 +453,7 @@ export class DictationController {
     a.shown = true;
     // The text goes where you are when you stop, not where you started: people start talking, go to
     // the window the text is for, and stop there (mostly across virtual desktops, by the usage counts).
-    a.stopTarget = this.deps.input.foreground();
+    a.stopTarget = this.stopTarget(a);
     this.deps.input.arm(false);
     this.resumeMedia(a);
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
@@ -552,6 +594,18 @@ export class DictationController {
         delivery = r.delivery;
         if (r.delivery === "clipboard") a.miss = r.miss;
         else a.check = r.check;
+        // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
+        // name (not on Wayland, where Enter would go to whatever is in front), and with no trigger held:
+        // a held Right Ctrl would make it Ctrl+Enter, which T3 Code takes as steering the running turn.
+        if (r.delivery === "pasted" && r.check === "landed" && settings.t3Send && target.hwnd !== 0 && !this.hotkeyDown) {
+          await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
+          if (!this.hotkeyDown && (await this.deps.input.enter(target.hwnd))) {
+            // Sent: the box gave the text up. (A T3 window under 640 px takes Enter as a new line.)
+            await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
+            const box = await this.deps.input.field(target.hwnd);
+            a.sent = box.text === null ? null : occurrences(box.text, r.text) === 0;
+          }
+        }
         this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
       } else if (settings.autoPaste && target) {
         const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
@@ -571,7 +625,7 @@ export class DictationController {
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
-    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", entry.target?.process ?? "", `${entry.durationMs}ms`);
+    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", a.sent === undefined ? "" : a.sent === null ? "enter" : a.sent ? "sent" : "not-sent", entry.target?.process ?? "", `${entry.durationMs}ms`);
     this.deps.store.save(entry);
     this.deps.changed(entry);
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
@@ -599,7 +653,7 @@ export class DictationController {
     let stop = a.stopTarget ? await a.stopTarget : null;
     if (stop && this.deps.isOwnWindow(stop.hwnd)) stop = null;
     if (!stop || !start || stop.hwnd === start.hwnd) return stop ?? start;
-    a.targetMoved = true;
+    a.targetMoved = !((a.forwarded ? await a.forwarded : false) && isT3Code(stop)); // not when Ciao itself brought T3 Code forward
     a.entry.target = { title: stop.title, process: stop.process };
     return stop;
   }

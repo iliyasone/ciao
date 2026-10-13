@@ -91,6 +91,26 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     - anything else (the field can't be read, you switched away or sent it at once):
       the text stays on the clipboard, so it is never lost, and your old clipboard
       isn't put back;
+  - *Bring T3 Code forward when dictating* (on by default): once a hold lasts past a
+    tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
+    then), or on a click on the pill, the T3 Code window comes forward on the chat
+    it shows, so you can dictate from any app. Not when T3 Code is in front already,
+    and not for the wake word. T3 Code puts focus back into its chat box when its
+    window is activated, unless a dialog or the command palette had it, or its
+    terminal panel is open (then a paste still reaches the box, see above). Ciao waits up to 0.4 s at the end of the hold for the switch. Not on a
+    Wayland desktop, where no app may bring another forward;
+  - *Send right away* (off by default): Ciao presses Enter once it has seen the
+    text in the chat box, and never when it isn't sure, or while a trigger is still
+    held (Right Ctrl would make it Ctrl+Enter). A prompt said in several holds goes
+    out in parts. T3 Code has to send on Enter (its *Settings → General → Send
+    shortcut*; with *Ctrl+Enter for multi-line*, a prompt with paragraphs gets a new
+    line instead). An open `@` or `/` menu, dialog or command palette takes the
+    Enter, and a T3 Code window narrower than 640 px takes it as a new line (such a
+    window doesn't put focus back into the chat box either). `ciao.log` says
+    whether the box gave the text up (`sent`, `not-sent`, or `enter` when it couldn't
+    tell). On Linux, Ciao sees T3 Code's chat box only with desktop accessibility on
+    (see [Linux](#linux)); otherwise it never sends. It doesn't send there while you
+    hold a modifier key either. Not on Wayland;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
     is empty (or can't be read), so a prompt said in several holds gets them once:
     the suffix then follows the first hold's words, and the later holds start with
@@ -609,7 +629,8 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `target_on_other_desktop` (true when you switched to another
     virtual desktop; absent when Windows can't tell). `target_moved` is true when
     the window in front at the end was another one than at the start (the text
-    then goes to the one at the end).
+    then goes to the one at the end), unless it is T3 Code that T3 mode brought
+    forward.
 
 Each event carries a random install id from `telemetry-id` in the [data folder](#where-things-are-stored). It is
 not derived from your machine or accounts. No text, audio, window titles, prompts,
@@ -729,11 +750,13 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   the focused field through UI Automation (`FieldReader.cs`) and pauses the music
   through the system media sessions (`Media.cs`).
 - `src/linux-input/` — the Linux one, with the same protocol: evdev for the keys,
-  X11 (libX11/libXtst through koffi) for the active window and Ctrl+V, uinput for
+  X11 (libX11/libXtst through koffi) for the active window, bringing an app forward
+  (`_NET_ACTIVE_WINDOW`), Ctrl+V and Enter, uinput for
   Ctrl+V on Wayland, AT-SPI (libatspi) for the focused field, and MPRIS over D-Bus
   for pausing the music (`media.ts`). Electron runs it as plain Node.
 - `native/mac-input/` — the macOS one (Swift), same protocol: an event tap for
-  the keys, the frontmost app, ⌘V, the Accessibility API for the focused field, and
+  the keys, the frontmost app, bringing an app forward (Launch Services), ⌘V and
+  Return, the Accessibility API for the focused field, and
   AppleScript to pause Music and Spotify.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.

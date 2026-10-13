@@ -75,6 +75,7 @@ const api = {
     /** A key was saved, here or on another device (through sync). */
     onKeys: (cb: () => void) => on("settings:keys", cb),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),
+    canBringForward: (): Promise<boolean> => ipcRenderer.invoke("settings:can-bring-forward"),
     setApiKey: (provider: Provider, key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", provider, key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
     captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),

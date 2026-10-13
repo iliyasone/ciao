@@ -39,6 +39,8 @@ export const DEFAULT_SETTINGS: Settings = {
   t3Mode: false,
   t3Prefix: "",
   t3Suffix: "",
+  t3Forward: true,
+  t3Send: false,
   wakeWord: false,
   pauseMedia: false,
   formatText: true,
