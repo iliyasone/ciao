@@ -358,7 +358,7 @@ export class DictationController {
       if (this.active !== a || a.phase !== "recording") return;
       a.shown = true;
       this.push(a);
-    }, SHOW_AFTER_MS);
+    }, settings.tapHandsFree ? SHOW_AFTER_MS : TAP_MS); // with taps dropped, a tap shows nothing at all
   }
 
   private checkStopPhrase(a: Active): void {
