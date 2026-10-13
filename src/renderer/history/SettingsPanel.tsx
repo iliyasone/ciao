@@ -174,6 +174,28 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           </Row>
         </Card>
 
+        <Card title={tr.t3.title}>
+          <Toggle label={tr.t3.mode} hint={tr.t3.modeHint} value={s.t3Mode} onChange={(v) => update({ t3Mode: v })} />
+          {s.t3Mode && (
+            <>
+              <Row label={tr.t3.prefix} hint={tr.t3.affixHint}>
+                <input
+                  value={s.t3Prefix}
+                  onChange={(e) => update({ t3Prefix: e.target.value }, true)}
+                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                />
+              </Row>
+              <Row label={tr.t3.suffix}>
+                <input
+                  value={s.t3Suffix}
+                  onChange={(e) => update({ t3Suffix: e.target.value }, true)}
+                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                />
+              </Row>
+            </>
+          )}
+        </Card>
+
         {updateState && <UpdateCard state={updateState} />}
 
         {/* The delay level is all it holds, and only OpenAI has one. */}

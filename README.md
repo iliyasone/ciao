@@ -71,6 +71,22 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - macOS: only Music and Spotify, by AppleScript: macOS has no public way to
     pause other apps. macOS asks once whether Ciao may control each of them: as you
     turn the option on for the ones running then, otherwise at the first dictation.
+- **T3 mode** for dictating prompts into [T3 Code](https://t3.codes), in *Settings →
+  T3 Code*. With it on:
+  - only a hold dictates; a short press does nothing;
+  - the text is pasted only into T3 Code, whichever chat is open there. If another
+    app is in front when you let go, nothing is pasted, and the text waits on the
+    clipboard;
+  - after pasting, Ciao reads T3 Code's focused field to check that the text is
+    there. If the field reads fine but hasn't got it (focus was on a message, not
+    the chat box), the card says so and the text stays on the clipboard. If the
+    field can't be read, the text stays on the clipboard anyway, so it is never lost;
+  - *Before the prompt* and *After the prompt* are added to every prompt, for
+    example "Клауди," when your agent answers by voice to that name.
+
+  T3 Code doesn't tell other apps which chat is open (its window is always titled
+  "T3 Code"), so Ciao goes by the window in front. On a Wayland desktop, where
+  no app can tell which window is in front, it pastes without that check.
 - **The card stays out of your way.**
   - Moving the pointer over it makes it see-through, so you can read what's
     underneath; scroll it or start dragging it and it turns solid again.
@@ -571,10 +587,12 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `terminal`, `browser`, `telegram`, …). Any program not on the list is sent as
     `other`, never by name. When the text could not be pasted,
     `paste_miss` says why: `focus-changed`, `no-target`, `auto-paste-off`,
-    `no-permission` (macOS: Ciao has no Accessibility permission), or
-    `no-helper` / `timeout` / `unknown` when the input helper failed. On
-    `focus-changed` there are also `switched_to_app` (the app in front instead, same list),
-    `target_closed`, and `target_on_other_desktop` (true when you switched to another
+    `no-permission` (macOS: Ciao has no Accessibility permission), `not-t3` and
+    `not-in-field` (T3 mode: T3 Code wasn't in front, or the text didn't show up in
+    its chat box), or `no-helper` / `timeout` / `unknown` when the input helper
+    failed. On `focus-changed` and `not-t3` there is also `switched_to_app` (the app
+    in front instead, same list); on `focus-changed` also `target_closed` and
+    `target_on_other_desktop` (true when you switched to another
     virtual desktop; absent when Windows can't tell). `target_moved` is true when
     the window in front at the end was another one than at the start (the text
     then goes to the one at the end).

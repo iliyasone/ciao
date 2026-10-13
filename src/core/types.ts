@@ -56,6 +56,14 @@ export interface Settings {
   wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */
   stopPhrase: boolean;
+  /**
+   * T3 mode: dictation for T3 Code's chat box. Only a hold dictates (taps are dropped), and the text is
+   * pasted only into T3 Code and checked to have landed there; otherwise it stays on the clipboard.
+   */
+  t3Mode: boolean;
+  /** T3 mode: added before and after each prompt (e.g. "Клауди," to have the agent answer by voice). */
+  t3Prefix: string;
+  t3Suffix: string;
   /** A short press of a dictation trigger starts hands-free mode; off, it is dropped and only a hold dictates. */
   tapHandsFree: boolean;
   /** Send anonymous usage counts (launches, dictations); never text or audio. */
