@@ -73,11 +73,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     turn the option on for the ones running then, otherwise at the first dictation.
 - **T3 mode** for dictating prompts into [T3 Code](https://t3.codes), in *Settings →
   T3 Code*. With it on:
-  - holding a trigger dictates; a short press does nothing (the pill and the wake
-    word still start hands-free dictations);
+  - holding a trigger dictates. A short press starts hands-free mode, as elsewhere,
+    unless *A short press starts hands-free mode* is off (then it does nothing); the
+    pill and the wake word start hands-free dictations too. When a hands-free
+    dictation ends, the text goes the same way as after a hold (into T3 Code,
+    checked, sent if *Send right away* is on);
   - the text is pasted only into T3 Code, whichever chat is open there. If another
-    app is in front when you let go, nothing is pasted, and the text waits on the
-    clipboard;
+    app is in front when the dictation ends, nothing is pasted, and the text waits
+    on the clipboard;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
     - the text shows up in the box: done, and your clipboard comes back at once
@@ -93,12 +96,16 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
       isn't put back;
   - *Bring T3 Code forward when dictating* (on by default): once a hold lasts past a
     tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
-    then), or on a click on the pill, the T3 Code window comes forward on the chat
-    it shows, so you can dictate from any app. Not when T3 Code is in front already,
-    and not for the wake word. T3 Code puts focus back into its chat box when its
-    window is activated, unless a dialog or the command palette had it, or its
-    terminal panel is open (then a paste still reaches the box, see above). Ciao waits up to 0.4 s at the end of the hold for the switch. Not on a
-    Wayland desktop, where no app may bring another forward;
+    then), after a tap that starts hands-free mode, once your first words are
+    transcribed or, if it ends before that, once its text is in (so a stray tap
+    doesn't take the focus, and with Right Ctrl not before 1 s either), or on a
+    click on the pill, the T3 Code window comes forward on the chat it shows, so you
+    can dictate from any app. Not when
+    T3 Code is in front already, and not for the wake word. T3 Code puts focus back
+    into its chat box when its window is activated, unless a dialog or the command
+    palette had it, or its terminal panel is open (then a paste still reaches the
+    box, see above). Ciao waits up to 0.4 s at the end of the dictation for the
+    switch. Not on a Wayland desktop, where no app may bring another forward;
   - *Send right away* (off by default): Ciao presses Enter once it has seen the
     text in the chat box, and never when it isn't sure, or while a trigger is still
     held (Right Ctrl would make it Ctrl+Enter). A prompt said in several holds goes
