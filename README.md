@@ -132,6 +132,15 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   finished, nothing is typed anywhere and the text is left on the clipboard. After
   a successful paste, the clipboard is restored 1.5 s later, unless something else
   was copied meanwhile (in T3 mode, see above).
+- **Text that didn't land stays in reach.** When the text went to the clipboard
+  instead, when T3 mode couldn't see it reach the chat box, or when it was pasted
+  while nothing editable had focus (a click had left focus on a page or a list),
+  the card stays with the text instead of folding away. Select any of it with the
+  mouse, or drag all of it with *Drag*, into another app's field; *Copy* puts it on
+  the clipboard. It stays until you close it, use it, or start the next dictation.
+  The "nothing editable" check runs only in windows whose fields Ciao has read
+  before (Chromium apps show theirs only after a first read) and not in terminals,
+  which take a paste without showing a field.
 - **Learns the words you correct.** When you fix a misheard word in the pasted
   text ("постхок" → "PostHog", "клод код" → "Claude Code"), Ciao offers to add it
   to the terms, in a small card under its own name; one click and recognition
@@ -581,7 +590,8 @@ build signed with another key can't sign in.
 Everything is under `%APPDATA%\Ciao` on Windows, `~/Library/Application Support/Ciao`
 on macOS and `~/.config/Ciao` on Linux:
 
-- `config.json` — settings. Most of them are edited in the app.
+- `config.json` — settings. Most of them are edited in the app. An edit to the file
+  while Ciao runs is picked up within 2 s, instead of being overwritten by Ciao's next save.
 - `openai-key.txt`, `gemini-key.txt` — the API keys.
 - `history\<id>\` — one folder per dictation, holding `audio.wav` and
   `entry.json` (transcripts, timings, cost, where it was pasted). The `<id>`

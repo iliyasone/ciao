@@ -36,6 +36,8 @@ const dropsTaps = (s: Settings) => !s.tapHandsFree || s.t3Mode;
 const FORWARD_WAIT_MS = 400;
 /** T3 mode, sending: after the text showed up in the box, so the editor has taken it in. */
 const SEND_AFTER_MS = 150;
+/** After a plain paste, before checking that a field had focus: the app needs a moment to take it in. */
+const LANDED_CHECK_MS = 400;
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
@@ -562,6 +564,7 @@ export class DictationController {
 
     let phase: OverlayPhase;
     let delivery: Delivery = "none";
+    let keep = false;
     if (!text) {
       if (entry.durationMs < 1500 && !entry.error) {
         console.log("dictation", entry.id, "dropped", "empty", `${entry.durationMs}ms`);
@@ -577,6 +580,8 @@ export class DictationController {
       this.deps.overlay.final(a.seq, text);
       const target = await this.target(a);
       const t3 = settings.t3Mode;
+      /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
+      let sent = text;
       // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
       this.lastText = text;
       if (a.replay) {
@@ -584,6 +589,7 @@ export class DictationController {
       } else if (t3 && settings.autoPaste && target && !isT3Code(target) && !(target.hwnd === 0 && !target.process)) {
         // Never into another app. (A Wayland desktop names no window: there it pastes as usual.)
         const out = t3Prompt(text, settings.t3Prefix, settings.t3Suffix);
+        sent = out;
         await cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
@@ -592,6 +598,7 @@ export class DictationController {
       } else if (t3 && settings.autoPaste && target) {
         const r = await pasteIntoT3(this.deps.input, text, { prefix: settings.t3Prefix, suffix: settings.t3Suffix }, target.hwnd, settings.restoreClipboard);
         delivery = r.delivery;
+        sent = r.text;
         if (r.delivery === "clipboard") a.miss = r.miss;
         else a.check = r.check;
         // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
@@ -614,6 +621,7 @@ export class DictationController {
         this.deps.delivered(text, r.delivery === "pasted" ? target.hwnd : null);
       } else {
         const out = t3 ? t3Prompt(text, settings.t3Prefix, settings.t3Suffix) : text;
+        sent = out;
         await cancelRestore();
         await clipboard.writeText(out);
         delivery = "clipboard";
@@ -622,6 +630,11 @@ export class DictationController {
       }
       entry.status = "done";
       phase = delivery === "clipboard" ? "clipboard" : "done";
+      // Not seen where it went: the card keeps the text in reach. A T3 paste the check couldn't see land
+      // counts; a plain paste is checked after the card shows (checkLanded), so nothing waits on it.
+      if (!a.replay && (delivery === "clipboard" || (delivery === "pasted" && a.check !== undefined && a.check !== "landed"))) keep = true;
+      else if (!a.replay && delivery === "pasted" && !t3 && target) void this.checkLanded(a, target, sent);
+      if (keep && sent !== text) this.deps.overlay.final(a.seq, sent);
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
@@ -634,13 +647,32 @@ export class DictationController {
     this.deps.overlay.state({
       ...this.baseState(a),
       phase,
+      keep,
       message:
         phase === "clipboard"
           ? missMessage(a.miss?.reason)
+          : keep
+            ? t().overlay.unconfirmed
           : phase === "saved"
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     });
+  }
+
+  /**
+   * After a plain paste: if nothing editable had focus (a click had left it on a page, a list, a
+   * picture), the text went nowhere you can see. The card comes back with it, unless a new dictation
+   * started. Only in windows whose fields have been read before (see InputHelper.fieldsReadable),
+   * and not in terminals, which show no field but take the paste.
+   */
+  private async checkLanded(a: Active, target: ForegroundWindow, text: string): Promise<void> {
+    if (appLabel(target.process) === "terminal" || !this.deps.input.fieldsReadable(target.hwnd)) return;
+    await new Promise((resolve) => setTimeout(resolve, LANDED_CHECK_MS));
+    const r = await this.deps.input.field(target.hwnd);
+    if (r.text !== null || r.reason !== "no-field" || this.active || this.seq !== a.seq) return;
+    console.log("dictation", a.entry.id, "pasted where no field had focus: card kept");
+    this.deps.overlay.state({ ...this.baseState(a), phase: "done", keep: true, message: t().overlay.noFieldFocused });
+    this.deps.overlay.final(a.seq, text);
   }
 
   /**

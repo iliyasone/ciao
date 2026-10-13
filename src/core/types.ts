@@ -123,6 +123,11 @@ export interface OverlayState {
   /** Increments per dictation, so stale renderer messages can be ignored. */
   seq: number;
   phase: OverlayPhase;
+  /**
+   * The text may not be where it was meant to go: the card stays with it, selectable and draggable, with
+   * Copy, until closed, used, or the next dictation.
+   */
+  keep?: boolean;
   handsFree: boolean;
   /** Epoch ms; the timer runs in the renderer. */
   startedAt: number;

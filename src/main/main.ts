@@ -16,7 +16,7 @@ import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
-import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings } from "./settings";
+import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
 import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
@@ -590,6 +590,10 @@ void app.whenReady().then(() => {
   // applySettings only re-registers the hotkey when it changes, and here prev === next.
   registerPasteLast();
   applySettings(settings);
+  watchSettings((next) => {
+    console.log("settings: config.json was edited outside Ciao, reloaded");
+    applySettings(next);
+  });
   nativeTheme.on("updated", () => {
     if (!historyWin || historyWin.isDestroyed()) return;
     const c = chrome();

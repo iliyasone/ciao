@@ -57,10 +57,14 @@ function systemLanguage(): Settings["language"] {
   return langFromLocale(app.getPreferredSystemLanguages()[0] ?? app.getSystemLocale());
 }
 
+/** The settings file as Ciao last read or wrote it: anything else on disk was edited from outside. */
+let known: string | null = null;
+
 export function loadSettings(): Settings {
   let raw: Partial<Settings> & { hotkey?: string; middleClick?: boolean; overlayPosition?: { x: number; y: number } | null };
   try {
-    raw = JSON.parse(fs.readFileSync(file(), "utf8"));
+    known = fs.readFileSync(file(), "utf8");
+    raw = JSON.parse(known);
   } catch {
     return { ...DEFAULT_SETTINGS, language: systemLanguage() };
   }
@@ -84,7 +88,25 @@ export function loadSettings(): Settings {
 
 export function saveSettings(s: Settings): void {
   fs.mkdirSync(path.dirname(file()), { recursive: true });
-  fs.writeFileSync(file(), JSON.stringify(s, null, 2));
+  known = JSON.stringify(s, null, 2);
+  fs.writeFileSync(file(), known);
+}
+
+/**
+ * Calls back with the settings when config.json is edited from outside while Ciao runs (another app,
+ * an editor), so the next save doesn't put the old ones back over the edit. Checked every 2 s.
+ */
+export function watchSettings(changed: (s: Settings) => void): void {
+  fs.watchFile(file(), { interval: 2000 }, () => {
+    let text: string;
+    try {
+      text = fs.readFileSync(file(), "utf8");
+      JSON.parse(text); // half written: wait for the next change
+    } catch {
+      return;
+    }
+    if (text !== known) changed(loadSettings());
+  });
 }
 
 export function keyPath(provider: Provider): string {
