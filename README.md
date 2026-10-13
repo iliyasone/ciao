@@ -98,8 +98,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
     then), after a tap that starts hands-free mode, once your first words are
     transcribed or, if it ends before that, once its text is in (so a stray tap
-    doesn't take the focus, and with Right Ctrl not before 1 s either), or on a click on the pill, the T3 Code window
-    comes forward on the chat it shows, so you can dictate from any app. Not when
+    doesn't take the focus, and with Right Ctrl not before 1 s either), or on a
+    click on the pill, the T3 Code window comes forward on the chat it shows, so you
+    can dictate from any app. Not when
     T3 Code is in front already, and not for the wake word. T3 Code puts focus back
     into its chat box when its window is activated, unless a dialog or the command
     palette had it, or its terminal panel is open (then a paste still reaches the

@@ -604,8 +604,10 @@ export class DictationController {
       // Stopped before the first words came in (a short prompt, or an offline session): there are words
       // now, so T3 Code comes forward before the paste looks for it.
       if (a.forwardOnVoice) {
+        // Nothing came forward (T3 Code isn't running, or is in front already): the window at the stop stands.
+        const atStop = a.stopTarget;
         this.forwardNow(a);
-        a.stopTarget = this.stopTarget(a);
+        a.stopTarget = a.forwarded!.then((ok) => (ok || !atStop ? this.stopTarget(a) : atStop));
       }
       const target = await this.target(a);
       const t3 = settings.t3Mode;
