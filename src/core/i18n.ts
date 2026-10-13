@@ -521,7 +521,7 @@ const en: Strings = {
       modeHint:
         "For dictating prompts into T3 Code. Holding a key or button dictates; a short press starts hands-free mode if that is on under Keys. The text is pasted only into the T3 Code window in front, and Ciao reads the chat box before and after pasting to check it's there. If not, it stays on the clipboard and in history.",
       forward: "Bring T3 Code forward when dictating",
-      forwardHint: `Once a hold lasts longer than a tap, after a tap that started hands-free mode once your first words come in, or on a click on the pill, the T3 Code window comes forward on the chat it shows, and the text goes there. With ${isMac ? "Right Option" : "Right Ctrl"}, after a second: until then it may turn out to be a shortcut.`,
+      forwardHint: `Once a hold lasts longer than a tap; after a tap that started hands-free mode, once your first words come in; or on a click on the pill: the T3 Code window comes forward on the chat it shows, and the text goes there. With ${isMac ? "Right Option" : "Right Ctrl"}, after a second: until then it may turn out to be a shortcut.`,
       send: "Send right away",
       sendHint: "Ciao presses Enter once it sees the text in the chat box; when unsure, it doesn't send. A prompt said in several holds goes out in parts. T3 Code must send on Enter (Settings → General → Send shortcut). With the command palette, a dialog or an @ or / menu open in T3 Code, the Enter goes to that; in a window narrower than 640 px it adds a line.",
       prefix: "Before the prompt",

@@ -225,7 +225,7 @@ export class DictationController {
     if (a.voiceOnsetAt === undefined && level(pcm) > VOICE_LEVEL) a.voiceOnsetAt = Date.now();
   }
 
-  /** T3 mode, hands-free from a tap: the first words are in (or it stops with some), so T3 Code comes forward now. */
+  /** T3 mode, hands-free from a tap: the first words are in (or the final text, if it stopped first), so T3 Code comes forward now. */
   private forwardNow(a: Active): void {
     if (!a.forwardOnVoice) return;
     a.forwardOnVoice = false;
@@ -475,7 +475,6 @@ export class DictationController {
     a.shown = true;
     // The text goes where you are when you stop, not where you started: people start talking, go to
     // the window the text is for, and stop there (mostly across virtual desktops, by the usage counts).
-    if (a.liveText.trim()) this.forwardNow(a); // words heard but not yet in when it stopped
     a.stopTarget = this.stopTarget(a);
     this.deps.input.arm(false);
     this.resumeMedia(a);
@@ -602,6 +601,12 @@ export class DictationController {
       phase = entry.error ? "saved" : "empty";
     } else {
       this.deps.overlay.final(a.seq, text);
+      // Stopped before the first words came in (a short prompt, or an offline session): there are words
+      // now, so T3 Code comes forward before the paste looks for it.
+      if (a.forwardOnVoice) {
+        this.forwardNow(a);
+        a.stopTarget = this.stopTarget(a);
+      }
       const target = await this.target(a);
       const t3 = settings.t3Mode;
       /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
