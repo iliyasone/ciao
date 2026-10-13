@@ -175,6 +175,8 @@ const ru = {
       openAtLogin: "Запускать при входе в систему",
       pill: "Значок на экране",
       pillHint: "Маленький значок Ciao остаётся на экране и между диктовками: нажми — начнётся диктовка, перетащи — подвинется. Карточка записи раскрывается из него.",
+      sounds: "Звуки начала и конца",
+      soundsHint: "Тихое «ту-тун», когда Ciao начинает слушать, и «бу-бум», когда закончил. В саму запись звук не попадает, если ты ещё не начал говорить (и кроме диктовки со слова «чао»).",
       pauseMedia: "Ставить музыку на паузу, пока диктуешь",
       pauseMediaHint: isMac
         ? "Music и Spotify. После записи играет дальше то, что поставил на паузу Ciao. В первый раз macOS спросит, можно ли Ciao ими управлять."
@@ -481,6 +483,8 @@ const en: Strings = {
       openAtLogin: "Start when you sign in",
       pill: "Pill on screen",
       pillHint: "A small Ciao pill stays on screen between dictations: click it to dictate, drag it to move it. The recording card unfolds from it.",
+      sounds: "Start and stop sounds",
+      soundsHint: "A soft rising two-note sound when Ciao starts listening, a falling one when it stops. The sound itself isn't recorded unless you're already speaking (or after the wake word).",
       pauseMedia: "Pause music while you dictate",
       pauseMediaHint: isMac
         ? "Music and Spotify. After the recording, what Ciao paused plays on. The first time, macOS asks whether Ciao may control them."

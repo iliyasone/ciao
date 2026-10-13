@@ -325,6 +325,10 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.send("capture:start", seq);
   }
 
+  sound(kind: "start" | "stop"): void {
+    this.win.webContents.send("overlay:sound", kind);
+  }
+
   stopCapture(seq: number): void {
     this.win.webContents.send("capture:stop", seq);
   }

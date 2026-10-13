@@ -41,6 +41,8 @@ const api = {
   },
   capture: {
     onStart: (cb: (seq: number) => void) => on("capture:start", cb),
+    /** Play the start or stop sound (src/renderer/overlay/sounds.ts). */
+    onSound: (cb: (kind: "start" | "stop") => void) => on("overlay:sound", cb),
     onStop: (cb: (seq: number) => void) => on("capture:stop", cb),
     chunk: (seq: number, pcm: ArrayBuffer) => ipcRenderer.send("capture:chunk", seq, pcm),
     stopped: (seq: number) => ipcRenderer.send("capture:stopped", seq),
