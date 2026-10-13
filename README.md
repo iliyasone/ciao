@@ -91,6 +91,15 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     - anything else (the field can't be read, you switched away or sent it at once):
       the text stays on the clipboard, so it is never lost, and your old clipboard
       isn't put back;
+  - *Bring T3 Code forward when dictating* (on by default): once a hold lasts past a
+    tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
+    then), the T3 Code window comes forward on the chat it shows, so you can dictate
+    from any app. T3 Code puts focus back into its chat box when its window is
+    activated. Not on a Wayland desktop, where no app may bring another forward;
+  - *Send right away* (off by default): Ciao presses Enter once it has seen the
+    text in the chat box, and never when it isn't sure. A prompt said in several
+    holds goes out in parts. T3 Code has to send on Enter (its *Settings → General →
+    Send shortcut*), and an open `@` or `/` menu in the box would take the Enter;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
     is empty (or can't be read), so a prompt said in several holds gets them once:
     the suffix then follows the first hold's words, and the later holds start with

@@ -9,6 +9,9 @@ export function isT3Code(w: { process: string; title: string }): boolean {
   return /^t3[ -]?code\b/i.test(w.process.replace(/\.exe$/i, "")) || (appLabel(w.process) === "browser" && /^T3 Code\b/.test(w.title));
 }
 
+/** The T3 Code app's process, for the input helper's "activate" (a case-insensitive regex). */
+export const T3_PROCESS = "^t3[ -]?code";
+
 /** The prompt as pasted: the user's words between the optional prefix and suffix (say, "Клауди," to get a spoken answer). */
 export function t3Prompt(text: string, prefix: string, suffix: string): string {
   return [prefix.trim(), text, suffix.trim()].filter(Boolean).join(" ");

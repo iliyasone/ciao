@@ -223,16 +223,96 @@ static class Native
         ki = new KEYBDINPUT { wVk = (ushort)k, dwFlags = up ? KEYEVENTF_KEYUP : 0 },
     };
 
-    /// <summary>Sends Ctrl+V, first releasing any modifier the user may still be holding (e.g. Alt+Shift from the paste-last hotkey).</summary>
-    public static void SendPaste()
+    /// <summary>Key-ups for the modifiers the user may still be holding (e.g. Alt+Shift from the paste-last hotkey), so they don't turn a key into a shortcut.</summary>
+    static List<INPUT> ReleaseModifiers()
     {
         var inputs = new List<INPUT>();
         foreach (var m in new[] { Keys.LControlKey, Keys.RControlKey, Keys.LShiftKey, Keys.RShiftKey, Keys.LMenu, Keys.RMenu, Keys.LWin, Keys.RWin })
             if ((GetAsyncKeyState((int)m) & 0x8000) != 0) inputs.Add(Key(m, up: true));
+        return inputs;
+    }
+
+    /// <summary>Sends Ctrl+V, first releasing any modifier the user may still be holding.</summary>
+    public static void SendPaste()
+    {
+        var inputs = ReleaseModifiers();
         inputs.Add(Key(Keys.ControlKey, false));
         inputs.Add(Key(Keys.V, false));
         inputs.Add(Key(Keys.V, true));
         inputs.Add(Key(Keys.ControlKey, true));
         SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+    }
+
+    /// <summary>Sends Enter on its own, first releasing any modifier the user may still be holding.</summary>
+    public static void SendEnter()
+    {
+        var inputs = ReleaseModifiers();
+        inputs.Add(Key(Keys.Return, false));
+        inputs.Add(Key(Keys.Return, true));
+        SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool ShowWindow(IntPtr hWnd, int cmd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool on);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsGUIThread([MarshalAs(UnmanagedType.Bool)] bool convert);
+
+    [DllImport("kernel32.dll")]
+    static extern uint GetCurrentThreadId();
+
+    /// <summary>
+    /// Brings the main window of a running app whose process name matches to the front, restoring it if
+    /// minimized; Zero if there is none, or Windows kept another window in front. A background process
+    /// may not take the foreground on its own, so this thread borrows the input state of the one in front.
+    /// </summary>
+    public static IntPtr Activate(System.Text.RegularExpressions.Regex process)
+    {
+        IntPtr hwnd = IntPtr.Zero;
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero) hwnd = p.MainWindowHandle;
+            }
+            catch (Exception) { } // exited meanwhile
+            finally { p.Dispose(); }
+            if (hwnd != IntPtr.Zero) break;
+        }
+        if (hwnd == IntPtr.Zero) return IntPtr.Zero;
+        var front = GetForegroundWindow();
+        if (front == hwnd) return hwnd;
+        IsGUIThread(true); // AttachThreadInput needs this thread to have a message queue
+        uint me = GetCurrentThreadId(), theirs = GetWindowThreadProcessId(front, out _);
+        bool attached = theirs != 0 && theirs != me && AttachThreadInput(me, theirs, true);
+        try
+        {
+            if (IsIconic(hwnd)) ShowWindow(hwnd, 9); // SW_RESTORE
+            BringWindowToTop(hwnd);
+            SetForegroundWindow(hwnd);
+        }
+        finally
+        {
+            if (attached) AttachThreadInput(me, theirs, false);
+        }
+        return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
     }
 }

@@ -205,6 +205,18 @@ export class InputHelper extends EventEmitter<InputEvents> {
     this.send({ cmd: "media-ask" });
   }
 
+  /** Brings a running app whose process name matches `process` (a case-insensitive regex) to the front; its window, 0 if none or refused. */
+  async activate(process: string): Promise<number> {
+    const r = await this.request({ cmd: "activate", process });
+    return typeof r.hwnd === "number" ? r.hwnd : 0;
+  }
+
+  /** Presses Enter if `hwnd` is still in front (0 = whatever is). */
+  async enter(hwnd: number): Promise<boolean> {
+    const r = await this.request({ cmd: "key", key: "enter", hwnd });
+    return r.ok === true;
+  }
+
   /** Report key presses as "key" events (for watching a correction), or stop. Enter reads the field of `hwnd` only (0: no window's). */
   watch(on: boolean, hwnd = 0): void {
     this.watching = { on, hwnd };

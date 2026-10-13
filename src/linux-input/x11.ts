@@ -10,12 +10,14 @@ interface Koffi {
   pointer(type: unknown): unknown;
   register(fn: Fn, type: unknown): unknown;
   decode(ptr: unknown, type: string, len?: number): unknown;
+  struct(name: string, def: Record<string, string>): unknown;
 }
 
 // X keysyms (X11/keysymdef.h).
 const XK_Control_L = 0xffe3;
 const XK_Shift_L = 0xffe1;
 const XK_v = 0x0076;
+const XK_Return = 0xff0d;
 
 export interface WindowInfo {
   id: number;
@@ -53,6 +55,19 @@ export class X11 {
       XSetErrorHandler: x.func("void *XSetErrorHandler(void *)"),
       XTestFakeKeyEvent: xtst.func("int XTestFakeKeyEvent(void *, unsigned int, int, unsigned long)"),
     };
+    // XClientMessageEvent, padded to the size of an XEvent (24 longs).
+    koffi.struct("XClientMessageEvent", {
+      type: "int",
+      serial: "unsigned long",
+      send_event: "int",
+      display: "void *",
+      window: "unsigned long",
+      message_type: "unsigned long",
+      format: "int",
+      data: "long[5]",
+      pad: "long[12]",
+    });
+    f.XSendEvent = x.func("int XSendEvent(void *, unsigned long, int, long, XClientMessageEvent *)");
     // The default handler exits the process on any error, e.g. asking about a window that just closed.
     const handler = koffi.proto("int XErrorHandler(void *, void *)");
     f.XSetErrorHandler!(koffi.register(() => 0, koffi.pointer(handler)));
@@ -79,7 +94,7 @@ export class X11 {
     if (status !== 0 || !data[0]) return null;
     try {
       const n = Number(count[0]);
-      if (format[0] === 32) return (this.koffi.decode(data[0], "unsigned long", n) as (number | bigint)[]).map(Number); // longs on the client side
+      if (format[0] === 32) return Array.from(this.koffi.decode(data[0], "unsigned long", n) as ArrayLike<number | bigint>, Number); // longs on the client side (a BigUint64Array in newer koffi)
       if (format[0] === 8) return Buffer.from(this.koffi.decode(data[0], "uint8_t", n) as number[]).toString("utf8");
       return null;
     } finally {
@@ -119,6 +134,42 @@ export class X11 {
     const desktop = this.number(window, "_NET_WM_DESKTOP");
     if (current === null || desktop === null) return undefined;
     return desktop === current || desktop === 0xffffffff; // sticky: on every desktop
+  }
+
+  /**
+   * Asks the window manager to bring forward the window of a running app whose process name (or, if
+   * it names none, title) matches; its id, 0 if there is no such window.
+   */
+  activate(match: RegExp): number {
+    const list = this.property(this.root, "_NET_CLIENT_LIST");
+    if (!Array.isArray(list)) return 0;
+    const window = [...list].reverse().find((w) => {
+      const d = this.describe(w);
+      return match.test(d.process) || (!d.process && match.test(d.title));
+    });
+    if (!window) return 0;
+    // source 2: a pager or taskbar, which window managers obey (an app's own request may only flash it).
+    const event = {
+      type: 33, // ClientMessage
+      serial: 0,
+      send_event: 1,
+      display: this.display,
+      window,
+      message_type: this.atom("_NET_ACTIVE_WINDOW"),
+      format: 32,
+      data: [2, 0, 0, 0, 0],
+      pad: new Array(12).fill(0),
+    };
+    this.f.XSendEvent!(this.display, this.root, 0, (1 << 20) | (1 << 19), event); // SubstructureRedirect | SubstructureNotify
+    this.f.XSync!(this.display, 0);
+    return window;
+  }
+
+  enter(): void {
+    const k = this.f.XKeysymToKeycode!(this.display, XK_Return);
+    this.f.XTestFakeKeyEvent!(this.display, k, 1, 0);
+    this.f.XTestFakeKeyEvent!(this.display, k, 0, 0);
+    this.f.XSync!(this.display, 0);
   }
 
   /** Ctrl+V, or Ctrl+Shift+V (terminals). */

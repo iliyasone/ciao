@@ -15,6 +15,8 @@
 // - "field" answers "unsupported" without Accessibility. Chromium and Electron apps expose their
 //   fields only to an assistive client that asks, so the first read in such an app turns that on
 //   (AXManualAccessibility) and, if nothing showed yet, tries once more a moment later.
+// - "activate" matches the app bundle's file name ("T3 Code (Nightly)") and answers with its pid.
+// - "key" needs Accessibility too, like "paste"; without it it answers ok:false.
 // - "media" pauses only Music and Spotify, through AppleScript (macOS asks the user once per app).
 //   Extra command {"cmd":"media-ask"}: ask that permission now for the players that are running.
 // - "key" events: "paste" is ⌘V or ⌘⇧V, by the key where QWERTY has V (so it holds in the Russian
@@ -428,6 +430,36 @@ func setMedia(pause: Bool) {
     }
 }
 
+/// Return on its own, for "key": the flags are cleared so a modifier the user still holds doesn't make it a shortcut.
+func sendEnter() {
+    let source = CGEventSource(stateID: .hidSystemState)
+    source?.userData = injectedMark
+    for down in [true, false] {
+        let e = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: down) // Return
+        e?.flags = []
+        e?.post(tap: .cghidEventTap)
+    }
+}
+
+/// "activate": brings a running app whose bundle file name matches to the front, through Launch Services, which
+/// lets a background helper do it (a plain activate() may be refused since macOS 14). Answers with its pid, 0 if none.
+func activateApp(id: Int?, pattern: String) {
+    let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    let app = NSWorkspace.shared.runningApplications.first { app in
+        let name = appFile(app)
+        return app.activationPolicy == .regular && re?.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
+    }
+    guard let app, let url = app.bundleURL else {
+        emit(["id": id, "hwnd": 0])
+        return
+    }
+    let config = NSWorkspace.OpenConfiguration()
+    config.activates = true
+    NSWorkspace.shared.openApplication(at: url, configuration: config) { opened, _ in
+        emit(["id": id, "hwnd": opened == nil ? 0 : Int(app.processIdentifier)])
+    }
+}
+
 // MARK: - Field text ("field", and Enter while watching)
 
 /// Longer than this it is a log or a document rather than a message, and copying it costs too much.
@@ -570,6 +602,13 @@ func handle(_ line: String) {
         if msg["on"] as? Bool ?? false { startCapture() } else { capturing = false }
     case "field":
         answerField(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
+    case "activate":
+        activateApp(id: id, pattern: msg["process"] as? String ?? "$^")
+    case "key":
+        let wanted = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0
+        let ok = msg["key"] as? String == "enter" && AXIsProcessTrusted() && (wanted == 0 || frontmost()?.processIdentifier == wanted)
+        if ok { sendEnter() }
+        emit(["id": id, "ok": ok])
     case "media":
         setMedia(pause: msg["pause"] as? Bool ?? false)
     case "media-ask":

@@ -18,6 +18,8 @@
 //   On Wayland the watched window has no id, so Enter reads nothing, and "field" sticks with the app
 //   its first read in a watch found in front: in any other app it answers "focus-changed".
 // - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
+// - "activate" works on X11 only (Wayland lets no app bring another forward): it answers hwnd 0 there.
+// - "key" presses Enter with XTest on X11 and the uinput keyboard on Wayland (no window check there).
 // - "media" pauses MPRIS players through dbus-send (media.ts); without it, it pauses nothing.
 //
 // Extra event: {"type":"status","reading":N,"denied":M} after every device scan.
@@ -263,6 +265,28 @@ function handle(msg: Record<string, unknown>): void {
       watchApp = null;
       if (watching) connectAtspi();
       return;
+    case "activate": {
+      if (wayland || !x11) return emit({ id, hwnd: 0 }); // Wayland lets no app bring another forward
+      let re: RegExp;
+      try {
+        re = new RegExp(String(msg.process), "i");
+      } catch {
+        return emit({ id, hwnd: 0 });
+      }
+      return emit({ id, hwnd: x11.activate(re) });
+    }
+    case "key": {
+      const wanted = typeof msg.hwnd === "number" ? msg.hwnd : 0;
+      if (msg.key !== "enter") return emit({ id, ok: false });
+      if (!wayland && x11) {
+        if (wanted !== 0 && x11.activeWindow() !== wanted) return emit({ id, ok: false });
+        x11.enter();
+        return emit({ id, ok: true });
+      }
+      if (!uinput) return emit({ id, ok: false });
+      uinput.enter();
+      return emit({ id, ok: true });
+    }
     case "media":
       media.set(msg.pause === true);
       return;
