@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, CloudOff, Copy, GripVertical, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
@@ -502,6 +502,8 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
+  /** The kept card's text as edited in its box (null: as dictated). */
+  const [edited, setEdited] = useState<string | null>(null);
   /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
   const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
   const foldingSeq = useRef(-1);
@@ -520,6 +522,8 @@ export function Overlay() {
           foldingSeq.current = -1;
         }
         shownSeq.current = s.seq;
+        setEdited(null);
+        if (!s.keep) ciao.overlay.edit(false); // the box is gone: the window stops taking the keyboard
         dispatch({ type: "reset", seq: s.seq });
         setState(s);
         setLeaving(false);
@@ -643,12 +647,11 @@ export function Overlay() {
       icon = null;
   }
 
+  const kept = !!state.keep && text.final !== null;
+  const keptText = edited ?? text.final ?? "";
   const content =
     text.final !== null ? (
-      // Kept, it can be selected with the mouse and dragged out, a word or all of it.
-      <span data-selectable={state.keep || undefined} className={`text-settled whitespace-pre-wrap ${state.keep ? "selectable cursor-text" : ""}`}>
-        {text.final}
-      </span>
+      <span className="text-settled whitespace-pre-wrap">{text.final}</span>
     ) : text.settled || text.fresh.length ? (
       <LiveText text={text} withLayout={state.layout ?? false} />
     ) : (
@@ -659,6 +662,7 @@ export function Overlay() {
 
   const withActions = state.phase === "recovered" || state.phase === "saved" || !!state.keep;
   const dismiss = () => {
+    ciao.overlay.edit(false);
     closedSeq.current = state.seq;
     ciao.overlay.closed(state.seq); // main forgets a kept card now, not after the fold
     fold(state.seq);
@@ -722,14 +726,28 @@ export function Overlay() {
             )}
           </div>
         </header>
-        {showText ? <Scroller maxLines={maxLines}>{content}</Scroller> : null}
+        {kept ? (
+          // A text box like any other: select with the mouse, drag the selection out into another app's
+          // field, click in to edit (the window then takes the keyboard). Copy takes it as it is now.
+          <textarea
+            data-selectable
+            value={keptText}
+            onChange={(e) => setEdited(e.target.value)}
+            onPointerDown={() => ciao.overlay.edit(true)}
+            rows={Math.min(maxLines, Math.max(2, Math.ceil(keptText.length / 70) + (keptText.match(/\n/g)?.length ?? 0)))}
+            spellCheck={false}
+            className="selectable block w-full cursor-text resize-none rounded-xl bg-tint/5 px-3 py-2 text-[15px] leading-[25px] text-fg outline-none ring-1 ring-tint/20 focus:ring-tint/40"
+          />
+        ) : showText ? (
+          <Scroller maxLines={maxLines}>{content}</Scroller>
+        ) : null}
         {state.message && <div className="mt-2 text-[12.5px] text-amber-700 dark:text-amber-200/90">{state.message}</div>}
         {withActions && (
           <div className="mt-2.5 -ml-2 flex gap-1">
             {(state.phase === "recovered" || state.keep) && text.final && (
               <button
                 onClick={async () => {
-                  await ciao.overlay.copy(text.final!);
+                  await ciao.overlay.copy(kept ? keptText : text.final!);
                   setCopied(true);
                   setTimeout(dismiss, 700);
                 }}
@@ -738,24 +756,6 @@ export function Overlay() {
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 {copied ? tr.copied : tr.copy}
               </button>
-            )}
-            {state.keep && text.final && (
-              // All of the text in one drag, to drop into another app's field; dropped there, the card is done.
-              <span
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", text.final!);
-                  e.dataTransfer.effectAllowed = "copy";
-                }}
-                onDragEnd={(e) => {
-                  if (e.dataTransfer.dropEffect !== "none") dismiss();
-                }}
-                title={tr.dragTitle}
-                className="inline-flex cursor-grab items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] text-muted hover:bg-tint/8 hover:text-fg active:cursor-grabbing"
-              >
-                <GripVertical className="size-3.5" />
-                {tr.drag}
-              </span>
             )}
             <button
               onClick={() => {

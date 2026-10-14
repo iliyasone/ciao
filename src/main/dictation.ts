@@ -442,14 +442,15 @@ export class DictationController {
         a.pausedMedia = true;
         this.deps.input.media(true);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
-    // T3 mode: T3 Code comes forward on the chat it shows, so the text goes there when the dictation ends.
-    // Not at once: a tap may be dropped (tapHandsFree off), and a held Ctrl may still turn into Ctrl+C for
-    // the app in front. After a tap that went hands-free, only once words come in (not just noise, like
-    // keys clicking): a stray tap must not take the focus from what you are typing in. Not for the wake word, which may be a false alarm.
-    if (!replay && settings.t3Mode && settings.t3Forward && trigger !== "wake_word")
+    // T3 mode is for hands-free dictations (a tap, the wake word, the pill); a hold talks into the window
+    // you are in. T3 Code comes forward on the chat it shows, so the text goes there when the dictation
+    // ends. Not at once: until then a press may still be a hold, a dropped tap (tapHandsFree off), or a
+    // held Ctrl turning into Ctrl+C. After a tap or the wake word, only once words come in (not just
+    // noise, like keys clicking, or a false alarm): a stray one must not take the focus from your typing.
+    if (!replay && settings.t3Mode && settings.t3Forward)
       setTimeout(() => {
-        if (this.active !== a || a.phase !== "recording") return;
-        if (this.handsFree && trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
+        if (this.active !== a || a.phase !== "recording" || !this.handsFree) return;
+        if (trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
         else a.forwarded = this.bringT3Forward(a);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
   }
@@ -649,7 +650,8 @@ export class DictationController {
         a.stopTarget = a.forwarded!.then((ok) => (ok || !atStop ? this.stopTarget(a) : atStop));
       }
       const target = await this.target(a);
-      const t3 = settings.t3Mode;
+      // A hold pastes where you are, T3 mode or not: T3 mode is for hands-free dictations.
+      const t3 = settings.t3Mode && !!a.handsFree;
       /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
       let sent = text;
       // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
