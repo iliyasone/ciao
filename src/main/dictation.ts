@@ -37,7 +37,7 @@ const START_SOUND_MUTE_MS = 280;
 /** A short press starts nothing (tapHandsFree off); otherwise it starts hands-free, in T3 mode too. */
 const dropsTaps = (s: Settings) => !s.tapHandsFree;
 /** T3 mode: how long the stop waits for T3 Code, just called forward, to be in front. */
-const FORWARD_WAIT_MS = 400;
+const FORWARD_WAIT_MS = 1000; // a switch to another desktop animates
 /** T3 mode, sending: after the text showed up in the box, so the editor has taken it in. */
 const SEND_AFTER_MS = 150;
 /** After a plain paste, before checking that a field had focus: the app needs a moment to take it in. */
@@ -646,9 +646,12 @@ export class DictationController {
       // A T3 dictation lands in T3 Code wherever you went meanwhile (another app, another desktop): T3
       // Code is brought forward now, whatever is in front, and the paste waits for it. Without T3 Code
       // running, the text waits on the clipboard; it never goes into the app in front.
-      if (settings.t3Mode && a.handsFree && !a.replay) {
+      if (settings.t3Mode && settings.t3Forward && settings.autoPaste && a.handsFree && !a.replay) {
+        const earlier = a.forwarded;
         a.forwardOnVoice = true;
         this.forwardNow(a);
+        // Brought forward during the dictation counts too (it is in front now, so this one says no).
+        if (earlier) a.forwarded = Promise.all([earlier, a.forwarded!]).then(([x, y]) => x || y);
         a.stopTarget = this.stopTarget(a);
       }
       const target = await this.target(a);

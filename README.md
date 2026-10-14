@@ -90,7 +90,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     Code tells other apps nothing and has no way to fill its chat box from outside,
     so this needs its window in front. If T3 Code isn't running, or the system
     won't bring it forward, nothing is pasted and the text waits on the clipboard,
-    never in the app in front;
+    never in the app in front (except on a Wayland desktop, where no app can tell
+    or change which window is in front, so it pastes as usual). With *Bring T3 Code
+    forward* off, nothing is brought forward: then the text goes in only if T3 Code
+    is in front at the end;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
     - the text shows up in the box: done, and your clipboard comes back at once
@@ -112,7 +115,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     when T3 Code is in front already. T3 Code puts focus back
     into its chat box when its window is activated, unless a dialog or the command
     palette had it, or its terminal panel is open (then a paste still reaches the
-    box, see above). Ciao waits up to 0.4 s at the end of the dictation for the
+    box, see above). Ciao waits up to 1 s at the end of the dictation for the
     switch. Not on a Wayland desktop, where no app may bring another forward;
   - *Send right away* (off by default): Ciao presses Enter once it has seen the
     text in the chat box, and never when it isn't sure, or while a trigger is still
