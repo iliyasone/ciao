@@ -18,8 +18,6 @@ const api = {
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
     hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),
-    /** The kept card's text box is being used (true): the window may take the keyboard; false when it's gone. */
-    edit: (on: boolean) => ipcRenderer.send("overlay:edit", on),
     /** The user closed or used the card (it is folding now): a kept one is done with. */
     closed: (seq: number) => ipcRenderer.send("overlay:closed", seq),
     /** x/y: where the press was on screen; the window then follows the cursor until dragEnd. */

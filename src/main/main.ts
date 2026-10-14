@@ -373,7 +373,6 @@ function registerIpc(): void {
     dictation.cardHidden(seq);
   });
   ipcMain.on("overlay:closed", (_e, seq: number) => dictation.cardHidden(seq));
-  ipcMain.on("overlay:edit", (_e, on: boolean) => overlay.setEditing(on));
   ipcMain.on("overlay:drag-start", (_e, mode: "move" | "resize", x: number, y: number) => overlay.dragStart(mode, x, y));
   ipcMain.on("overlay:drag-end", () => overlay.dragEnd());
   ipcMain.on("overlay:reset-placement", () => overlay.resetPlacement());

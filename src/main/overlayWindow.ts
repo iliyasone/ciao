@@ -68,7 +68,6 @@ export class OverlayWindow implements OverlayPort {
   private dragTimer: ReturnType<typeof setInterval> | null = null;
   private dragAt = { x: NaN, y: NaN };
   private wake = false;
-  private editing = false;
   private pill: boolean;
   /** The renderer shows a card or a suggestion; without the pill the window hides when it shows nothing. */
   private busy = false;
@@ -354,18 +353,6 @@ export class OverlayWindow implements OverlayPort {
 
   startCapture(seq: number): void {
     this.win.webContents.send("capture:start", seq);
-  }
-
-  /**
-   * The kept card's text box is clicked into: the window, otherwise never focusable (it must not take
-   * focus from the app being dictated into), takes the keyboard so the text can be edited. Off again
-   * when the box goes.
-   */
-  setEditing(on: boolean): void {
-    if (this.win.isDestroyed() || this.editing === on) return;
-    this.editing = on;
-    this.win.setFocusable(on);
-    if (on) this.win.focus();
   }
 
   sound(kind: "start" | "stop"): void {

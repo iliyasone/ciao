@@ -452,7 +452,7 @@ export class DictationController {
         if (this.active !== a || a.phase !== "recording" || !this.handsFree) return;
         if (trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
         else a.forwarded = this.bringT3Forward(a);
-      }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
+      }, TAP_MS); // hands-free by then means the key was let go: no shortcut can claim it any more
   }
 
   /**

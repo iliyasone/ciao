@@ -265,7 +265,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
     onPointerDown: (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      if (mode === "move" && target.closest("button, [data-selectable], [draggable=true]")) return;
+      if (mode === "move" && target.closest("button, [data-selectable]")) return;
       const scroller = target.closest<HTMLElement>("[data-scroller]");
       if (scroller && e.clientX >= scroller.getBoundingClientRect().left + scroller.clientWidth) return;
       e.stopPropagation();
@@ -502,8 +502,6 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
-  /** The kept card's text as edited in its box (null: as dictated). */
-  const [edited, setEdited] = useState<string | null>(null);
   /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
   const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
   const foldingSeq = useRef(-1);
@@ -522,8 +520,6 @@ export function Overlay() {
           foldingSeq.current = -1;
         }
         shownSeq.current = s.seq;
-        setEdited(null);
-        if (!s.keep) ciao.overlay.edit(false); // the box is gone: the window stops taking the keyboard
         dispatch({ type: "reset", seq: s.seq });
         setState(s);
         setLeaving(false);
@@ -648,7 +644,7 @@ export function Overlay() {
   }
 
   const kept = !!state.keep && text.final !== null;
-  const keptText = edited ?? text.final ?? "";
+  const keptText = text.final ?? "";
   const content =
     text.final !== null ? (
       <span className="text-settled whitespace-pre-wrap">{text.final}</span>
@@ -662,7 +658,6 @@ export function Overlay() {
 
   const withActions = state.phase === "recovered" || state.phase === "saved" || !!state.keep;
   const dismiss = () => {
-    ciao.overlay.edit(false);
     closedSeq.current = state.seq;
     ciao.overlay.closed(state.seq); // main forgets a kept card now, not after the fold
     fold(state.seq);
@@ -727,14 +722,14 @@ export function Overlay() {
           </div>
         </header>
         {kept ? (
-          // A text box like any other: select with the mouse, drag the selection out into another app's
-          // field, click in to edit (the window then takes the keyboard). Copy takes it as it is now.
+          // A text box like any other for the mouse: select, and drag the selection out into another
+          // app's field. Read-only: the overlay never takes the keyboard, or it would keep it from the app
+          // you dictate into (and from the one you drop the text in).
           <textarea
             data-selectable
+            readOnly
             value={keptText}
-            onChange={(e) => setEdited(e.target.value)}
-            onPointerDown={() => ciao.overlay.edit(true)}
-            rows={Math.min(maxLines, Math.max(2, Math.ceil(keptText.length / 70) + (keptText.match(/\n/g)?.length ?? 0)))}
+            rows={Math.min(maxLines - 1, Math.max(2, Math.ceil(keptText.length / 70) + (keptText.match(/\n/g)?.length ?? 0)))}
             spellCheck={false}
             className="selectable block w-full cursor-text resize-none rounded-xl bg-tint/5 px-3 py-2 text-[15px] leading-[25px] text-fg outline-none ring-1 ring-tint/20 focus:ring-tint/40"
           />
