@@ -741,6 +741,7 @@ export function Overlay() {
             // text field. Counted here: on Windows the browser's own count is thrown off by the press the
             // window hands it in place of the one it would eat (overlayWindow.ts, pressEaten).
             onMouseDown={(e) => {
+              if (e.button !== 0) return;
               const now = performance.now();
               const last = lastPress.current;
               lastPress.current = { at: now, x: e.clientX, y: e.clientY };
