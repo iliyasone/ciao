@@ -732,8 +732,10 @@ export class DictationController {
     // Nothing said: a kept card from before comes back rather than folding away.
     if (phase === "empty" && this.kept) return this.emptyOrKept(a);
     this.kept = null;
+    const base = this.baseState(a);
     const state: OverlayState = {
-      ...this.baseState(a),
+      ...base,
+      t3: base.t3 && phase !== "clipboard", // the text waits on the clipboard: it isn't going to T3 Code
       phase,
       keep,
       message:
