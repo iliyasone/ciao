@@ -210,9 +210,12 @@ export class InputHelper extends EventEmitter<InputEvents> {
     this.send({ cmd: "media-ask" });
   }
 
-  /** Brings a running app whose process name matches `process` (a case-insensitive regex) to the front; its window, 0 if none or refused. */
-  async activate(process: string): Promise<number> {
-    const r = await this.request({ cmd: "activate", process });
+  /**
+   * Brings a running app whose process name matches `process` (a case-insensitive regex) to the front; its
+   * window, 0 if none or refused. launch (Windows): if refused, start its exe again so it shows itself.
+   */
+  async activate(process: string, launch = false): Promise<number> {
+    const r = await this.request({ cmd: "activate", process, launch }, 4000);
     return typeof r.hwnd === "number" ? r.hwnd : 0;
   }
 
@@ -237,14 +240,14 @@ export class InputHelper extends EventEmitter<InputEvents> {
     this.send({ cmd: "watch", on, hwnd });
   }
 
-  private request(msg: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private request(msg: Record<string, unknown>, timeoutMs = 2000): Promise<Record<string, unknown>> {
     if (!this.child) return Promise.resolve({ ok: false, reason: "no-helper" });
     const id = this.nextId++;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         resolve({ ok: false, reason: "timeout" });
-      }, 2000);
+      }, timeoutMs);
       this.pending.set(id, (reply) => {
         clearTimeout(timer);
         resolve(reply);

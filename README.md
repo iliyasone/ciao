@@ -86,7 +86,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - the card shows T3 Code's logo by its clock, so you know where the text goes;
   - the text is pasted only into T3 Code, whichever chat is open there, wherever
     you went meanwhile: when it ends, Ciao brings T3 Code's window forward
-    (switching to its virtual desktop) and pastes there, and you stay there. T3
+    (switching to its virtual desktop; on Windows, if the system refuses, it starts
+    T3 Code's exe again so T3 Code shows its own window) and pastes there, and you
+    stay there. T3
     Code tells other apps nothing and has no way to fill its chat box from outside,
     so this needs its window in front. If T3 Code isn't running, or the system
     won't bring it forward, nothing is pasted and the text waits on the clipboard,

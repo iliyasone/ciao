@@ -285,17 +285,22 @@ static class Native
 
     /// <summary>
     /// Brings the main window of a running app whose process name matches to the front, restoring it if
-    /// minimized; Zero if there is none, or Windows kept another window in front. A background process
+    /// minimized (launch: if Windows refuses, start the app's exe again so it shows itself); Zero if there is none, or Windows kept another window in front. A background process
     /// may not take the foreground on its own, so this thread borrows the input state of the one in front.
     /// </summary>
-    public static IntPtr Activate(System.Text.RegularExpressions.Regex process)
+    public static IntPtr Activate(System.Text.RegularExpressions.Regex process, bool launch = false)
     {
         IntPtr hwnd = IntPtr.Zero;
+        string? exe = null;
         foreach (var p in System.Diagnostics.Process.GetProcesses())
         {
             try
             {
-                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero) hwnd = p.MainWindowHandle;
+                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero)
+                {
+                    hwnd = p.MainWindowHandle;
+                    if (launch) exe = p.MainModule?.FileName;
+                }
             }
             catch (Exception) { } // exited meanwhile
             finally { p.Dispose(); }
@@ -321,6 +326,18 @@ static class Native
         }
         // A window on another virtual desktop comes forward once Windows has switched desktops: wait for it.
         for (int i = 0; i < 12 && GetForegroundWindow() != hwnd; i++) Thread.Sleep(25);
+        if (GetForegroundWindow() != hwnd && exe != null)
+        {
+            // Refused (Windows may only flash it, say on another desktop): start the app's own exe with no
+            // arguments. A single-instance app like T3 Code then shows its window itself, which Windows
+            // allows where it refuses another app.
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false })?.Dispose();
+                for (int i = 0; i < 40 && GetForegroundWindow() != hwnd; i++) Thread.Sleep(25);
+            }
+            catch (Exception) { }
+        }
         return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
     }
 }

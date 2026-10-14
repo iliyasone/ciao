@@ -462,7 +462,7 @@ export class DictationController {
   private async bringT3Forward(a: Active): Promise<boolean> {
     const front = await this.deps.input.foreground();
     if ((front && isT3Code(front)) || !this.active || this.active.seq !== a.seq) return false;
-    const hwnd = await this.deps.input.activate(T3_PROCESS);
+    const hwnd = await this.deps.input.activate(T3_PROCESS, true);
     console.log("t3: brought forward", hwnd || "nothing");
     return hwnd !== 0;
   }
