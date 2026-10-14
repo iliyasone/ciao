@@ -215,7 +215,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
    * window, 0 if none or refused. launch (Windows): if refused, start its exe again so it shows itself.
    */
   async activate(process: string, launch = false): Promise<number> {
-    const r = await this.request({ cmd: "activate", process, launch }, 4000);
+    const r = await this.request({ cmd: "activate", process, launch }, 6000);
     return typeof r.hwnd === "number" ? r.hwnd : 0;
   }
 

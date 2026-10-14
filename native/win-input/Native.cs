@@ -296,16 +296,18 @@ static class Native
         {
             try
             {
-                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero)
+                if (process.IsMatch(p.ProcessName))
                 {
-                    hwnd = p.MainWindowHandle;
-                    if (launch) exe = p.MainModule?.FileName;
+                    // A matching app with no window shown (hidden to the tray) can still be launched to show it.
+                    if (launch) exe ??= ImagePath(p.Id);
+                    if (p.MainWindowHandle != IntPtr.Zero) hwnd = p.MainWindowHandle;
                 }
             }
             catch (Exception) { } // exited meanwhile
             finally { p.Dispose(); }
             if (hwnd != IntPtr.Zero) break;
         }
+        if (hwnd == IntPtr.Zero && exe != null) return Launch(exe, () => FindWindow(process));
         if (hwnd == IntPtr.Zero || IsHungAppWindow(hwnd)) return IntPtr.Zero;
         var front = GetForegroundWindow();
         if (front == hwnd) return hwnd;
@@ -326,18 +328,77 @@ static class Native
         }
         // A window on another virtual desktop comes forward once Windows has switched desktops: wait for it.
         for (int i = 0; i < 12 && GetForegroundWindow() != hwnd; i++) Thread.Sleep(25);
-        if (GetForegroundWindow() != hwnd && exe != null)
+        // Refused (Windows may only flash it, say on another desktop): start the app's own exe with no
+        // arguments. A single-instance app like T3 Code then shows its window itself, which Windows
+        // allows where it refuses another app.
+        if (GetForegroundWindow() != hwnd && exe != null) return Launch(exe, () => hwnd);
+        return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
+    }
+
+    /// <summary>Starts exe (no arguments, its own folder, nothing inherited) and waits up to 3 s for window() to be in front.</summary>
+    static IntPtr Launch(string exe, Func<IntPtr> window)
+    {
+        try
         {
-            // Refused (Windows may only flash it, say on another desktop): start the app's own exe with no
-            // arguments. A single-instance app like T3 Code then shows its window itself, which Windows
-            // allows where it refuses another app.
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(exe) ?? "",
+            })?.Dispose();
+        }
+        catch (Exception)
+        {
+            return IntPtr.Zero;
+        }
+        // An Electron app's second instance takes a moment to start and hand over (longer from a cold disk).
+        for (int i = 0; i < 120; i++)
+        {
+            var w = window();
+            if (w != IntPtr.Zero && GetForegroundWindow() == w) return w;
+            Thread.Sleep(25);
+        }
+        return IntPtr.Zero;
+    }
+
+    static IntPtr FindWindow(System.Text.RegularExpressions.Regex process)
+    {
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false })?.Dispose();
-                for (int i = 0; i < 40 && GetForegroundWindow() != hwnd; i++) Thread.Sleep(25);
+                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero) return p.MainWindowHandle;
             }
             catch (Exception) { }
+            finally { p.Dispose(); }
         }
-        return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
+        return IntPtr.Zero;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int pid);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref uint size);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool CloseHandle(IntPtr handle);
+
+    /// <summary>The process's exe path; works for other architectures and elevated processes, unlike MainModule.</summary>
+    static string? ImagePath(int pid)
+    {
+        var h = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+        if (h == IntPtr.Zero) return null;
+        try
+        {
+            var sb = new StringBuilder(1024);
+            uint size = (uint)sb.Capacity;
+            return QueryFullProcessImageName(h, 0, sb, ref size) ? sb.ToString() : null;
+        }
+        finally
+        {
+            CloseHandle(h);
+        }
     }
 }
