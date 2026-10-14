@@ -79,15 +79,23 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     pause other apps. macOS asks once whether Ciao may control each of them: as you
     turn the option on for the ones running then, otherwise at the first dictation.
 - **T3 mode** for dictating prompts into [T3 Code](https://t3.codes), in *Settings →
-  T3 Code*. With it on:
-  - holding a trigger dictates. A short press starts hands-free mode, as elsewhere,
-    unless *A short press starts hands-free mode* is off (then it does nothing); the
-    pill and the wake word start hands-free dictations too. When a hands-free
-    dictation ends, the text goes the same way as after a hold (into T3 Code,
-    checked, sent if *Send right away* is on);
-  - the text is pasted only into T3 Code, whichever chat is open there. If another
-    app is in front when the dictation ends, nothing is pasted, and the text waits
-    on the clipboard;
+  T3 Code*. It is for hands-free dictations: a short press (unless *A short press
+  starts hands-free mode* is off), the wake word, or a click on the pill. A hold
+  works as without T3 mode: the text goes where your cursor is, with no T3 Code
+  brought forward, no prefix and no check. For a hands-free dictation:
+  - the card shows T3 Code's logo by its clock, so you know where the text goes;
+  - the text is pasted only into T3 Code, whichever chat is open there, wherever
+    you went meanwhile: when it ends, Ciao brings T3 Code's window forward
+    (switching to its virtual desktop; on Windows, if the system refuses, it starts
+    T3 Code's exe again so T3 Code shows its own window) and pastes there, and you
+    stay there. T3
+    Code tells other apps nothing and has no way to fill its chat box from outside,
+    so this needs its window in front. If T3 Code isn't running, or the system
+    won't bring it forward, nothing is pasted and the text waits on the clipboard,
+    never in the app in front (except on a Wayland desktop, where no app can tell
+    or change which window is in front, so it pastes as usual). With *Bring T3 Code
+    forward* off, nothing is brought forward: then the text goes in only if T3 Code
+    is in front at the end;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
     - the text shows up in the box: done, and your clipboard comes back at once
@@ -101,21 +109,21 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     - anything else (the field can't be read, you switched away or sent it at once):
       the text stays on the clipboard, so it is never lost, and your old clipboard
       isn't put back;
-  - *Bring T3 Code forward when dictating* (on by default): once a hold lasts past a
-    tap (1 s with a trigger like Right Ctrl, which a shortcut can still claim until
-    then), after a tap that starts hands-free mode, once your first words are
-    transcribed or, if it ends before that, once its text is in (so a stray tap
-    doesn't take the focus, and with Right Ctrl not before 1 s either), or on a
-    click on the pill, the T3 Code window comes forward on the chat it shows, so you
-    can dictate from any app. Not when
-    T3 Code is in front already, and not for the wake word. T3 Code puts focus back
-    into its chat box when its window is activated, unless a dialog or the command
+  - *Bring T3 Code forward when dictating* (on by default): after a tap or the wake
+    word, once your first words are transcribed or, if it ends before that, once its
+    text is in (so a stray tap or a false wake word doesn't take the focus), or at
+    once on a click on the pill, the T3 Code window comes forward on the chat it
+    shows, so you can dictate from any app; and again when the dictation ends,
+    wherever you went meanwhile (another app or virtual desktop). Not when T3 Code
+    is in front already. With this off, T3 Code has to be in front when the
+    dictation ends. T3 Code puts focus back into its chat box when its window is
+    activated, unless a dialog or the command
     palette had it, or its terminal panel is open (then a paste still reaches the
-    box, see above). Ciao waits up to 0.4 s at the end of the dictation for the
+    box, see above). Ciao waits up to 1 s at the end of the dictation for the
     switch. Not on a Wayland desktop, where no app may bring another forward;
   - *Send right away* (off by default): Ciao presses Enter once it has seen the
     text in the chat box, and never when it isn't sure, or while a trigger is still
-    held (Right Ctrl would make it Ctrl+Enter). A prompt said in several holds goes
+    held (Right Ctrl would make it Ctrl+Enter). A prompt said in several dictations goes
     out in parts. T3 Code has to send on Enter (its *Settings → General → Send
     shortcut*; with *Ctrl+Enter for multi-line*, a prompt with paragraphs gets a new
     line instead). An open `@` or `/` menu, dialog or command palette takes the
@@ -126,8 +134,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     (see [Linux](#linux)); otherwise it never sends. It doesn't send there while you
     hold a modifier key either. Not on Wayland;
   - *Before the prompt* and *After the prompt* go around the text when the chat box
-    is empty (or can't be read), so a prompt said in several holds gets them once:
-    the suffix then follows the first hold's words, and the later holds start with
+    is empty (or can't be read), so a prompt said in several dictations gets them once:
+    the suffix then follows the first one's words, and the later ones start with
     a space. The box is judged by all its text, wherever the cursor is. For example
     "Клауди," when your agent answers by voice to that name.
 
@@ -149,9 +157,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Text that didn't land stays in reach.** When the text went to the clipboard
   instead, when T3 mode couldn't see it reach the chat box, or when it was pasted
   while nothing editable had focus (a click had left focus on a page or a list),
-  the card stays with the text instead of folding away. Select any of it with the
-  mouse, or drag all of it with *Drag*, into another app's field; *Copy* puts it on
-  the clipboard. It stays until you close it, use it, or start the next dictation
+  the card stays with the text in a text box instead of folding away: select any of
+  it with the mouse and drag the selection into another app's field; *Copy* puts it
+  on the clipboard. The box is read-only: the card never takes the keyboard, which
+  stays with the app you dictate into. It stays until you close it, use it, or start the next dictation
   (a click on its icon starts one, as the pill would; a dictation that comes to
   nothing, like a brushed trigger or a silent hold, gives the card back, while Esc
   lets it go). It doesn't turn see-through under the pointer. Not when *Paste text

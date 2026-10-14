@@ -130,6 +130,8 @@ export interface OverlayState {
    * Copy, until closed, used, or the next dictation.
    */
   keep?: boolean;
+  /** A T3-mode dictation (hands-free): its text is headed for T3 Code, and the card shows T3 Code's logo. */
+  t3?: boolean;
   handsFree: boolean;
   /** Epoch ms; the timer runs in the renderer. */
   startedAt: number;

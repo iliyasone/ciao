@@ -39,7 +39,9 @@ namespace Ciao.Input;
 ///                                           field only while window "hwnd" is in front; otherwise (or hwnd 0) its text is null
 ///   {"id":4,"cmd":"activate","process":"^t3 code"} → brings the main window of a running app whose process name
 ///                                           matches (a case-insensitive regex) to the front: {"id":4,"hwnd":123}, 0 = no
-///                                           such app, or the system kept another window in front
+///                                           such app, or the system kept another window in front. "launch":true (Windows
+///                                           only): if refused, start the app's exe again with no arguments, so a single-
+///                                           instance app (T3 Code) shows its own window
 ///   {"id":5,"cmd":"key","key":"enter","hwnd":123} → presses Enter if that window is still in front (hwnd 0 = whatever
 ///                                           is): {"id":5,"ok":true|false}. "enter" is the only key
 ///   {"cmd":"media","pause":true}          pause the media players that are playing (music, a video in a browser);
@@ -343,7 +345,7 @@ static class Program
                 try
                 {
                     var re = new System.Text.RegularExpressions.Regex(msg["process"]?.GetValue<string>() ?? "$^", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    hwnd = Native.Activate(re).ToInt64();
+                    hwnd = Native.Activate(re, msg["launch"]?.GetValue<bool>() ?? false).ToInt64();
                 }
                 catch (ArgumentException) { } // a bad pattern matches nothing
                 Emit(new JsonObject { ["id"] = id, ["hwnd"] = hwnd });

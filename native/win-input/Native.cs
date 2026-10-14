@@ -285,17 +285,22 @@ static class Native
 
     /// <summary>
     /// Brings the main window of a running app whose process name matches to the front, restoring it if
-    /// minimized; Zero if there is none, or Windows kept another window in front. A background process
+    /// minimized (launch: if Windows refuses, start the app's exe again so it shows itself); Zero if there is none, or Windows kept another window in front. A background process
     /// may not take the foreground on its own, so this thread borrows the input state of the one in front.
     /// </summary>
-    public static IntPtr Activate(System.Text.RegularExpressions.Regex process)
+    public static IntPtr Activate(System.Text.RegularExpressions.Regex process, bool launch = false)
     {
         IntPtr hwnd = IntPtr.Zero;
+        string? exe = null;
         foreach (var p in System.Diagnostics.Process.GetProcesses())
         {
             try
             {
-                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero) hwnd = p.MainWindowHandle;
+                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero)
+                {
+                    hwnd = p.MainWindowHandle;
+                    if (launch) exe = ImagePath(p.Id);
+                }
             }
             catch (Exception) { } // exited meanwhile
             finally { p.Dispose(); }
@@ -319,6 +324,61 @@ static class Native
         {
             if (attached) AttachThreadInput(me, theirs, false);
         }
+        // A window on another virtual desktop comes forward once Windows has switched desktops: wait for it.
+        for (int i = 0; i < 12 && GetForegroundWindow() != hwnd; i++) Thread.Sleep(25);
+        // Refused (Windows may only flash it, say on another desktop): start the app's own exe with no
+        // arguments. A single-instance app like T3 Code then shows its window itself, which Windows
+        // allows where it refuses another app.
+        if (GetForegroundWindow() != hwnd && exe != null) return Launch(exe, hwnd);
         return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
+    }
+
+    /// <summary>Starts exe (no arguments, from its own folder, no handles inherited) and waits up to 3 s for hwnd to be in front.</summary>
+    static IntPtr Launch(string exe, IntPtr hwnd)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(exe) ?? "",
+            })?.Dispose();
+        }
+        catch (Exception)
+        {
+            return IntPtr.Zero;
+        }
+        // An Electron app's second instance takes a moment to start and hand over (longer from a cold disk).
+        for (var clock = System.Diagnostics.Stopwatch.StartNew(); clock.ElapsedMilliseconds < 3000; Thread.Sleep(25))
+            if (GetForegroundWindow() == hwnd) return hwnd;
+        return IntPtr.Zero;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int pid);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref uint size);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool CloseHandle(IntPtr handle);
+
+    /// <summary>The process's exe path; works for other architectures and elevated processes, unlike MainModule.</summary>
+    static string? ImagePath(int pid)
+    {
+        var h = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+        if (h == IntPtr.Zero) return null;
+        try
+        {
+            var sb = new StringBuilder(1024);
+            uint size = (uint)sb.Capacity;
+            return QueryFullProcessImageName(h, 0, sb, ref size) ? sb.ToString() : null;
+        }
+        finally
+        {
+            CloseHandle(h);
+        }
     }
 }

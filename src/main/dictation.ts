@@ -37,7 +37,7 @@ const START_SOUND_MUTE_MS = 280;
 /** A short press starts nothing (tapHandsFree off); otherwise it starts hands-free, in T3 mode too. */
 const dropsTaps = (s: Settings) => !s.tapHandsFree;
 /** T3 mode: how long the stop waits for T3 Code, just called forward, to be in front. */
-const FORWARD_WAIT_MS = 400;
+const FORWARD_WAIT_MS = 1000; // a switch to another desktop animates
 /** T3 mode, sending: after the text showed up in the box, so the editor has taken it in. */
 const SEND_AFTER_MS = 150;
 /** After a plain paste, before checking that a field had focus: the app needs a moment to take it in. */
@@ -442,16 +442,17 @@ export class DictationController {
         a.pausedMedia = true;
         this.deps.input.media(true);
       }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
-    // T3 mode: T3 Code comes forward on the chat it shows, so the text goes there when the dictation ends.
-    // Not at once: a tap may be dropped (tapHandsFree off), and a held Ctrl may still turn into Ctrl+C for
-    // the app in front. After a tap that went hands-free, only once words come in (not just noise, like
-    // keys clicking): a stray tap must not take the focus from what you are typing in. Not for the wake word, which may be a false alarm.
-    if (!replay && settings.t3Mode && settings.t3Forward && trigger !== "wake_word")
+    // T3 mode is for hands-free dictations (a tap, the wake word, the pill); a hold talks into the window
+    // you are in. T3 Code comes forward on the chat it shows, so the text goes there when the dictation
+    // ends. Not at once: until then a press may still be a hold, a dropped tap (tapHandsFree off), or a
+    // held Ctrl turning into Ctrl+C. After a tap or the wake word, only once words come in (not just
+    // noise, like keys clicking, or a false alarm): a stray one must not take the focus from your typing.
+    if (!replay && settings.t3Mode && settings.t3Forward && settings.autoPaste)
       setTimeout(() => {
-        if (this.active !== a || a.phase !== "recording") return;
-        if (this.handsFree && trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
+        if (this.active !== a || a.phase !== "recording" || !this.handsFree) return;
+        if (trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
         else a.forwarded = this.bringT3Forward(a);
-      }, isLoneModifierTrigger(trigger) ? SHORTCUT_WINDOW_MS : TAP_MS);
+      }, TAP_MS); // hands-free by then means the key was let go: no shortcut can claim it any more
   }
 
   /**
@@ -461,7 +462,7 @@ export class DictationController {
   private async bringT3Forward(a: Active): Promise<boolean> {
     const front = await this.deps.input.foreground();
     if ((front && isT3Code(front)) || !this.active || this.active.seq !== a.seq) return false;
-    const hwnd = await this.deps.input.activate(T3_PROCESS);
+    const hwnd = await this.deps.input.activate(T3_PROCESS, true);
     console.log("t3: brought forward", hwnd || "nothing");
     return hwnd !== 0;
   }
@@ -640,16 +641,20 @@ export class DictationController {
       phase = entry.error ? "saved" : "empty";
     } else {
       this.deps.overlay.final(a.seq, text);
-      // Stopped before the first words came in (a short prompt, or an offline session): there are words
-      // now, so T3 Code comes forward before the paste looks for it.
-      if (a.forwardOnVoice) {
-        // Nothing came forward (T3 Code isn't running, or is in front already): the window at the stop stands.
-        const atStop = a.stopTarget;
+      // A T3 dictation lands in T3 Code wherever you went meanwhile (another app, another desktop): T3
+      // Code is brought forward now, whatever is in front, and the paste waits for it. Without T3 Code
+      // running, the text waits on the clipboard; it never goes into the app in front.
+      if (settings.t3Mode && settings.t3Forward && settings.autoPaste && a.handsFree && !a.replay) {
+        const earlier = a.forwarded;
+        a.forwardOnVoice = true;
         this.forwardNow(a);
-        a.stopTarget = a.forwarded!.then((ok) => (ok || !atStop ? this.stopTarget(a) : atStop));
+        // Brought forward during the dictation counts too (it is in front now, so this one says no).
+        if (earlier) a.forwarded = Promise.all([earlier, a.forwarded!]).then(([x, y]) => x || y);
+        a.stopTarget = this.stopTarget(a);
       }
       const target = await this.target(a);
-      const t3 = settings.t3Mode;
+      // A hold pastes where you are, T3 mode or not: T3 mode is for hands-free dictations.
+      const t3 = settings.t3Mode && !!a.handsFree;
       /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
       let sent = text;
       // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
@@ -727,8 +732,10 @@ export class DictationController {
     // Nothing said: a kept card from before comes back rather than folding away.
     if (phase === "empty" && this.kept) return this.emptyOrKept(a);
     this.kept = null;
+    const base = this.baseState(a);
     const state: OverlayState = {
-      ...this.baseState(a),
+      ...base,
+      t3: base.t3 && phase !== "clipboard", // the text waits on the clipboard: it isn't going to T3 Code
       phase,
       keep,
       message:
@@ -789,7 +796,7 @@ export class DictationController {
     this.deps.overlay.final(this.kept.state.seq, this.kept.text);
   }
 
-  /** The renderer folded the card for `seq` away (closed, copied, dragged out, or done). */
+  /** The renderer folded the card for `seq` away (closed, copied, or done). */
   cardHidden(seq: number): void {
     if (this.kept?.state.seq === seq) this.kept = null;
   }
@@ -850,6 +857,7 @@ export class DictationController {
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
       layout: a.settings.formatText,
+      t3: a.settings.t3Mode && a.settings.autoPaste && (a.phase === "recording" ? this.handsFree : !!a.handsFree) && a.miss?.reason !== "not-t3",
     };
   }
 

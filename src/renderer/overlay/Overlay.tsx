@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, CloudOff, Copy, GripVertical, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
@@ -265,7 +265,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
     onPointerDown: (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      if (mode === "move" && target.closest("button, [data-selectable], [draggable=true]")) return;
+      if (mode === "move" && target.closest("button, [data-selectable]")) return;
       const scroller = target.closest<HTMLElement>("[data-scroller]");
       if (scroller && e.clientX >= scroller.getBoundingClientRect().left + scroller.clientWidth) return;
       e.stopPropagation();
@@ -505,7 +505,7 @@ export function Overlay() {
   /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
   const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
   const foldingSeq = useRef(-1);
-  /** The card the user closed, copied or dragged out: later states for it (a late check) don't bring it back. */
+  /** The card the user closed or copied: later states for it (a late check) don't bring it back. */
   const closedSeq = useRef(-1);
   const shownSeq = useRef(-1);
   const tr = useStrings().overlay;
@@ -643,12 +643,11 @@ export function Overlay() {
       icon = null;
   }
 
+  const kept = !!state.keep && text.final !== null;
+  const keptText = text.final ?? "";
   const content =
     text.final !== null ? (
-      // Kept, it can be selected with the mouse and dragged out, a word or all of it.
-      <span data-selectable={state.keep || undefined} className={`text-settled whitespace-pre-wrap ${state.keep ? "selectable cursor-text" : ""}`}>
-        {text.final}
-      </span>
+      <span className="text-settled whitespace-pre-wrap">{text.final}</span>
     ) : text.settled || text.fresh.length ? (
       <LiveText text={text} withLayout={state.layout ?? false} />
     ) : (
@@ -712,7 +711,11 @@ export function Overlay() {
             {state.handsFree && state.phase === "recording" && <Lock className="size-3.5 text-faint" />}
             {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-700 dark:text-amber-300/80" />}
           </div>
-          <div className={`text-[13px] font-medium tracking-wide tabular-nums ${finishing ? "text-faint" : "text-fg2"}`}>{clock(elapsed)}</div>
+          <div className={`flex items-center gap-1.5 text-[13px] font-medium tracking-wide tabular-nums ${finishing ? "text-faint" : "text-fg2"}`}>
+            {/* Headed for T3 Code: its logo by the clock. */}
+            {state.t3 && <img src="./t3code.png" alt="T3 Code" title={tr.t3Badge} draggable={false} className="size-4 rounded-[4px]" />}
+            {clock(elapsed)}
+          </div>
           <div className="mr-3 flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">
             {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
             {withActions && (
@@ -722,14 +725,28 @@ export function Overlay() {
             )}
           </div>
         </header>
-        {showText ? <Scroller maxLines={maxLines}>{content}</Scroller> : null}
+        {kept ? (
+          // A text box like any other for the mouse: select, and drag the selection out into another
+          // app's field. Read-only: the overlay never takes the keyboard, or it would keep it from the app
+          // you dictate into (and from the one you drop the text in).
+          <textarea
+            data-selectable
+            readOnly
+            value={keptText}
+            rows={Math.min(maxLines - 1, Math.max(2, Math.ceil(keptText.length / 70) + (keptText.match(/\n/g)?.length ?? 0)))}
+            spellCheck={false}
+            className="selectable block w-full cursor-text resize-none rounded-xl bg-tint/5 px-3 py-2 text-[15px] leading-[25px] text-fg outline-none ring-1 ring-tint/20 focus:ring-tint/40"
+          />
+        ) : showText ? (
+          <Scroller maxLines={maxLines}>{content}</Scroller>
+        ) : null}
         {state.message && <div className="mt-2 text-[12.5px] text-amber-700 dark:text-amber-200/90">{state.message}</div>}
         {withActions && (
           <div className="mt-2.5 -ml-2 flex gap-1">
             {(state.phase === "recovered" || state.keep) && text.final && (
               <button
                 onClick={async () => {
-                  await ciao.overlay.copy(text.final!);
+                  await ciao.overlay.copy(kept ? keptText : text.final!);
                   setCopied(true);
                   setTimeout(dismiss, 700);
                 }}
@@ -738,24 +755,6 @@ export function Overlay() {
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 {copied ? tr.copied : tr.copy}
               </button>
-            )}
-            {state.keep && text.final && (
-              // All of the text in one drag, to drop into another app's field; dropped there, the card is done.
-              <span
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", text.final!);
-                  e.dataTransfer.effectAllowed = "copy";
-                }}
-                onDragEnd={(e) => {
-                  if (e.dataTransfer.dropEffect !== "none") dismiss();
-                }}
-                title={tr.dragTitle}
-                className="inline-flex cursor-grab items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] text-muted hover:bg-tint/8 hover:text-fg active:cursor-grabbing"
-              >
-                <GripVertical className="size-3.5" />
-                {tr.drag}
-              </span>
             )}
             <button
               onClick={() => {
