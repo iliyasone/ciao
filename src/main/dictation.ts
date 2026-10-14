@@ -641,8 +641,6 @@ export class DictationController {
       phase = entry.error ? "saved" : "empty";
     } else {
       this.deps.overlay.final(a.seq, text);
-      // Stopped before the first words came in (a short prompt, or an offline session): there are words
-      // now, so T3 Code comes forward before the paste looks for it.
       // A T3 dictation lands in T3 Code wherever you went meanwhile (another app, another desktop): T3
       // Code is brought forward now, whatever is in front, and the paste waits for it. Without T3 Code
       // running, the text waits on the clipboard; it never goes into the app in front.
@@ -857,7 +855,7 @@ export class DictationController {
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
       layout: a.settings.formatText,
-      t3: a.settings.t3Mode && (a.phase === "recording" ? this.handsFree : !!a.handsFree),
+      t3: a.settings.t3Mode && (a.phase === "recording" ? this.handsFree : !!a.handsFree) && a.miss?.reason !== "not-t3",
     };
   }
 

@@ -319,6 +319,8 @@ static class Native
         {
             if (attached) AttachThreadInput(me, theirs, false);
         }
+        // A window on another virtual desktop comes forward once Windows has switched desktops: wait for it.
+        for (int i = 0; i < 12 && GetForegroundWindow() != hwnd; i++) Thread.Sleep(25);
         return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
     }
 }

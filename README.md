@@ -110,10 +110,12 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - *Bring T3 Code forward when dictating* (on by default): after a tap or the wake
     word, once your first words are transcribed or, if it ends before that, once its
     text is in (so a stray tap or a false wake word doesn't take the focus), or at
-    once on a click on the pill, the T3 Code
-    window comes forward on the chat it shows, so you can dictate from any app. Not
-    when T3 Code is in front already. T3 Code puts focus back
-    into its chat box when its window is activated, unless a dialog or the command
+    once on a click on the pill, the T3 Code window comes forward on the chat it
+    shows, so you can dictate from any app; and again when the dictation ends,
+    wherever you went meanwhile (another app or virtual desktop). Not when T3 Code
+    is in front already. With this off, T3 Code has to be in front when the
+    dictation ends. T3 Code puts focus back into its chat box when its window is
+    activated, unless a dialog or the command
     palette had it, or its terminal panel is open (then a paste still reaches the
     box, see above). Ciao waits up to 1 s at the end of the dictation for the
     switch. Not on a Wayland desktop, where no app may bring another forward;
