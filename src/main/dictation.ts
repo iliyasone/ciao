@@ -855,7 +855,7 @@ export class DictationController {
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
       layout: a.settings.formatText,
-      t3: a.settings.t3Mode && (a.phase === "recording" ? this.handsFree : !!a.handsFree) && a.miss?.reason !== "not-t3",
+      t3: a.settings.t3Mode && a.settings.autoPaste && (a.phase === "recording" ? this.handsFree : !!a.handsFree) && a.miss?.reason !== "not-t3",
     };
   }
 
