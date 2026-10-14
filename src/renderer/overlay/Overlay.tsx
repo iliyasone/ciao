@@ -363,6 +363,8 @@ const HIDE_AFTER: Partial<Record<OverlayState["phase"], number>> = { done: 450, 
 /** The fold/fade-out animations in styles.css, plus a frame. */
 const LEAVE_MS = 210;
 const SUGGESTION_MS = 15_000;
+/** Two presses in the kept text box within this time make a double click: all of its text is selected. */
+const DOUBLE_PRESS_MS = 500;
 
 /** The Ciao pill between dictations: click to dictate, drag to move. Draws nothing but a static icon, so it costs nothing. */
 function Pill({ dragging }: { dragging: React.RefObject<boolean> }) {
@@ -502,6 +504,8 @@ export function Overlay() {
   const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const solidUntilLeave = useRef(false);
   const [copied, setCopied] = useState(false);
+  /** The kept box's last press, to tell a double press (select all) from a single one. */
+  const lastPress = useRef({ at: 0, x: 0, y: 0 });
   /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
   const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
   const foldingSeq = useRef(-1);
@@ -733,6 +737,23 @@ export function Overlay() {
             data-selectable
             readOnly
             value={keptText}
+            // A second press on the same spot within half a second selects it all, like a double click in a
+            // text field. Counted here: on Windows the browser's own count is thrown off by the press the
+            // window hands it in place of the one it would eat (overlayWindow.ts, pressEaten).
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              const now = performance.now();
+              const last = lastPress.current;
+              lastPress.current = { at: now, x: e.clientX, y: e.clientY };
+              if (e.detail < 2 && (now - last.at > DOUBLE_PRESS_MS || Math.hypot(e.clientX - last.x, e.clientY - last.y) > 6)) return;
+              e.preventDefault(); // not the word under the pointer: all of it
+              e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
+            }}
+            onDoubleClick={(e) => {
+              // The browser's own double click would select a word (or nothing) after the press above.
+              e.preventDefault();
+              e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
+            }}
             rows={Math.min(maxLines - 1, Math.max(2, Math.ceil(keptText.length / 70) + (keptText.match(/\n/g)?.length ?? 0)))}
             spellCheck={false}
             className="selectable block w-full cursor-text resize-none rounded-xl bg-tint/5 px-3 py-2 text-[15px] leading-[25px] text-fg outline-none ring-1 ring-tint/20 focus:ring-tint/40"
