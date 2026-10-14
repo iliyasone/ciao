@@ -296,18 +296,16 @@ static class Native
         {
             try
             {
-                if (process.IsMatch(p.ProcessName))
+                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero)
                 {
-                    // A matching app with no window shown (hidden to the tray) can still be launched to show it.
-                    if (launch) exe ??= ImagePath(p.Id);
-                    if (p.MainWindowHandle != IntPtr.Zero) hwnd = p.MainWindowHandle;
+                    hwnd = p.MainWindowHandle;
+                    if (launch) exe = ImagePath(p.Id);
                 }
             }
             catch (Exception) { } // exited meanwhile
             finally { p.Dispose(); }
             if (hwnd != IntPtr.Zero) break;
         }
-        if (hwnd == IntPtr.Zero && exe != null) return Launch(exe, () => FindWindow(process));
         if (hwnd == IntPtr.Zero || IsHungAppWindow(hwnd)) return IntPtr.Zero;
         var front = GetForegroundWindow();
         if (front == hwnd) return hwnd;
@@ -331,12 +329,12 @@ static class Native
         // Refused (Windows may only flash it, say on another desktop): start the app's own exe with no
         // arguments. A single-instance app like T3 Code then shows its window itself, which Windows
         // allows where it refuses another app.
-        if (GetForegroundWindow() != hwnd && exe != null) return Launch(exe, () => hwnd);
+        if (GetForegroundWindow() != hwnd && exe != null) return Launch(exe, hwnd);
         return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
     }
 
-    /// <summary>Starts exe (no arguments, its own folder, nothing inherited) and waits up to 3 s for window() to be in front.</summary>
-    static IntPtr Launch(string exe, Func<IntPtr> window)
+    /// <summary>Starts exe (no arguments, from its own folder, no handles inherited) and waits up to 3 s for hwnd to be in front.</summary>
+    static IntPtr Launch(string exe, IntPtr hwnd)
     {
         try
         {
@@ -351,26 +349,8 @@ static class Native
             return IntPtr.Zero;
         }
         // An Electron app's second instance takes a moment to start and hand over (longer from a cold disk).
-        for (int i = 0; i < 120; i++)
-        {
-            var w = window();
-            if (w != IntPtr.Zero && GetForegroundWindow() == w) return w;
-            Thread.Sleep(25);
-        }
-        return IntPtr.Zero;
-    }
-
-    static IntPtr FindWindow(System.Text.RegularExpressions.Regex process)
-    {
-        foreach (var p in System.Diagnostics.Process.GetProcesses())
-        {
-            try
-            {
-                if (process.IsMatch(p.ProcessName) && p.MainWindowHandle != IntPtr.Zero) return p.MainWindowHandle;
-            }
-            catch (Exception) { }
-            finally { p.Dispose(); }
-        }
+        for (var clock = System.Diagnostics.Stopwatch.StartNew(); clock.ElapsedMilliseconds < 3000; Thread.Sleep(25))
+            if (GetForegroundWindow() == hwnd) return hwnd;
         return IntPtr.Zero;
     }
 
