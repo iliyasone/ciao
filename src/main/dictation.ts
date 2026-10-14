@@ -447,7 +447,7 @@ export class DictationController {
     // ends. Not at once: until then a press may still be a hold, a dropped tap (tapHandsFree off), or a
     // held Ctrl turning into Ctrl+C. After a tap or the wake word, only once words come in (not just
     // noise, like keys clicking, or a false alarm): a stray one must not take the focus from your typing.
-    if (!replay && settings.t3Mode && settings.t3Forward)
+    if (!replay && settings.t3Mode && settings.t3Forward && settings.autoPaste)
       setTimeout(() => {
         if (this.active !== a || a.phase !== "recording" || !this.handsFree) return;
         if (trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
@@ -794,7 +794,7 @@ export class DictationController {
     this.deps.overlay.final(this.kept.state.seq, this.kept.text);
   }
 
-  /** The renderer folded the card for `seq` away (closed, copied, dragged out, or done). */
+  /** The renderer folded the card for `seq` away (closed, copied, or done). */
   cardHidden(seq: number): void {
     if (this.kept?.state.seq === seq) this.kept = null;
   }

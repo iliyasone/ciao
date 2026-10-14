@@ -505,7 +505,7 @@ export function Overlay() {
   /** A fold under way, and its card: a state for that card arriving meanwhile (kept after all) cancels it. */
   const folding = useRef<ReturnType<typeof setTimeout>>(undefined);
   const foldingSeq = useRef(-1);
-  /** The card the user closed, copied or dragged out: later states for it (a late check) don't bring it back. */
+  /** The card the user closed or copied: later states for it (a late check) don't bring it back. */
   const closedSeq = useRef(-1);
   const shownSeq = useRef(-1);
   const tr = useStrings().overlay;
