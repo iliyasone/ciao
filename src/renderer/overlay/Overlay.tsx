@@ -711,7 +711,11 @@ export function Overlay() {
             {state.handsFree && state.phase === "recording" && <Lock className="size-3.5 text-faint" />}
             {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-700 dark:text-amber-300/80" />}
           </div>
-          <div className={`text-[13px] font-medium tracking-wide tabular-nums ${finishing ? "text-faint" : "text-fg2"}`}>{clock(elapsed)}</div>
+          <div className={`flex items-center gap-1.5 text-[13px] font-medium tracking-wide tabular-nums ${finishing ? "text-faint" : "text-fg2"}`}>
+            {/* Headed for T3 Code: its logo by the clock. */}
+            {state.t3 && <img src="./t3code.png" alt="T3 Code" title={tr.t3Badge} draggable={false} className="size-4 rounded-[4px]" />}
+            {clock(elapsed)}
+          </div>
           <div className="mr-3 flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">
             {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
             {withActions && (

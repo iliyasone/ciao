@@ -83,9 +83,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   starts hands-free mode* is off), the wake word, or a click on the pill. A hold
   works as without T3 mode: the text goes where your cursor is, with no T3 Code
   brought forward, no prefix and no check. For a hands-free dictation:
-  - the text is pasted only into T3 Code, whichever chat is open there. If another
-    app is in front when the dictation ends, nothing is pasted, and the text waits
-    on the clipboard;
+  - the card shows T3 Code's logo by its clock, so you know where the text goes;
+  - the text is pasted only into T3 Code, whichever chat is open there, wherever
+    you went meanwhile: when it ends, Ciao brings T3 Code's window forward
+    (switching to its virtual desktop) and pastes there, and you stay there. T3
+    Code tells other apps nothing and has no way to fill its chat box from outside,
+    so this needs its window in front. If T3 Code isn't running, or the system
+    won't bring it forward, nothing is pasted and the text waits on the clipboard,
+    never in the app in front;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
     - the text shows up in the box: done, and your clipboard comes back at once

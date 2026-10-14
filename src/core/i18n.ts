@@ -60,6 +60,7 @@ const ru = {
     unconfirmed: `Не видно, чтобы текст попал в поле ввода — он здесь и в буфере: выдели и перетащи или скопируй`,
     noFieldFocused: "Не видно поля ввода, куда ушёл текст — вот он: выдели и перетащи или скопируй",
     dictateAgain: "Диктовать",
+    t3Badge: "Текст пойдёт в T3 Code",
     close: "Закрыть",
     copy: "Скопировать",
     copied: "Скопировано",
@@ -213,7 +214,7 @@ const ru = {
       title: "T3 Code",
       mode: "Режим T3",
       modeHint:
-        "Для диктовки промптов в T3 Code без рук: после короткого нажатия (если оно включено в «Клавишах»), слова «чао» или клика по значку. Удержание диктует, как обычно, туда, где курсор. Текст диктовки без рук вставляется только в окно T3 Code, и Ciao читает поле ввода до и после вставки, чтобы проверить, что текст там. Если нет — текст остаётся в буфере и в истории.",
+        "Для диктовки промптов в T3 Code без рук: после короткого нажатия (если оно включено в «Клавишах»), слова «чао» или клика по значку. Удержание диктует, как обычно, туда, где курсор. Пока идёт такая диктовка, на карточке логотип T3 Code. Когда она заканчивается, Ciao выводит T3 Code вперёд, даже если ты ушёл в другое приложение или на другой рабочий стол, и вставляет текст только туда, проверяя по полю ввода, что текст дошёл. Если нет — текст остаётся в буфере и в истории.",
       forward: "Показывать T3 Code при диктовке",
       forwardHint: `В диктовке без рук окно T3 Code выходит вперёд, когда появятся первые слова (после короткого нажатия или слова «чао») или сразу (по клику на значок), — на том чате, который в нём открыт, и текст попадает туда.`,
       send: "Сразу отправлять",
@@ -366,6 +367,7 @@ const en: Strings = {
     unconfirmed: "Couldn't see the text reach a text field — it's here and on the clipboard: select and drag, or copy it",
     noFieldFocused: "Couldn't see a text field the text went into — here it is: select and drag, or copy it",
     dictateAgain: "Dictate",
+    t3Badge: "The text goes to T3 Code",
     close: "Close",
     copy: "Copy",
     copied: "Copied",
@@ -519,7 +521,7 @@ const en: Strings = {
       title: "T3 Code",
       mode: "T3 mode",
       modeHint:
-        "For dictating prompts into T3 Code hands-free: after a short press (if that is on under Keys), the wake word or a click on the pill. A hold dictates as usual, wherever your cursor is. Hands-free text is pasted only into the T3 Code window, and Ciao reads the chat box before and after pasting to check it's there. If not, it stays on the clipboard and in history.",
+        "For dictating prompts into T3 Code hands-free: after a short press (if that is on under Keys), the wake word or a click on the pill. A hold dictates as usual, wherever your cursor is. Such a dictation shows T3 Code's logo on the card. When it ends, Ciao brings T3 Code forward, even if you went to another app or desktop, and pastes only there, reading the chat box before and after to check the text is in. If not, it stays on the clipboard and in history.",
       forward: "Bring T3 Code forward when dictating",
       forwardHint: `In a hands-free dictation the T3 Code window comes forward once your first words come in (after a tap or the wake word) or at once (on a click on the pill), on the chat it shows, and the text goes there.`,
       send: "Send right away",

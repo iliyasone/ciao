@@ -643,13 +643,13 @@ export class DictationController {
       this.deps.overlay.final(a.seq, text);
       // Stopped before the first words came in (a short prompt, or an offline session): there are words
       // now, so T3 Code comes forward before the paste looks for it.
-      // Hands-free and stopped before the forward timer (0.35 s): forward now, the same way.
-      if (settings.t3Mode && settings.t3Forward && a.handsFree && !a.forwarded && !a.replay) a.forwardOnVoice = true;
-      if (a.forwardOnVoice) {
-        // Nothing came forward (T3 Code isn't running, or is in front already): the window at the stop stands.
-        const atStop = a.stopTarget;
+      // A T3 dictation lands in T3 Code wherever you went meanwhile (another app, another desktop): T3
+      // Code is brought forward now, whatever is in front, and the paste waits for it. Without T3 Code
+      // running, the text waits on the clipboard; it never goes into the app in front.
+      if (settings.t3Mode && a.handsFree && !a.replay) {
+        a.forwardOnVoice = true;
         this.forwardNow(a);
-        a.stopTarget = a.forwarded!.then((ok) => (ok || !atStop ? this.stopTarget(a) : atStop));
+        a.stopTarget = this.stopTarget(a);
       }
       const target = await this.target(a);
       // A hold pastes where you are, T3 mode or not: T3 mode is for hands-free dictations.
@@ -854,6 +854,7 @@ export class DictationController {
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
       layout: a.settings.formatText,
+      t3: a.settings.t3Mode && (a.phase === "recording" ? this.handsFree : !!a.handsFree),
     };
   }
 
