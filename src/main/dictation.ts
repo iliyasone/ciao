@@ -643,6 +643,8 @@ export class DictationController {
       this.deps.overlay.final(a.seq, text);
       // Stopped before the first words came in (a short prompt, or an offline session): there are words
       // now, so T3 Code comes forward before the paste looks for it.
+      // Hands-free and stopped before the forward timer (0.35 s): forward now, the same way.
+      if (settings.t3Mode && settings.t3Forward && a.handsFree && !a.forwarded && !a.replay) a.forwardOnVoice = true;
       if (a.forwardOnVoice) {
         // Nothing came forward (T3 Code isn't running, or is in front already): the window at the stop stands.
         const atStop = a.stopTarget;
