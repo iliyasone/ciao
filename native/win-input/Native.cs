@@ -41,7 +41,7 @@ static class Native
         public static bool AcceptInjected;
 
         readonly LowLevelHookProc _proc; // kept alive: the OS holds only a raw pointer
-        readonly IntPtr _hook;
+        IntPtr _hook;
         readonly Func<Keys, bool, bool> _handler;
 
         public KeyboardHook(Func<Keys, bool, bool> handler)
@@ -52,8 +52,12 @@ static class Native
             if (_hook == IntPtr.Zero) throw new InvalidOperationException("SetWindowsHookEx failed: " + Marshal.GetLastWin32Error());
         }
 
+        /// <summary>Hooks in afresh (on the hook thread): Windows silently drops a hook that once answered too slowly.</summary>
+        public void Reinstall() => _hook = Rehook(_hook, WH_KEYBOARD_LL, _proc);
+
         IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
         {
+            LastCall = Environment.TickCount;
             if (nCode >= 0)
             {
                 var k = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
@@ -90,7 +94,7 @@ static class Native
     public sealed class MouseButtonHook : IDisposable
     {
         readonly LowLevelHookProc _proc; // kept alive: the OS holds only a raw pointer
-        readonly IntPtr _hook;
+        IntPtr _hook;
         readonly Func<string, bool, bool> _handler;
 
         public MouseButtonHook(Func<string, bool, bool> handler)
@@ -101,8 +105,12 @@ static class Native
             if (_hook == IntPtr.Zero) throw new InvalidOperationException("SetWindowsHookEx(mouse) failed: " + Marshal.GetLastWin32Error());
         }
 
+        /// <summary>Hooks in afresh (on the hook thread), as <see cref="KeyboardHook.Reinstall"/>.</summary>
+        public void Reinstall() => _hook = Rehook(_hook, WH_MOUSE_LL, _proc);
+
         IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
         {
+            LastCall = Environment.TickCount;
             if (nCode >= 0)
             {
                 int msg = (int)wParam;
@@ -117,6 +125,35 @@ static class Native
         }
 
         public void Dispose() => UnhookWindowsHookEx(_hook);
+    }
+
+    /// <summary>When a hook was last called (Environment.TickCount): any key or mouse event, a move too.</summary>
+    public static volatile int LastCall = Environment.TickCount;
+
+    /// <summary>The new hook, or the old one if hooking in again failed.</summary>
+    static IntPtr Rehook(IntPtr old, int id, LowLevelHookProc proc)
+    {
+        var hook = SetWindowsHookEx(id, proc, GetModuleHandle(null), 0);
+        if (hook == IntPtr.Zero) return old;
+        UnhookWindowsHookEx(old); // fails harmlessly if Windows already removed it
+        return hook;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct LASTINPUTINFO
+    {
+        public uint cbSize, dwTime;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
+    /// <summary>The system's last keyboard or mouse input (GetTickCount, as Environment.TickCount); null if unknown.</summary>
+    public static int? LastInput()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        return GetLastInputInfo(ref info) ? (int)info.dwTime : null;
     }
 
     public static bool Down(Keys k) => (GetAsyncKeyState((int)k) & 0x8000) != 0;

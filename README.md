@@ -48,9 +48,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     reach other apps, except on Linux, where trigger buttons are never held back.
   - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
     the history.
+  - **Stop** on the card finishes a dictation however it started (a key, the pill,
+    the wake word), the same as a second press.
 - **A pill between dictations.** A small Ciao pill stays at the bottom of the
   screen; the card unfolds out of it when you start and folds back when the text
-  is in. Click it to dictate hands-free (click the red dot on the card to
+  is in. Click it to dictate hands-free (click **Stop** or the red dot on the card to
   finish), drag it anywhere. The card then opens where the pill is, on that
   screen, rather than on the screen under the pointer.
   Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
@@ -461,6 +463,11 @@ Set them in *Settings → Keys*.
   - Keys and mouse buttons bound this way are hidden from other apps.
   - A lone modifier such as Right Ctrl is the exception, so Ctrl+C keeps working.
 - **Paste last.** Click the shortcut and press a new combo.
+- **If the keys stop working.** Windows quietly removes a keyboard or mouse hook
+  that once answered too slowly (on a busy machine). Ciao notices input its hooks
+  missed and hooks in again within seconds. A trigger whose release got lost works
+  again on the next press. An input helper that stops answering on any system is
+  restarted.
 
 On macOS, Option is `Alt` and Command is `Win` in these names, and the Fn key is
 `Fn`.

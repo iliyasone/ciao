@@ -223,6 +223,11 @@ export class DictationController {
     }
   }
 
+  /** The card's Stop button: finish the dictation running, held or hands-free. */
+  onStopClick(): void {
+    if (this.active?.phase === "recording") this.stop();
+  }
+
   onEscape(): void {
     if (this.active?.phase === "recording") this.cancel(true);
   }

@@ -30,6 +30,8 @@ const api = {
     onPill: (cb: (on: boolean) => void) => on("overlay:pill", cb),
     /** The pill was clicked: start a hands-free dictation, or finish the one running. */
     pillClick: () => ipcRenderer.send("overlay:pill-click"),
+    /** The card's Stop button: finish the dictation running (never starts one). */
+    stop: () => ipcRenderer.send("overlay:stop"),
     /** Linux: what is drawn, in window pixels (the rest of the window lets clicks through). */
     setRegion: (rects: { x: number; y: number; width: number; height: number }[]) => ipcRenderer.send("overlay:region", rects),
     /** A card or a suggestion is up (true), or nothing but maybe the pill (false). */

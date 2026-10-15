@@ -53,6 +53,8 @@ export class InputHelper extends EventEmitter<InputEvents> {
   private child: ChildProcess | null = null;
   private nextId = 1;
   private pending = new Map<number, (reply: Record<string, unknown>) => void>();
+  /** Quick requests in a row the helper left unanswered (see request). */
+  private unanswered = 0;
   private stopped = false;
   private captureResolve: ((spec: string | null) => void) | null = null;
   /** macOS: false until the helper has the Accessibility permission (it hears no keys before). */
@@ -241,15 +243,23 @@ export class InputHelper extends EventEmitter<InputEvents> {
   }
 
   private request(msg: Record<string, unknown>, timeoutMs = 2000): Promise<Record<string, unknown>> {
-    if (!this.child) return Promise.resolve({ ok: false, reason: "no-helper" });
+    const child = this.child;
+    if (!child) return Promise.resolve({ ok: false, reason: "no-helper" });
     const id = this.nextId++;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         resolve({ ok: false, reason: "timeout" });
+        // A quick command unanswered twice in a row: the helper hangs, and hears no keys either. Restart it
+        // (the exit handler does). Not for the slow ones: a field read or a window switch may take long.
+        if (msg.cmd === "field" || msg.cmd === "activate" || ++this.unanswered < 2 || this.child !== child) return;
+        console.warn("input helper not answering: restarting it");
+        this.unanswered = 0;
+        child.kill();
       }, timeoutMs);
       this.pending.set(id, (reply) => {
         clearTimeout(timer);
+        this.unanswered = 0;
         resolve(reply);
       });
       this.send({ ...msg, id });
