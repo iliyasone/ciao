@@ -382,6 +382,7 @@ function registerIpc(): void {
   });
   ipcMain.on("overlay:open-history", () => openHistory());
   ipcMain.on("overlay:pill-click", () => dictation.onPillClick());
+  ipcMain.on("overlay:stop", () => dictation.onStopClick());
   ipcMain.on("overlay:region", (_e, rects: Electron.Rectangle[]) => overlay.setRegion(rects));
   ipcMain.on("overlay:busy", (_e, on: boolean) => overlay.setBusy(on));
   ipcMain.on("overlay:answer", (_e, s: TermSuggestion, add: boolean) => {

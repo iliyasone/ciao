@@ -54,6 +54,7 @@ namespace Ciao.Input;
 static class Program
 {
     static readonly BlockingCollection<string> Out = new();
+    static readonly object ActivateLock = new(); // one window switch at a time
     static volatile bool _armed;
     static volatile Trigger[] _triggers = [];
 
@@ -73,6 +74,8 @@ static class Program
     /// the key (a chat app sends and clears the field). Well under the hook timeout; a slower read just races.
     /// </summary>
     const int EnterHoldMs = 100;
+    /// <summary>At most this often the hooks are put in again (see the watchdog in Main).</summary>
+    const int RehookEveryMs = 10_000;
 
     [STAThread]
     static void Main(string[] args)
@@ -88,6 +91,22 @@ static class Program
 
         using var keyboard = new Native.KeyboardHook(OnKey);
         using var mouse = new Native.MouseButtonHook(OnMouse);
+        // Windows silently removes a low-level hook that once answered too slowly (a busy machine), and the
+        // triggers then go dead until a restart. The system saw input the hooks didn't: hook in again.
+        int rehookedAt = Environment.TickCount - RehookEveryMs;
+        using var watchdog = new System.Windows.Forms.Timer { Interval = 2000 };
+        watchdog.Tick += (_, _) =>
+        {
+            int now = Environment.TickCount;
+            if (Native.LastInput() is not { } input || now - input < 250 || input - Native.LastCall < 1000) return;
+            if (now - rehookedAt < RehookEveryMs) return; // input the hooks may not see (an elevated app, the lock screen)
+            rehookedAt = now;
+            keyboard.Reinstall();
+            mouse.Reinstall();
+            Native.LastCall = now;
+            Emit(new JsonObject { ["type"] = "log", ["message"] = "hooks missed input: hooked in again" });
+        };
+        watchdog.Start();
 
         var stdin = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
         new Thread(() =>
@@ -140,6 +159,13 @@ static class Program
             if (t.Mouse is not null || t.Key != key) continue;
             if (down)
             {
+                // Held, yet a fresh press: its release never came (the hook was dropped meanwhile, or the
+                // secure desktop took it). Let it go first, or the trigger would never fire again.
+                if (t.Active && !repeat)
+                {
+                    t.Active = false;
+                    Emit(new JsonObject { ["type"] = "trigger", ["down"] = false, ["spec"] = t.Spec });
+                }
                 if (!t.Active && t.ModifiersMatch(mods))
                 {
                     t.Active = true;
@@ -212,6 +238,12 @@ static class Program
         foreach (var t in _triggers)
         {
             if (t.Mouse != button) continue;
+            if (down && t.Active)
+            {
+                // A button doesn't repeat: its release was lost (see OnKey). Let it go first.
+                t.Active = false;
+                Emit(new JsonObject { ["type"] = "trigger", ["down"] = false, ["spec"] = t.Spec });
+            }
             if (down && !t.Active && t.ModifiersMatch(mods))
             {
                 t.Active = true;
@@ -341,14 +373,22 @@ static class Program
                 break;
             case "activate":
             {
-                long hwnd = 0;
-                try
+                // On a thread of its own: it may wait seconds (another desktop, a launch), and the commands
+                // after it (the foreground window at a stop, a paste) must not wait behind it.
+                var pattern = msg["process"]?.GetValue<string>() ?? "$^";
+                var launch = msg["launch"]?.GetValue<bool>() ?? false;
+                new Thread(() =>
                 {
-                    var re = new System.Text.RegularExpressions.Regex(msg["process"]?.GetValue<string>() ?? "$^", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    hwnd = Native.Activate(re, msg["launch"]?.GetValue<bool>() ?? false).ToInt64();
-                }
-                catch (ArgumentException) { } // a bad pattern matches nothing
-                Emit(new JsonObject { ["id"] = id, ["hwnd"] = hwnd });
+                    long hwnd = 0;
+                    try
+                    {
+                        var re = new System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        lock (ActivateLock) hwnd = Native.Activate(re, launch).ToInt64();
+                    }
+                    catch (ArgumentException) { } // a bad pattern matches nothing
+                    catch (Exception e) { Emit(new JsonObject { ["type"] = "log", ["message"] = "activate: " + e.Message }); }
+                    Emit(new JsonObject { ["id"] = id, ["hwnd"] = hwnd });
+                }) { IsBackground = true }.Start();
                 break;
             }
             case "key":

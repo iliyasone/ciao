@@ -1,4 +1,4 @@
-import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Check, ClipboardCheck, CloudOff, Copy, History, Loader2, Lock, RotateCcw, Square, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
@@ -722,6 +722,17 @@ export function Overlay() {
           </div>
           <div className="mr-3 flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">
             {[state.delay, state.showCost ? cost : null].filter(Boolean).join(" · ")}
+            {state.phase === "recording" && (
+              // Finishes the dictation however it started (the pill, a key, the wake word): the text goes where it would on a stop.
+              <button
+                onClick={() => ciao.overlay.stop()}
+                title={tr.finish}
+                className="-my-1 inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-0.5 text-[12px] font-medium text-fg2 ring-1 ring-tint/15 hover:bg-tint/10 hover:text-fg"
+              >
+                <Square className="size-2.5 fill-current" />
+                {tr.stop}
+              </button>
+            )}
             {withActions && (
               <button onClick={dismiss} title={tr.close} className="rounded-md p-0.5 text-faint hover:bg-tint/10 hover:text-fg">
                 <X className="size-3.5" />
