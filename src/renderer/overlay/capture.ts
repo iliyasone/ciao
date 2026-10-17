@@ -4,7 +4,7 @@
 // It records from the microphone chosen in Settings (the system's default if none is, or it isn't
 // connected), and follows devices coming and going: see refresh() and lost().
 
-import { errorText, openMicStream } from "../mic";
+import { errorText, micGroup, openMicStream } from "../mic";
 
 let ctx: AudioContext | null = null;
 let moduleReady: Promise<void> | null = null;
@@ -62,8 +62,11 @@ function openMic(): Promise<Mic> {
     node.port.onmessage = onAudio;
     source.connect(node).connect(sink).connect(c.destination);
     const m: Mic = { stream, source, node, sink };
-    stream.getAudioTracks()[0]?.addEventListener("ended", () => void lost(m));
+    const track = stream.getAudioTracks()[0];
+    track?.addEventListener("ended", () => void lost(m));
     mic = m;
+    // Unplugged while the graph was being built: "ended" has fired already. After this open settles.
+    if (track?.readyState === "ended") setTimeout(() => void lost(m));
     return m;
   })().finally(() => {
     opening = null;
@@ -98,10 +101,28 @@ async function lost(m: Mic): Promise<void> {
   }
 }
 
+let deviceTimer: ReturnType<typeof setTimeout> | undefined;
 navigator.mediaDevices.addEventListener("devicechange", () => {
+  // Several arrive at once (a headset brings a mic and speakers): look once they have settled.
+  clearTimeout(deviceTimer);
+  deviceTimer = setTimeout(() => void devicesChanged(), 300);
+});
+
+async function devicesChanged(): Promise<void> {
+  const m = mic;
+  if (!m) {
+    // The wake word found no mic to open (none was connected, or the reopen after an unplug failed): try this one.
+    if (wakeOn && activeSeq === null && !opening) void setWake(true);
+    return;
+  }
+  const now = m.stream.getAudioTracks()[0]?.getSettings().groupId;
+  const next = await micGroup(wanted).catch(() => undefined);
+  if (mic !== m) return;
+  // Speakers or another mic coming and going leave the open one alone: a reopen loses ~0.2 s the wake word could be said in.
+  if (now && next && now === next) return;
   stale = true;
   refresh();
-});
+}
 
 /** The microphone chosen in Settings ("" = the system's default). */
 export function setMicrophone(name: string): void {
@@ -116,6 +137,7 @@ function closeMic(): void {
   if (!m) return;
   mic = null;
   m.source.disconnect();
+  m.node.port.postMessage("close"); // lets the processor go: otherwise it lives on with each reopen
   m.node.disconnect();
   m.sink.disconnect();
   m.stream.getTracks().forEach((t) => t.stop());

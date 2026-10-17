@@ -63,7 +63,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   name of the microphone actually heard. If the microphone in use is unplugged in
   the middle of a dictation, the recording carries on from the one to use now;
   a microphone plugged in or out between dictations is picked up at once, even
-  while the wake word keeps the mic open. Desktop only: on Android the phone
+  while the wake word keeps the mic open. The choice is kept by the microphone's
+  name: Windows may rename a USB one plugged into another port ("2- USB Audio
+  Device"), then choose it again. Desktop only: on Android the phone
   chooses (a headset when one is connected).
 - **Sounds when it listens.** A soft rising two-note sound when Ciao starts
   listening, a falling one when it stops (*Settings → Behavior → Start and stop

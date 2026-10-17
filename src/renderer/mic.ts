@@ -14,6 +14,16 @@ export async function listMics(): Promise<string[]> {
   return [...new Set(names)];
 }
 
+/**
+ * The device group a mic opened now would record from: the chosen one's if it is connected, else the
+ * system default's. Undefined if unknown (no permission yet, no microphone).
+ */
+export async function micGroup(name: string): Promise<string | undefined> {
+  const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+  const chosen = name ? inputs.find((d) => !ALIASES.has(d.deviceId) && d.label === name) : undefined;
+  return (chosen ?? inputs.find((d) => d.deviceId === "default") ?? inputs[0])?.groupId || undefined;
+}
+
 /** Opens the microphone named `name`, or the system's default if it is "" or not connected. */
 export async function openMicStream(name: string): Promise<MediaStream> {
   if (name) {

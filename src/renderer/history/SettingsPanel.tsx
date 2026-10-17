@@ -324,7 +324,8 @@ function SyncCard({ syncKeys, onSyncKeys }: { syncKeys: boolean; onSyncKeys: (v:
 
 /** Which microphone dictation and the wake word record from, and a level bar to check it hears you. */
 function MicCard({ value, onChange }: { value: string; onChange: (name: string) => void }) {
-  const [mics, setMics] = useState<string[]>([]);
+  /** null until listed: a saved one isn't called "not connected" meanwhile. */
+  const [mics, setMics] = useState<string[] | null>(null);
   const [testing, setTesting] = useState(false);
   /** While testing: the device actually heard (the default if the chosen one isn't connected), or why none is. */
   const [heard, setHeard] = useState<{ name: string } | { error: string } | null>(null);
@@ -400,9 +401,10 @@ function MicCard({ value, onChange }: { value: string; onChange: (name: string) 
     };
   }, [testing, value]);
 
-  const options = [{ value: "", label: tr.systemDefault }, ...mics.map((m) => ({ value: m, label: m }))];
-  if (value && !mics.includes(value)) options.push({ value, label: tr.notConnected(value) });
-  const hint = !testing ? tr.deviceHint : !heard ? tr.testHint : "error" in heard ? heard.error : `${tr.using(heard.name)}. ${tr.testHint}`;
+  const options = [{ value: "", label: tr.systemDefault }, ...(mics ?? []).map((m) => ({ value: m, label: m }))];
+  if (value && !mics?.includes(value)) options.push({ value, label: mics ? tr.notConnected(value) : value });
+  const hint =
+    !testing ? tr.deviceHint : !heard ? tr.testHint : "error" in heard ? heard.error : heard.name ? `${tr.using(heard.name)}. ${tr.testHint}` : tr.testHint;
   return (
     <Card title={tr.title}>
       <Row label={tr.device} hint={hint}>

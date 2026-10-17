@@ -7,6 +7,7 @@ class Pcm16Processor extends AudioWorkletProcessor {
     this.n = 0;
     this.sum = 0;
     this.port.onmessage = (e) => {
+      if (e.data === "close") this.closed = true;
       if (e.data === "flush") {
         this.emit();
         this.port.postMessage({ flushed: true });
@@ -34,7 +35,7 @@ class Pcm16Processor extends AudioWorkletProcessor {
         if (this.n === this.buf.length) this.emit();
       }
     }
-    return true;
+    return !this.closed;
   }
 }
 
