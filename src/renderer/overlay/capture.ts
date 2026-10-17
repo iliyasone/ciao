@@ -75,6 +75,8 @@ function openMic(): Promise<Mic> {
     opening = null;
     if (mic && activeSeq === null && !wakeOn) {
       closeMic(); // no longer needed (the wake word was turned off meanwhile)
+    } else if (!mic && (stale || recheck)) {
+      void reopen(); // it failed, but the choice or the devices changed meanwhile: try those
     } else if (stale) {
       refresh(); // the choice changed while it was opening
     } else if (recheck) {
@@ -144,7 +146,8 @@ export function setMicrophone(name: string): void {
   if (name === wanted) return;
   wanted = name;
   stale = true;
-  refresh();
+  if (mic) refresh();
+  else if (!opening) void reopen(); // the last open failed: this one may work
 }
 
 function closeMic(): void {

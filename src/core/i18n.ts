@@ -198,6 +198,7 @@ const ru = {
       testHint: "Скажи что-нибудь: полоска должна двигаться. Звук никуда не отправляется.",
       stop: "Хватит",
       using: (name: string) => `Слышно с: ${name}`,
+      testFailed: (message: string) => `Не открылся: ${message}`,
     },
     voice: {
       title: "Голосом",
@@ -517,6 +518,7 @@ const en: Strings = {
       testHint: "Say something: the bar should move. The audio isn't sent anywhere.",
       stop: "Stop",
       using: (name) => `Hearing: ${name}`,
+      testFailed: (message) => `Couldn't open it: ${message}`,
     },
     voice: {
       title: "Voice",

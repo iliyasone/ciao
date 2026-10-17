@@ -31,7 +31,11 @@ export async function checkTrack(track: MediaStreamTrack, name: string): Promise
   // track on the "default" entry is also checked by name: Windows and macOS put the device's name in
   // it ("Default - Headset Microphone"); on Linux it stays "Default", and the sound server moves the stream itself.
   const fallback = inputs.find((d) => d.deviceId === "default") ?? real[0];
-  if (!groupId || fallback?.groupId !== groupId) return "switch";
+  if (!groupId || fallback?.groupId !== groupId) {
+    // On the default and no device of its group is left: unplugged, even if the stream only stalled.
+    const left = groupId && ALIASES.has(deviceId ?? "") && !real.some((d) => d.groupId === groupId);
+    return left ? "gone" : "switch";
+  }
   return deviceId === "default" && fallback.label !== track.label ? "switch" : null;
 }
 
@@ -40,7 +44,9 @@ export async function trackName(track: MediaStreamTrack): Promise<string> {
   const { deviceId, groupId } = track.getSettings();
   if (!deviceId || !ALIASES.has(deviceId)) return track.label;
   const real = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput" && !ALIASES.has(d.deviceId));
-  const device = real.find((d) => d.label && track.label.includes(d.label)) ?? real.find((d) => d.groupId === groupId);
+  // "Default - Headset Microphone (USB)" holds "Microphone (USB)" too: the longest name is the one.
+  const named = real.filter((d) => d.label && track.label.endsWith(d.label)).sort((a, b) => b.label.length - a.label.length)[0];
+  const device = named ?? real.find((d) => d.groupId === groupId);
   return device?.label || track.label;
 }
 

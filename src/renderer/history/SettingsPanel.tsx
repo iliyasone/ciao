@@ -407,7 +407,7 @@ function MicCard({ value, onChange }: { value: string; onChange: (name: string) 
   const options = [{ value: "", label: tr.systemDefault }, ...(mics ?? []).map((m) => ({ value: m, label: m }))];
   if (value && !mics?.includes(value)) options.push({ value, label: mics ? tr.notConnected(value) : value });
   const hint =
-    !testing ? tr.deviceHint : !heard ? tr.testHint : "error" in heard ? heard.error : heard.name ? `${tr.using(heard.name)}. ${tr.testHint}` : tr.testHint;
+    !testing ? tr.deviceHint : !heard ? tr.testHint : "error" in heard ? tr.testFailed(heard.error) : heard.name ? `${tr.using(heard.name)}. ${tr.testHint}` : tr.testHint;
   return (
     <Card title={tr.title}>
       <Row label={tr.device} hint={hint}>
