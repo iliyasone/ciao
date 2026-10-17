@@ -50,7 +50,10 @@ class Prefs(context: Context) {
      * default, so every install starts with it off. As on the desktop (src/core/types.ts).
      */
     var smart: Boolean
-        get() = sp.getBoolean("geminiSmart", false)
+        get() {
+            if (sp.contains("smart")) sp.edit().remove("smart").apply()
+            return sp.getBoolean("geminiSmart", false)
+        }
         set(v) = sp.edit().putBoolean("geminiSmart", v).apply()
 
     val liveModel: String get() = provider.liveModel
