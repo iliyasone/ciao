@@ -5,7 +5,7 @@ import type { Strings } from "../../core/i18n";
 import { models, PROVIDERS } from "../../core/providers";
 import { DELAYS, type Lang, type Provider, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
 import { useStrings } from "../lang";
-import { errorText, listMics, openMicStream } from "../mic";
+import { errorText, listMics, openMicStream, trackName } from "../mic";
 
 const PROVIDER_OPTIONS: { value: Provider; label: string }[] = (Object.keys(PROVIDERS) as Provider[]).map((value) => ({ value, label: PROVIDERS[value].name }));
 
@@ -374,7 +374,10 @@ function MicCard({ value, onChange }: { value: string; onChange: (name: string) 
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      setHeard({ name: stream.getAudioTracks()[0]?.label ?? "" });
+      const track = stream.getAudioTracks()[0];
+      const name = track ? await trackName(track).catch(() => track.label) : "";
+      if (stopped) return; // the cleanup has stopped the stream
+      setHeard({ name });
       ctx = new AudioContext();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;

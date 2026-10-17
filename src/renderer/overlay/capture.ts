@@ -25,6 +25,8 @@ let onFlushed: (() => void) | null = null;
 let wanted = "";
 /** The open mic may not be the one to record from now (the choice changed, a device came or went). */
 let stale = false;
+/** Devices changed while the mic was opening: check the one it opened (devicesChanged) once it is open. */
+let recheck = false;
 
 /** Latest mean absolute sample level (0..32768) of the dictation, read by the UI without re-rendering. */
 export const meter = { level: 0 };
@@ -54,6 +56,7 @@ function openMic(): Promise<Mic> {
   if (mic) return Promise.resolve(mic);
   opening ??= (async () => {
     stale = false;
+    recheck = false;
     const [stream, c] = await Promise.all([openMicStream(wanted), context()]);
     const source = c.createMediaStreamSource(stream);
     const node = new AudioWorkletNode(c, "pcm16");
@@ -70,8 +73,14 @@ function openMic(): Promise<Mic> {
     return m;
   })().finally(() => {
     opening = null;
-    if (mic && activeSeq === null && !wakeOn) closeMic(); // no longer needed (the wake word was turned off meanwhile)
-    else refresh(); // the choice changed or a device came while it was opening
+    if (mic && activeSeq === null && !wakeOn) {
+      closeMic(); // no longer needed (the wake word was turned off meanwhile)
+    } else if (stale) {
+      refresh(); // the choice changed while it was opening
+    } else if (recheck) {
+      recheck = false;
+      void devicesChanged();
+    }
   });
   return opening;
 }
@@ -113,7 +122,7 @@ navigator.mediaDevices.addEventListener("devicechange", () => {
 async function devicesChanged(): Promise<void> {
   const m = mic;
   if (!m) {
-    if (opening) stale = true; // it may have listed the devices before this change
+    if (opening) recheck = true; // it may have listed the devices before this change
     else void reopen(); // none could be opened before (none connected, or the reopen after an unplug failed)
     return;
   }

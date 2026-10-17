@@ -27,9 +27,21 @@ export async function checkTrack(track: MediaStreamTrack, name: string): Promise
   const chosen = name ? real.find((d) => d.label === name) : undefined;
   if (chosen) return track.label === name ? null : "switch";
   // The default, by group: the "default" entry's group is the device it stands for; speakers or
-  // another mic coming and going leave it alone.
+  // another mic coming and going leave it alone. Two inputs of one sound card share a group, so a
+  // track on the "default" entry is also checked by name: Windows and macOS put the device's name in
+  // it ("Default - Headset Microphone"); on Linux it stays "Default", and the sound server moves the stream itself.
   const fallback = inputs.find((d) => d.deviceId === "default") ?? real[0];
-  return groupId && fallback?.groupId === groupId ? null : "switch";
+  if (!groupId || fallback?.groupId !== groupId) return "switch";
+  return deviceId === "default" && fallback.label !== track.label ? "switch" : null;
+}
+
+/** The name of the device a track records from: for one opened on the default, the real device's, not "Default". */
+export async function trackName(track: MediaStreamTrack): Promise<string> {
+  const { deviceId, groupId } = track.getSettings();
+  if (!deviceId || !ALIASES.has(deviceId)) return track.label;
+  const real = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput" && !ALIASES.has(d.deviceId));
+  const device = real.find((d) => d.label && track.label.includes(d.label)) ?? real.find((d) => d.groupId === groupId);
+  return device?.label || track.label;
 }
 
 /** Opens the microphone named `name`, or the system's default if it is "" or not connected. */
