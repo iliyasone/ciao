@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
     "TypeScript", "Python", "Electron", "React", "commit", "pull request", "Wispr Flow", "Windows",
   ],
   fileModel: "gpt-transcribe",
-  smart: true,
+  geminiSmart: false,
   // Linux can't keep a middle click from the app under the pointer (it would paste the selection there).
   // Mac keyboards mostly have no Right Control; Right Option is the spare key there.
   triggers:
@@ -97,6 +97,8 @@ function parseSettings(text: string): Settings | null {
     raw.overlayAnchor = { x: raw.overlayPosition.x + Math.round(width / 2), y: raw.overlayPosition.y + 320 - 16 };
   }
   delete raw.overlayPosition;
+  // "smart" was on by default and saved as such; its successor starts off for everyone (see types.ts).
+  delete (raw as { smart?: boolean }).smart;
   return { ...DEFAULT_SETTINGS, ...raw };
 }
 

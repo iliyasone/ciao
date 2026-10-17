@@ -18,8 +18,12 @@ export interface Settings {
   languages: string[];
   /** Free-form context for the recognizer (OpenAI only). */
   prompt: string;
-  /** Gemini: drop fillers and false starts, apply spoken corrections ("at 2, no, 3" → "at 3"). */
-  smart: boolean;
+  /**
+   * Gemini's smart mode: drop fillers and false starts, apply spoken corrections ("at 2, no, 3" →
+   * "at 3"). Off by default: it also drops whole sentences now and then. Stored as "geminiSmart":
+   * the older "smart" was on by default and is dropped, so every install starts with it off.
+   */
+  geminiSmart: boolean;
   /** Literal terms to get right (product names, identifiers). */
   keywords: string[];
   /** OpenAI: model for "transcribe the whole recording again, more accurately". */

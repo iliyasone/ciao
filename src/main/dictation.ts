@@ -609,7 +609,7 @@ export class DictationController {
     };
 
     // Gemini's smart mode often lays out paragraphs itself; leave its layout alone when it did.
-    const laidOutByModel = settings.provider === "gemini" && settings.smart && !!text?.includes("\n");
+    const laidOutByModel = settings.provider === "gemini" && settings.geminiSmart && !!text?.includes("\n");
     if (text && settings.formatText && !laidOutByModel) {
       // Same rules as the live card. Pause offsets refer to the live text; they carry over when the
       // final text contains the same words (possibly without a leading "чао" or trailing "чао-чао").
@@ -832,7 +832,7 @@ export class DictationController {
       ended_by: a.endedBy ?? "release",
       hands_free: a.handsFree ?? this.handsFree,
       provider: a.settings.provider,
-      smart: a.settings.provider === "gemini" ? a.settings.smart : undefined,
+      smart: a.settings.provider === "gemini" ? a.settings.geminiSmart : undefined,
       // A partial live transcript is kept even when the saved file had to be transcribed instead.
       transcribed_by: entry.transcripts.some((x) => x.source === "retry-file") ? "file" : entry.transcripts.length ? "live" : "none",
       // A wake-word start begins with the audio since the word, so its onset is ~0 and means nothing.

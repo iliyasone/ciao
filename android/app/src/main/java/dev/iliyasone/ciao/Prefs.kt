@@ -44,10 +44,17 @@ class Prefs(context: Context) {
     /** The key of the service in use. */
     val currentKey: String get() = keyOf(provider)
 
-    /** Gemini's smart mode: drops fillers and false starts, applies spoken corrections. */
+    /**
+     * Gemini's smart mode: drops fillers and false starts, applies spoken corrections. Off by default:
+     * it also drops whole sentences now and then. Stored as "geminiSmart": the older "smart" was on by
+     * default, so every install starts with it off. As on the desktop (src/core/types.ts).
+     */
     var smart: Boolean
-        get() = sp.getBoolean("smart", true)
-        set(v) = sp.edit().putBoolean("smart", v).apply()
+        get() {
+            if (sp.contains("smart")) sp.edit().remove("smart").apply()
+            return sp.getBoolean("geminiSmart", false)
+        }
+        set(v) = sp.edit().putBoolean("geminiSmart", v).apply()
 
     val liveModel: String get() = provider.liveModel
     val fileModel: String get() = provider.fileModel

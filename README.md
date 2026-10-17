@@ -250,9 +250,12 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   *Service* on Android). OpenAI is the default.
   With Google's Gemini (`gemini-3.5-transcribe-live` while you speak,
   `gemini-3.5-transcribe` for the file), live transcription costs about half as much,
-  and **Apply spoken corrections** (on by default) cleans up the final text: it drops
-  "um", false starts and repeats, and keeps only the correction when you change your
-  mind ("в два, нет, в три" → "в три"; "at 1 pm, actually no, 2 pm" → "at 2 pm").
+  and **Apply spoken corrections** (right under the service; off by default) cleans up
+  the final text: it drops "um", false starts and repeats, and keeps only the correction
+  when you change your mind ("в два, нет, в три" → "в три"; "at 1 pm, actually no,
+  2 pm" → "at 2 pm"). It is off because it also drops whole sentences now and then;
+  with it off you get the words as said. Before 0.9.15 it was on, and updating turns
+  it off once.
   While you speak the card shows the words as said, so a correction is applied
   only when the final text arrives, about 0.3 s after you let go. With corrections
   on, Gemini often breaks the text into paragraphs itself; then Ciao leaves its

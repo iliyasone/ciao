@@ -96,7 +96,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
             <Segmented value={s.provider} options={PROVIDER_OPTIONS} onChange={(provider) => update({ provider })} />
           </Row>
           {s.provider === "gemini" ? (
-            <Toggle label={tr.recognition.smart} hint={tr.recognition.smartHint} value={s.smart} onChange={(v) => update({ smart: v })} />
+            <Toggle label={tr.recognition.smart} hint={tr.recognition.smartHint} value={s.geminiSmart} onChange={(v) => update({ geminiSmart: v })} />
           ) : (
             <>
               <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>

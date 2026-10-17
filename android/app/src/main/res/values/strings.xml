@@ -56,7 +56,7 @@
     <string name="stop_phrase">Say “ciao ciao” to finish</string>
     <string name="show_cost">Show the cost of a dictation</string>
     <string name="smart">Apply spoken corrections</string>
-    <string name="smart_hint">Drops “um”, false starts and repeats, and applies corrections: “at 2, no, at 3” becomes “at 3”. In the final text only: while you speak you see everything as said.</string>
+    <string name="smart_hint">Drops “um”, false starts and repeats, and applies corrections: “at 2, no, at 3” becomes “at 3”. In the final text only: while you speak you see everything as said. Now and then it drops whole sentences too.</string>
     <string name="version">Ciao %1$s for Android</string>
 
     <string name="update_check">Check for updates</string>

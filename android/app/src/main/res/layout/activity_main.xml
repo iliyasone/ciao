@@ -137,6 +137,18 @@
                     style="@style/Toggle"
                     android:text="@string/provider_gemini" />
             </RadioGroup>
+
+            <!-- Right under the service, as on the desktop: Gemini only (MainActivity.showProvider). -->
+            <Switch
+                android:id="@+id/smart"
+                style="@style/Toggle"
+                android:text="@string/smart" />
+
+            <TextView
+                android:id="@+id/smartHint"
+                style="@style/CardText"
+                android:layout_marginTop="0dp"
+                android:text="@string/smart_hint" />
         </LinearLayout>
 
         <LinearLayout style="@style/Card">
@@ -319,18 +331,6 @@
         </LinearLayout>
 
         <LinearLayout style="@style/Card">
-
-            <Switch
-                android:id="@+id/smart"
-                style="@style/Toggle"
-                android:text="@string/smart" />
-
-            <TextView
-                android:id="@+id/smartHint"
-                style="@style/CardText"
-                android:layout_marginTop="0dp"
-                android:layout_marginBottom="8dp"
-                android:text="@string/smart_hint" />
 
             <Switch
                 android:id="@+id/formatText"

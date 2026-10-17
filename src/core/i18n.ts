@@ -145,7 +145,7 @@ const ru = {
       providerHint: (live: string, file: string) => `Вживую — ${live}, «Точнее» — ${file}.`,
       smart: "Понимать поправки",
       smartHint:
-        "Убирает «э-э», оговорки и повторы, а поправки применяет: «в два, нет, в три» — будет «в три». Только в готовом тексте: пока говоришь, видно всё как есть.",
+        "Убирает «э-э», оговорки и повторы, а поправки применяет: «в два, нет, в три» — будет «в три». Только в готовом тексте: пока говоришь, видно всё как есть. Иногда выбрасывает и целые фразы.",
       languages: "Языки",
       languagesHint: "Коды через запятую: ru, en",
       context: "Контекст",
@@ -465,7 +465,7 @@ const en: Strings = {
       providerHint: (live, file) => `Live: ${live}; "More accurate": ${file}.`,
       smart: "Apply spoken corrections",
       smartHint:
-        "Drops \"um\", false starts and repeats, and applies corrections: \"at 2, no, at 3\" becomes \"at 3\". In the final text only: while you speak you see everything as said.",
+        "Drops \"um\", false starts and repeats, and applies corrections: \"at 2, no, at 3\" becomes \"at 3\". In the final text only: while you speak you see everything as said. Now and then it drops whole sentences too.",
       languages: "Languages",
       languagesHint: "Comma-separated codes: ru, en",
       context: "Context",
