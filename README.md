@@ -61,7 +61,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   system's default is used until you choose one, and while the chosen one isn't
   connected (Ciao goes back to it once it is). **Test** shows a level bar and the
   name of the microphone actually heard. If the microphone in use is unplugged in
-  the middle of a dictation, the recording carries on from the one to use now;
+  the middle of a dictation, the recording carries on from the one to use now
+  (with none left, what was said until then is still transcribed and pasted);
   a microphone plugged in or out between dictations is picked up at once, even
   while the wake word keeps the mic open. The choice is kept by the microphone's
   name: Windows may rename a USB one plugged into another port ("2- USB Audio

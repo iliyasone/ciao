@@ -4,7 +4,7 @@
 // It records from the microphone chosen in Settings (the system's default if none is, or it isn't
 // connected), and follows devices coming and going: see refresh() and lost().
 
-import { errorText, micGroup, openMicStream } from "../mic";
+import { checkTrack, errorText, openMicStream } from "../mic";
 
 let ctx: AudioContext | null = null;
 let moduleReady: Promise<void> | null = null;
@@ -63,14 +63,15 @@ function openMic(): Promise<Mic> {
     source.connect(node).connect(sink).connect(c.destination);
     const m: Mic = { stream, source, node, sink };
     const track = stream.getAudioTracks()[0];
-    track?.addEventListener("ended", () => void lost(m));
+    track?.addEventListener("ended", () => lost(m));
     mic = m;
     // Unplugged while the graph was being built: "ended" has fired already. After this open settles.
-    if (track?.readyState === "ended") setTimeout(() => void lost(m));
+    if (track?.readyState === "ended") setTimeout(() => lost(m));
     return m;
   })().finally(() => {
     opening = null;
-    refresh(); // the choice changed or a device came while it was opening
+    if (mic && activeSeq === null && !wakeOn) closeMic(); // no longer needed (the wake word was turned off meanwhile)
+    else refresh(); // the choice changed or a device came while it was opening
   });
   return opening;
 }
@@ -79,25 +80,26 @@ function openMic(): Promise<Mic> {
 function refresh(): void {
   if (!stale || !mic || activeSeq !== null) return;
   closeMic();
-  if (wakeOn) void setWake(true);
+  void reopen();
 }
 
 /** The device went away (unplugged, turned off): carry on with the one to use now, mid-dictation too. */
-async function lost(m: Mic): Promise<void> {
+function lost(m: Mic): void {
   if (mic !== m) return;
   closeMic();
-  const seq = activeSeq;
-  if (seq === null && !wakeOn) return;
+  void reopen();
+}
+
+/**
+ * Opens the mic again if a dictation or the wake word needs it. If none opens, a dictation goes on
+ * without audio (what it has is still transcribed when it ends) and the next devicechange tries again.
+ */
+async function reopen(): Promise<void> {
+  if (activeSeq === null && !wakeOn) return;
   try {
     await openMic();
-    if (activeSeq === null && !wakeOn) closeMic(); // stopped meanwhile
   } catch (e) {
-    if (seq !== null && activeSeq === seq) {
-      activeSeq = null;
-      ciao.capture.error(seq, errorText(e));
-    } else {
-      console.warn("reopening the mic:", errorText(e));
-    }
+    console.warn("reopening the mic:", errorText(e));
   }
 }
 
@@ -111,17 +113,21 @@ navigator.mediaDevices.addEventListener("devicechange", () => {
 async function devicesChanged(): Promise<void> {
   const m = mic;
   if (!m) {
-    // The wake word found no mic to open (none was connected, or the reopen after an unplug failed): try this one.
-    if (wakeOn && activeSeq === null && !opening) void setWake(true);
+    if (opening) stale = true; // it may have listed the devices before this change
+    else void reopen(); // none could be opened before (none connected, or the reopen after an unplug failed)
     return;
   }
-  const now = m.stream.getAudioTracks()[0]?.getSettings().groupId;
-  const next = await micGroup(wanted).catch(() => undefined);
-  if (mic !== m) return;
-  // Speakers or another mic coming and going leave the open one alone: a reopen loses ~0.2 s the wake word could be said in.
-  if (now && next && now === next) return;
-  stale = true;
-  refresh();
+  const track = m.stream.getAudioTracks()[0];
+  const change = track ? await checkTrack(track, wanted).catch(() => "switch" as const) : "gone";
+  if (mic !== m || !change) return;
+  // Gone: at once, mid-dictation too (some systems stall the stream rather than end it). A switch
+  // waits for the dictation's end; between dictations a needless one loses ~0.2 s the wake word could be said in.
+  if (change === "gone") {
+    lost(m);
+  } else {
+    stale = true;
+    refresh();
+  }
 }
 
 /** The microphone chosen in Settings ("" = the system's default). */

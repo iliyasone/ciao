@@ -15,13 +15,21 @@ export async function listMics(): Promise<string[]> {
 }
 
 /**
- * The device group a mic opened now would record from: the chosen one's if it is connected, else the
- * system default's. Undefined if unknown (no permission yet, no microphone).
+ * What the devices connected now mean for an open mic track: "gone" (its device was removed, even if
+ * the track didn't end), "switch" (another device is the one to record from now), or null (keep it).
  */
-export async function micGroup(name: string): Promise<string | undefined> {
+export async function checkTrack(track: MediaStreamTrack, name: string): Promise<"gone" | "switch" | null> {
   const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
-  const chosen = name ? inputs.find((d) => !ALIASES.has(d.deviceId) && d.label === name) : undefined;
-  return (chosen ?? inputs.find((d) => d.deviceId === "default") ?? inputs[0])?.groupId || undefined;
+  const real = inputs.filter((d) => !ALIASES.has(d.deviceId));
+  const { deviceId, groupId } = track.getSettings();
+  if (deviceId && !ALIASES.has(deviceId) && !real.some((d) => d.deviceId === deviceId)) return "gone";
+  // By name: two inputs of one device (a headset jack and the built-in array) can share a group.
+  const chosen = name ? real.find((d) => d.label === name) : undefined;
+  if (chosen) return track.label === name ? null : "switch";
+  // The default, by group: the "default" entry's group is the device it stands for; speakers or
+  // another mic coming and going leave it alone.
+  const fallback = inputs.find((d) => d.deviceId === "default") ?? real[0];
+  return groupId && fallback?.groupId === groupId ? null : "switch";
 }
 
 /** Opens the microphone named `name`, or the system's default if it is "" or not connected. */
