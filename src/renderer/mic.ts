@@ -46,7 +46,9 @@ export async function trackName(track: MediaStreamTrack): Promise<string> {
   const real = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput" && !ALIASES.has(d.deviceId));
   // "Default - Headset Microphone (USB)" holds "Microphone (USB)" too: the longest name is the one.
   const named = real.filter((d) => d.label && track.label.endsWith(d.label)).sort((a, b) => b.label.length - a.label.length)[0];
-  const device = named ?? real.find((d) => d.groupId === groupId);
+  // By group only if it names one device: two inputs of one card share it, and "Default" beats a wrong name.
+  const group = real.filter((d) => d.groupId === groupId);
+  const device = named ?? (group.length === 1 ? group[0] : undefined);
   return device?.label || track.label;
 }
 
