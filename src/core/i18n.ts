@@ -188,6 +188,18 @@ const ru = {
       telemetryHint:
         "Сколько людей пользуется Ciao и как работает диктовка: чем запущена, сколько длилась и стоила, в какое приложение вставлялась и удалось ли, версия системы — со случайным id установки. Ни текст, ни звук, ни названия окон не отправляются.",
     },
+    microphone: {
+      title: "Микрофон",
+      device: "Записывать с",
+      deviceHint: "Если выбранный не подключён, Ciao пишет с системного по умолчанию, а когда он появится — снова с него.",
+      systemDefault: "Системный по умолчанию",
+      notConnected: (name: string) => `${name} (не подключён)`,
+      test: "Проверить",
+      testHint: "Скажи что-нибудь: полоска должна двигаться. Звук никуда не отправляется.",
+      stop: "Хватит",
+      using: (name: string) => `Слышно с: ${name}`,
+      testFailed: (message: string) => `Не открылся: ${message}`,
+    },
     voice: {
       title: "Голосом",
       wakeWord: "Включать словом «чао»",
@@ -495,6 +507,18 @@ const en: Strings = {
       telemetry: "Anonymous usage stats",
       telemetryHint:
         "How many people use Ciao and how dictation goes: what started it, how long it took and what it cost, which kind of app it pasted into and whether that worked, the OS version — with a random install id. No text, audio or window titles are sent.",
+    },
+    microphone: {
+      title: "Microphone",
+      device: "Record from",
+      deviceHint: "If the chosen one isn't connected, Ciao records from the system's default, and from it again once it's back.",
+      systemDefault: "System default",
+      notConnected: (name) => `${name} (not connected)`,
+      test: "Test",
+      testHint: "Say something: the bar should move. The audio isn't sent anywhere.",
+      stop: "Stop",
+      using: (name) => `Hearing: ${name}`,
+      testFailed: (message) => `Couldn't open it: ${message}`,
     },
     voice: {
       title: "Voice",

@@ -1,6 +1,10 @@
 // Microphone → 24 kHz PCM16 chunks (40 ms) → main process. Lives in the (hidden) overlay window.
 // One mic graph serves both uses: while a dictation runs, chunks go to it; otherwise, if the
 // wake word is on, they go to the local wake-word detector. The mic is closed when neither needs it.
+// It records from the microphone chosen in Settings (the system's default if none is, or it isn't
+// connected), and follows devices coming and going: see refresh() and lost().
+
+import { checkTrack, errorText, openMicStream } from "../mic";
 
 let ctx: AudioContext | null = null;
 let moduleReady: Promise<void> | null = null;
@@ -17,6 +21,12 @@ let opening: Promise<Mic> | null = null;
 let activeSeq: number | null = null;
 let wakeOn = false;
 let onFlushed: (() => void) | null = null;
+/** The microphone's name from Settings; "" = the system's default. */
+let wanted = "";
+/** The open mic may not be the one to record from now (the choice changed, a device came or went). */
+let stale = false;
+/** Devices changed while the mic was opening: check the one it opened (devicesChanged) once it is open. */
+let recheck = false;
 
 /** Latest mean absolute sample level (0..32768) of the dictation, read by the UI without re-rendering. */
 export const meter = { level: 0 };
@@ -45,22 +55,99 @@ function onAudio(e: MessageEvent<{ pcm?: ArrayBuffer; level?: number; flushed?: 
 function openMic(): Promise<Mic> {
   if (mic) return Promise.resolve(mic);
   opening ??= (async () => {
-    const [stream, c] = await Promise.all([
-      navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: false, noiseSuppression: true, autoGainControl: true },
-      }),
-      context(),
-    ]);
+    stale = false;
+    recheck = false;
+    const [stream, c] = await Promise.all([openMicStream(wanted), context()]);
     const source = c.createMediaStreamSource(stream);
     const node = new AudioWorkletNode(c, "pcm16");
     const sink = c.createGain();
     sink.gain.value = 0; // keeps the node pulled by the graph without making a sound
     node.port.onmessage = onAudio;
     source.connect(node).connect(sink).connect(c.destination);
-    mic = { stream, source, node, sink };
-    return mic;
-  })().finally(() => (opening = null));
+    const m: Mic = { stream, source, node, sink };
+    const track = stream.getAudioTracks()[0];
+    track?.addEventListener("ended", () => lost(m));
+    mic = m;
+    // Unplugged while the graph was being built: "ended" has fired already. After this open settles.
+    if (track?.readyState === "ended") setTimeout(() => lost(m));
+    return m;
+  })().finally(() => {
+    opening = null;
+    if (mic && activeSeq === null && !wakeOn) {
+      closeMic(); // no longer needed (the wake word was turned off meanwhile)
+    } else if (!mic && (stale || recheck)) {
+      void reopen(); // it failed, but the choice or the devices changed meanwhile: try those
+    } else if (stale) {
+      refresh(); // the choice changed while it was opening
+    } else if (recheck) {
+      recheck = false;
+      void devicesChanged();
+    }
+  });
   return opening;
+}
+
+/** Reopens a stale mic on the device to use now; while a dictation records, it waits for its end (stopCapture). */
+function refresh(): void {
+  if (!stale || !mic || activeSeq !== null) return;
+  closeMic();
+  void reopen();
+}
+
+/** The device went away (unplugged, turned off): carry on with the one to use now, mid-dictation too. */
+function lost(m: Mic): void {
+  if (mic !== m) return;
+  closeMic();
+  void reopen();
+}
+
+/**
+ * Opens the mic again if a dictation or the wake word needs it. If none opens, a dictation goes on
+ * without audio (what it has is still transcribed when it ends) and the next devicechange tries again.
+ */
+async function reopen(): Promise<void> {
+  if (activeSeq === null && !wakeOn) return;
+  try {
+    await openMic();
+  } catch (e) {
+    console.warn("reopening the mic:", errorText(e));
+  }
+}
+
+let deviceTimer: ReturnType<typeof setTimeout> | undefined;
+navigator.mediaDevices.addEventListener("devicechange", () => {
+  // Several arrive at once (a headset brings a mic and speakers): look once they have settled.
+  clearTimeout(deviceTimer);
+  deviceTimer = setTimeout(() => void devicesChanged(), 300);
+});
+
+async function devicesChanged(): Promise<void> {
+  const m = mic;
+  if (!m) {
+    if (opening) recheck = true; // it may have listed the devices before this change
+    else void reopen(); // none could be opened before (none connected, or the reopen after an unplug failed)
+    return;
+  }
+  const track = m.stream.getAudioTracks()[0];
+  const change = track ? await checkTrack(track, wanted).catch(() => "switch" as const) : "gone";
+  if (mic !== m || !change) return;
+  // Gone: at once, mid-dictation too (some systems stall the stream rather than end it). A switch
+  // waits for the dictation's end; between dictations a needless one loses ~0.2 s the wake word could be said in.
+  if (change === "gone") {
+    lost(m);
+  } else {
+    stale = true;
+    refresh();
+  }
+}
+
+/** The microphone chosen in Settings ("" = the system's default). */
+export function setMicrophone(name: string): void {
+  if (name === wanted) return;
+  wanted = name;
+  stale = true;
+  if (mic) refresh();
+  else if (!opening) void reopen(); // the last open failed: this one may work
 }
 
 function closeMic(): void {
@@ -68,6 +155,7 @@ function closeMic(): void {
   if (!m) return;
   mic = null;
   m.source.disconnect();
+  m.node.port.postMessage("close"); // lets the processor go: otherwise it lives on with each reopen
   m.node.disconnect();
   m.sink.disconnect();
   m.stream.getTracks().forEach((t) => t.stop());
@@ -94,7 +182,7 @@ export async function startCapture(seq: number): Promise<void> {
     if (activeSeq !== seq && !wakeOn) closeMic(); // stopped while the mic was opening
   } catch (e) {
     if (activeSeq === seq) activeSeq = null;
-    ciao.capture.error(seq, (e as Error).message);
+    ciao.capture.error(seq, errorText(e));
   }
 }
 
@@ -105,6 +193,7 @@ export async function stopCapture(seq: number): Promise<void> {
   meter.level = 0;
   ciao.capture.stopped(seq);
   if (!wakeOn) closeMic();
+  else refresh();
 }
 
 export async function setWake(on: boolean): Promise<void> {
@@ -113,7 +202,7 @@ export async function setWake(on: boolean): Promise<void> {
     try {
       await openMic();
     } catch (e) {
-      console.warn("wake word mic:", (e as Error).message);
+      console.warn("wake word mic:", errorText(e));
     }
   } else if (activeSeq === null) {
     closeMic();

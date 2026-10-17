@@ -5,7 +5,7 @@ import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
 import { revisePauses } from "../../core/revision";
 import type { OverlayState, TermSuggestion } from "../../core/types";
 import { useStrings } from "../lang";
-import { meter, setWake, startCapture, stopCapture } from "./capture";
+import { meter, setMicrophone, setWake, startCapture, stopCapture } from "./capture";
 import { playSound, warmUp } from "./sounds";
 
 // ── Text model ────────────────────────────────────────────────────────────
@@ -539,6 +539,7 @@ export function Overlay() {
       ciao.capture.onStart((seq) => void startCapture(seq)),
       ciao.capture.onSound(playSound),
       ciao.capture.onStop((seq) => void stopCapture(seq)),
+      ciao.capture.onMic(setMicrophone),
       ciao.wake.onEnable((on) => void setWake(on)),
     ];
     return () => offs.forEach((off) => off());

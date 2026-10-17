@@ -68,6 +68,7 @@ export class OverlayWindow implements OverlayPort {
   private dragTimer: ReturnType<typeof setInterval> | null = null;
   private dragAt = { x: NaN, y: NaN };
   private wake = false;
+  private mic = "";
   private pill: boolean;
   /** The renderer shows a card or a suggestion; without the pill the window hides when it shows nothing. */
   private busy = false;
@@ -136,6 +137,7 @@ export class OverlayWindow implements OverlayPort {
       this.drag0 = null;
       this.stopDragTimer();
       this.setRegion([]);
+      this.win.webContents.send("capture:mic", this.mic); // before the wake word opens it
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
       if (this.pill) this.win.showInactive();
@@ -146,6 +148,12 @@ export class OverlayWindow implements OverlayPort {
   setWake(on: boolean): void {
     this.wake = on;
     if (!this.win.webContents.isLoading()) this.win.webContents.send("wake:enable", on);
+  }
+
+  /** The microphone to record from, by name ("" = the system's default). */
+  setMic(name: string): void {
+    this.mic = name;
+    if (!this.win.webContents.isLoading()) this.win.webContents.send("capture:mic", name);
   }
 
   /** Show the pill between dictations (or not). */

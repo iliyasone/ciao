@@ -215,6 +215,7 @@ function applySettings(next: Settings): void {
   // No detector in this build (macOS for now): keep the mic closed rather than listen for nothing.
   const wakeWord = next.wakeWord && WakeWord.available();
   wake.setEnabled(wakeWord);
+  overlay.setMic(next.microphone);
   overlay.setWake(wakeWord);
   tray?.setToolTip(t().tray.tooltip);
   buildTrayMenu();

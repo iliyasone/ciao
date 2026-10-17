@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   t3Suffix: "",
   t3Forward: true,
   t3Send: false,
+  microphone: "",
   wakeWord: false,
   pauseMedia: false,
   sounds: true,
