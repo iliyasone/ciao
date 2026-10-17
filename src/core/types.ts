@@ -54,6 +54,8 @@ export interface Settings {
   pauseMedia: boolean;
   /** A short rising sound when Ciao starts listening, a falling one when it stops. */
   sounds: boolean;
+  /** The microphone to record from, by its name; "" = the system's default, also used while the chosen one isn't connected. */
+  microphone: string;
   /** Saying "чао" starts a hands-free dictation (the mic stays open; detection is local). */
   wakeWord: boolean;
   /** In hands-free mode, saying "чао-чао" finishes the dictation (the words are not pasted). */

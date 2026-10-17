@@ -1,10 +1,11 @@
-import { ArrowDownToLine, Check, Cloud, KeyRound, Loader2, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Sun, X } from "lucide-react";
+import { ArrowDownToLine, Check, Cloud, KeyRound, Loader2, Mic, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Square, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
 import type { Strings } from "../../core/i18n";
 import { models, PROVIDERS } from "../../core/providers";
 import { DELAYS, type Lang, type Provider, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
 import { useStrings } from "../lang";
+import { errorText, listMics, openMicStream } from "../mic";
 
 const PROVIDER_OPTIONS: { value: Provider; label: string }[] = (Object.keys(PROVIDERS) as Provider[]).map((value) => ({ value, label: PROVIDERS[value].name }));
 
@@ -87,6 +88,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         <ApiKeyCard provider={s.provider} />
         <PermissionsCard />
         <SyncCard syncKeys={s.syncKeys} onSyncKeys={(syncKeys) => update({ syncKeys })} />
+
+        <MicCard value={s.microphone} onChange={(microphone) => update({ microphone })} />
 
         <Card title={tr.recognition.title}>
           <Row label={tr.recognition.provider} hint={tr.recognition.providerHint(models(s).live, models(s).file)}>
@@ -315,6 +318,124 @@ function SyncCard({ syncKeys, onSyncKeys }: { syncKeys: boolean; onSyncKeys: (v:
         </div>
       </Row>
       <Toggle label={tr.keys} hint={tr.keysHint} value={syncKeys} onChange={onSyncKeys} />
+    </Card>
+  );
+}
+
+/** Which microphone dictation and the wake word record from, and a level bar to check it hears you. */
+function MicCard({ value, onChange }: { value: string; onChange: (name: string) => void }) {
+  const [mics, setMics] = useState<string[]>([]);
+  const [testing, setTesting] = useState(false);
+  /** While testing: the device actually heard (the default if the chosen one isn't connected), or why none is. */
+  const [heard, setHeard] = useState<{ name: string } | { error: string } | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const tr = useStrings().settings.microphone;
+
+  useEffect(() => {
+    let current = true;
+    const load = async () => {
+      let names = await listMics();
+      // The names stay hidden until this page has opened a mic once: open one for a moment, then list again.
+      if (!names.length) {
+        try {
+          (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop());
+          names = await listMics();
+        } catch {
+          // no microphone, or no permission: the list stays empty
+        }
+      }
+      if (current) setMics(names);
+    };
+    const reload = () => void load().catch((e) => console.warn("listing microphones:", errorText(e)));
+    reload();
+    navigator.mediaDevices.addEventListener("devicechange", reload);
+    return () => {
+      current = false;
+      navigator.mediaDevices.removeEventListener("devicechange", reload);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!testing) return;
+    let stopped = false;
+    let stream: MediaStream | null = null;
+    let ctx: AudioContext | null = null;
+    let frame = 0;
+    const timer = setTimeout(() => setTesting(false), 20_000);
+    void (async () => {
+      try {
+        stream = await openMicStream(value);
+      } catch (e) {
+        if (!stopped) setHeard({ error: errorText(e) });
+        return;
+      }
+      if (stopped) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      setHeard({ name: stream.getAudioTracks()[0]?.label ?? "" });
+      ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const samples = new Float32Array(analyser.fftSize);
+      const draw = () => {
+        analyser.getFloatTimeDomainData(samples);
+        let peak = 0;
+        for (const v of samples) peak = Math.max(peak, Math.abs(v));
+        // sqrt: speech peaks around 0.05–0.3, which a straight scale would show as a sliver.
+        if (bar.current) bar.current.style.width = `${Math.min(100, Math.sqrt(peak) * 100)}%`;
+        frame = requestAnimationFrame(draw);
+      };
+      draw();
+    })();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((t) => t.stop());
+      void ctx?.close();
+      setHeard(null);
+      if (bar.current) bar.current.style.width = "0";
+    };
+  }, [testing, value]);
+
+  const options = [{ value: "", label: tr.systemDefault }, ...mics.map((m) => ({ value: m, label: m }))];
+  if (value && !mics.includes(value)) options.push({ value, label: tr.notConnected(value) });
+  const hint = !testing ? tr.deviceHint : !heard ? tr.testHint : "error" in heard ? heard.error : `${tr.using(heard.name)}. ${tr.testHint}`;
+  return (
+    <Card title={tr.title}>
+      <Row label={tr.device} hint={hint}>
+        <div className="flex shrink-0 flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <select
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-56 truncate rounded-lg bg-tint/5 px-2 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+            >
+              {options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setTesting(!testing)}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors ${
+                testing ? "bg-accent/15 text-accent ring-1 ring-accent/40" : "bg-tint/10 text-fg hover:bg-tint/15"
+              }`}
+            >
+              {testing ? <Square className="size-3" /> : <Mic className="size-3.5" />}
+              {testing ? tr.stop : tr.test}
+            </button>
+          </div>
+          {testing && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-tint/10">
+              <div ref={bar} className="h-full w-0 rounded-full bg-accent transition-[width] duration-75" />
+            </div>
+          )}
+        </div>
+      </Row>
     </Card>
   );
 }

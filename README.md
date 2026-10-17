@@ -57,6 +57,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen, rather than on the screen under the pointer.
   Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
   appears and disappears.
+- **Pick the microphone.** *Settings → Microphone* lists the connected ones; the
+  system's default is used until you choose one, and while the chosen one isn't
+  connected (Ciao goes back to it once it is). **Test** shows a level bar and the
+  name of the microphone actually heard. If the microphone in use is unplugged in
+  the middle of a dictation, the recording carries on from the one to use now;
+  a microphone plugged in or out between dictations is picked up at once, even
+  while the wake word keeps the mic open. Desktop only: on Android the phone
+  chooses (a headset when one is connected).
 - **Sounds when it listens.** A soft rising two-note sound when Ciao starts
   listening, a falling one when it stops (*Settings → Behavior → Start and stop
   sounds*, on by default; desktop only: on Android the bubble buzzes instead). The
@@ -798,7 +806,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     `src/core/sync.ts`.
 - `src/renderer/` — React 19 + Tailwind 4:
   - `overlay/` — the pill, the live card, the word suggestions and microphone capture;
-  - `history/` — the history and settings window.
+  - `history/` — the history and settings window;
+  - `mic.ts` — the connected microphones and opening the one chosen in Settings.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#); it also reads
   the focused field through UI Automation (`FieldReader.cs`) and pauses the music

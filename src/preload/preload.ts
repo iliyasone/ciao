@@ -46,6 +46,8 @@ const api = {
     /** Play the start or stop sound (src/renderer/overlay/sounds.ts). */
     onSound: (cb: (kind: "start" | "stop") => void) => on("overlay:sound", cb),
     onStop: (cb: (seq: number) => void) => on("capture:stop", cb),
+    /** The microphone chosen in Settings, by name ("" = the system's default). */
+    onMic: (cb: (name: string) => void) => on("capture:mic", cb),
     chunk: (seq: number, pcm: ArrayBuffer) => ipcRenderer.send("capture:chunk", seq, pcm),
     stopped: (seq: number) => ipcRenderer.send("capture:stopped", seq),
     error: (seq: number, message: string) => ipcRenderer.send("capture:error", seq, message),
