@@ -223,7 +223,7 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
   });
   if (vertexProject) return transcribeFileVertex(apiKey, vertexProject, pcm, settings);
   const config: Record<string, unknown> = {};
-  if (settings.smart) config.mode = "smart";
+  if (settings.geminiSmart) config.mode = "smart";
   const terms = vocabulary(settings.keywords);
   if (terms.length) config.custom_vocabulary = terms;
   const texts: string[] = [];
@@ -272,7 +272,7 @@ interface GeminiInteraction {
 
 /** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. */
 async function transcribeFileVertex(apiKey: string, project: string, pcm: Buffer, settings: Settings): Promise<string> {
-  const config: Record<string, unknown> = { mode: settings.smart ? "SMART" : "VERBATIM" };
+  const config: Record<string, unknown> = { mode: settings.geminiSmart ? "SMART" : "VERBATIM" };
   const terms = vocabulary(settings.keywords);
   if (terms.length) config.customVocabulary = terms;
   const texts: string[] = [];

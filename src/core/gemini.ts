@@ -160,8 +160,8 @@ export class GeminiLiveSession implements LiveSession {
     return this.failure === null && !this.closedByUs;
   }
 
-  configure(s: Pick<Settings, "smart" | "keywords">): void {
-    const transcription: Record<string, unknown> = { mode: s.smart ? "SMART" : "VERBATIM" };
+  configure(s: Pick<Settings, "geminiSmart" | "keywords">): void {
+    const transcription: Record<string, unknown> = { mode: s.geminiSmart ? "SMART" : "VERBATIM" };
     const terms = vocabulary(s.keywords);
     if (terms.length) transcription.customVocabulary = terms;
     this.send({

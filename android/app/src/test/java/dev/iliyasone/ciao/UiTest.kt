@@ -26,6 +26,7 @@ class UiTest {
         val prefs = Prefs(RuntimeEnvironment.getApplication())
         prefs.apiKey = "sk-openai"
         prefs.geminiKey = "AQ.gemini"
+        RuntimeEnvironment.getApplication().getSharedPreferences("ciao", 0).edit().putBoolean("smart", true).commit()
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         val key = activity.findViewById<EditText>(R.id.apiKey)
         assertEquals("sk-openai", key.text.toString())
@@ -34,7 +35,12 @@ class UiTest {
         activity.findViewById<RadioButton>(R.id.providerGemini).performClick()
         assertEquals(Provider.GEMINI, prefs.provider)
         assertEquals("AQ.gemini", key.text.toString())
-        assertEquals(View.VISIBLE, activity.findViewById<Switch>(R.id.smart).visibility)
+        // Smart mode is off by default, also where the older "smart" key was saved on, and the switch turns it on.
+        val smart = activity.findViewById<Switch>(R.id.smart)
+        assertEquals(View.VISIBLE, smart.visibility)
+        assertEquals(false, smart.isChecked)
+        smart.performClick()
+        assertEquals(true, prefs.smart)
         assertEquals("✓  Gemini API key", activity.findViewById<TextView>(R.id.keyTitle).text.toString())
 
         // Each service keeps its own key.
