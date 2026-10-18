@@ -276,8 +276,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   (`http://user:password@host:port`), for when Gemini isn't available in your
   country. Sync, updates and telemetry go direct. The proxy syncs through Google
   along with the API keys (and not while *Sync API keys* is off). A proxy that
-  can't be reached fails a dictation as "Cannot reach …", and the audio is kept
-  as when offline.
+  can't be reached fails a dictation as when offline ("Couldn't reach …"), and the
+  audio is kept.
 
 ## Requirements
 

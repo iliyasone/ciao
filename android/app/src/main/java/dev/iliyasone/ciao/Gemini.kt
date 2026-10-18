@@ -33,6 +33,9 @@ object GeminiEndpoint {
     /** Per key: its Vertex project number, or "" for AI Studio. */
     private val known = ConcurrentHashMap<String, String>()
 
+    /** Through another proxy Google may answer differently (one country refused, another let in): check again. */
+    fun forget() = known.clear()
+
     /**
      * Blocking. The Vertex project number of [key], or null for an AI Studio key, by the answer to
      * GET /v1beta/models on the Gemini API (see [parse]). Remembered per key. Offline throws; a check

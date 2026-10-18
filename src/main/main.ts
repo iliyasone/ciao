@@ -20,7 +20,7 @@ import { setProxy } from "./proxy";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
-import { SessionPool, transcribeFile, transcribeLive } from "./transcribe";
+import { forgetEndpoints, SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
@@ -209,8 +209,11 @@ function applySettings(next: Settings): void {
   if (prev.pasteLastHotkey !== next.pasteLastHotkey) registerPasteLast(prev.pasteLastHotkey);
   if (prev.triggers.join("|") !== next.triggers.join("|")) input.setTriggers(next.triggers);
   setProxy(next.proxy);
-  // The spare session connected the old way.
-  if (prev.proxy !== next.proxy) pool.close();
+  // The spare session connected the old way, and the Gemini endpoint was checked that way.
+  if (prev.proxy !== next.proxy) {
+    pool.close();
+    forgetEndpoints();
+  }
   if (prev.provider !== next.provider || prev.proxy !== next.proxy) pool.refill();
   // macOS asks once whether Ciao may control each player: let it ask now, in Settings, not over a dictation.
   if (next.pauseMedia && !prev.pauseMedia) input.askMedia();

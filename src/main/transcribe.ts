@@ -16,6 +16,11 @@ export function openLive(provider: Provider, apiKey: string): LiveSession {
 
 const endpoints = new Map<string, Promise<GeminiEndpoint>>();
 
+/** Through another proxy Google may answer differently (one country refused, another let in): check again. */
+export function forgetEndpoints(): void {
+  endpoints.clear();
+}
+
 /**
  * Where a Gemini key works (see parseGeminiEndpoint), remembered per key. A check with no answer to go
  * by (offline, a 5xx) is not remembered: offline fails as such, a 5xx counts as AI Studio this once.

@@ -97,6 +97,7 @@ function parseSettings(text: string): Settings | null {
     raw.overlayAnchor = { x: raw.overlayPosition.x + Math.round(width / 2), y: raw.overlayPosition.y + 320 - 16 };
   }
   delete raw.overlayPosition;
+  if (typeof raw.proxy !== "string") raw.proxy = DEFAULT_SETTINGS.proxy;
   // Gemini's smart mode ("smart", later "geminiSmart") is gone: it dropped whole sentences now and then.
   delete (raw as { smart?: boolean }).smart;
   delete (raw as { geminiSmart?: boolean }).geminiSmart;

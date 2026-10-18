@@ -43,6 +43,7 @@ object ApiProxy {
         val proxy = parse(Prefs(context).proxy)
         val href = proxy?.href ?: ""
         cached?.let { (h, c) -> if (h == href) return c }
+        if (cached != null) GeminiEndpoint.forget()
         val client = if (proxy == null) http else http.newBuilder()
             .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress.createUnresolved(proxy.host, proxy.port)))
             .proxyAuthenticator { _, response ->
