@@ -249,8 +249,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Gemini or OpenAI** (*Settings → Who transcribes* on the desktop and on
   Android). Ciao doesn't recognize speech itself: it sends the audio to one of
   these services, on your own key and your bill, and the card lists them side by
-  side with their price per hour of speech. Gemini is the default for a new install
-  (an Android install with only an OpenAI key stays on OpenAI). With Google's Gemini
+  side with their price per hour of speech. Gemini is the default for a new install.
+  An Android install where no service was ever picked moves to Gemini with the
+  update if it has a Gemini key (one with only an OpenAI key stays on OpenAI); the
+  desktop keeps the service it had. With Google's Gemini
   (`gemini-3.5-transcribe-live` while you speak, `gemini-3.5-transcribe` for the
   file), live transcription costs about half as much. Gemini transcribes verbatim:
   its smart mode, which dropped "um" and applied spoken corrections, also dropped

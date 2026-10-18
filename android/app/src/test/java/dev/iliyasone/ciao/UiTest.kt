@@ -60,15 +60,29 @@ class UiTest {
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         val field = activity.findViewById<EditText>(R.id.proxy)
         val status = activity.findViewById<TextView>(R.id.proxyText)
+        val remove = activity.findViewById<android.widget.Button>(R.id.proxyRemove)
         assertEquals(true, status.text.startsWith("Direct, no proxy."))
+        assertEquals(View.GONE, remove.visibility)
         field.setText("ciao:secret@")
         assertEquals("", prefs.proxy)
         assertEquals(true, status.text.startsWith("That doesn't look like a proxy"))
         field.setText("ciao:secret@212.118.40.237:43129")
         assertEquals("http://ciao:secret@212.118.40.237:43129", prefs.proxy)
+        // Shown without the password.
         assertEquals(true, status.text.startsWith("Through ciao@212.118.40.237:43129."))
-        field.setText("")
+        assertEquals(false, status.text.contains("secret"))
+        remove.performClick()
         assertEquals("", prefs.proxy)
+        assertEquals("", field.text.toString())
+        assertEquals(true, status.text.startsWith("Direct, no proxy."))
+    }
+
+    @Test
+    fun aSavedProxyShowsWithoutItsPassword() {
+        Prefs(RuntimeEnvironment.getApplication()).proxy = "http://ciao:secret@212.118.40.237:43129"
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        assertEquals("", activity.findViewById<EditText>(R.id.proxy).text.toString())
+        assertEquals(true, activity.findViewById<TextView>(R.id.proxyText).text.startsWith("Through ciao@212.118.40.237:43129."))
     }
 
     @Test

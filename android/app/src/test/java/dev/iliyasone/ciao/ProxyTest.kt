@@ -19,6 +19,9 @@ class ProxyTest {
             " http://ciao:abc@212.118.40.237:43129 " to ProxyAddress("http://ciao:abc@212.118.40.237:43129", "212.118.40.237", 43129, "ciao", "abc"),
             "http://u:a+b@h:1" to ProxyAddress("http://u:a+b@h:1", "h", 1, "u", "a+b"),
             "http://U@Host.Example:3128" to ProxyAddress("http://U@host.example:3128", "host.example", 3128, "U", ""),
+            "u:p@h:80" to ProxyAddress("http://u:p@h:80", "h", 80, "u", "p"),
+            "http://h:80/" to ProxyAddress("http://h:80", "h", 80, "", ""),
+            "http://u:50%off@h:8080" to null,
         )
         for ((typed, expected) in cases) assertEquals(typed, expected, ApiProxy.parse(typed))
         assertEquals("ciao@212.118.40.237:43129", ApiProxy.parse("http://ciao:abc@212.118.40.237:43129")!!.label)

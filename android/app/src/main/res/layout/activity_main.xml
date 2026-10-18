@@ -169,6 +169,11 @@
                 android:importantForAutofill="no"
                 android:inputType="textUri"
                 android:singleLine="true" />
+
+            <Button
+                android:id="@+id/proxyRemove"
+                style="@style/Action"
+                android:text="@string/proxy_remove" />
         </LinearLayout>
 
         <LinearLayout style="@style/Card">

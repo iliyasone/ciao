@@ -55,16 +55,18 @@ class MainActivity : Activity() {
             findViewById<RadioButton>(id).text = getString(R.string.provider_option, name, "$" + String.format(Locale.US, "%.2f", p.pricePerMinute * 60))
         }
         showProvider()
-        // Saved once it reads as a proxy (or is cleared); what's half typed waits.
-        bindText(R.id.proxy, prefs.proxy) { s ->
-            val parsed = ApiProxy.parse(s)
-            if (parsed != null || s.isBlank()) {
-                val value = parsed?.href ?: ""
-                if (value != prefs.proxy) GoogleSync.edit(this) { it.proxy = value }
-            }
+        // As on the desktop, the saved proxy shows without its password; a new one is typed in anew
+        // and saved once it reads as a proxy.
+        bindText(R.id.proxy, "") { s ->
+            ApiProxy.parse(s)?.let { if (it.href != prefs.proxy) GoogleSync.edit(this) { p -> p.proxy = it.href } }
             showProxy(s)
         }
-        showProxy(prefs.proxy)
+        findViewById<Button>(R.id.proxyRemove).setOnClickListener {
+            GoogleSync.edit(this) { it.proxy = "" }
+            findViewById<EditText>(R.id.proxy).setText("")
+            showProxy("")
+        }
+        showProxy("")
         bindSwitch(R.id.syncKeys, prefs.syncKeys) { on -> GoogleSync.edit(this) { it.syncKeys = on } }
         bindText(R.id.prompt, prefs.prompt) { s -> GoogleSync.edit(this) { it.prompt = s } }
         bindText(R.id.keywords, prefs.keywords.joinToString("\n")) { s -> GoogleSync.edit(this) { it.keywords = s.split("\n") } }
@@ -126,14 +128,16 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.version).text = getString(R.string.version, packageManager.getPackageInfo(packageName, 0).versionName)
     }
 
+    /** The saved proxy, or what's wrong with the one being typed. */
     private fun showProxy(typed: String) {
-        val parsed = ApiProxy.parse(typed)
+        val saved = ApiProxy.parse(prefs.proxy)
         val status = when {
-            typed.isBlank() -> getString(R.string.proxy_none)
-            parsed == null -> getString(R.string.proxy_invalid)
-            else -> getString(R.string.proxy_via, parsed.label)
+            typed.isNotBlank() && ApiProxy.parse(typed) == null -> getString(R.string.proxy_invalid)
+            saved == null -> getString(R.string.proxy_none)
+            else -> getString(R.string.proxy_via, saved.label)
         }
         findViewById<TextView>(R.id.proxyText).text = "$status ${getString(R.string.proxy_text)}"
+        findViewById<Button>(R.id.proxyRemove).visibility = if (saved != null) View.VISIBLE else View.GONE
     }
 
     /** The key field and the Gemini note follow the service picked. */
@@ -217,8 +221,7 @@ class MainActivity : Activity() {
     private fun showSynced() {
         val key = findViewById<EditText>(R.id.apiKey)
         if (key.text.toString().filter { it in '!'..'~' } != prefs.currentKey) key.setText(prefs.currentKey)
-        val proxy = findViewById<EditText>(R.id.proxy)
-        if ((ApiProxy.parse(proxy.text.toString())?.href ?: proxy.text.toString().trim()) != prefs.proxy) proxy.setText(prefs.proxy)
+        showProxy(findViewById<EditText>(R.id.proxy).text.toString())
         findViewById<Switch>(R.id.syncKeys).apply { if (isChecked != prefs.syncKeys) isChecked = prefs.syncKeys }
         updateStatus()
         val prompt = findViewById<EditText>(R.id.prompt)

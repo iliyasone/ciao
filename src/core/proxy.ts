@@ -23,11 +23,19 @@ export function parseProxy(text: string): ProxyAddress | null {
   } catch {
     return null;
   }
-  if (url.protocol !== "http:" || !url.hostname || !url.port || (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) return null;
-  const username = decodeURIComponent(url.username);
-  const password = decodeURIComponent(url.password);
+  // URL drops a port equal to the scheme's default: :80 has to be read from what was typed.
+  const port = url.port || (/:80\/?$/.test(typed) ? "80" : "");
+  if (url.protocol !== "http:" || !url.hostname || !port || (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) return null;
+  let username: string;
+  let password: string;
+  try {
+    username = decodeURIComponent(url.username);
+    password = decodeURIComponent(url.password);
+  } catch {
+    return null; // a "%" not followed by two hex digits, which Android's URI refuses too
+  }
   const auth = username ? `${url.username}${url.password ? `:${url.password}` : ""}@` : "";
-  return { href: `http://${auth}${url.host}`, host: url.hostname, port: Number(url.port), username, password };
+  return { href: `http://${auth}${url.hostname}:${port}`, host: url.hostname, port: Number(port), username, password };
 }
 
 /** For showing: the address without the password. */

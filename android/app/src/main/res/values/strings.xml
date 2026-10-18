@@ -19,6 +19,7 @@
     <string name="key_hint_gemini" translatable="false">AQ.…</string>
     <string name="proxy_title">Proxy</string>
     <string name="proxy_text">Requests to the service go through it, for when Gemini isn\'t available in your country. HTTP only. Synced along with the keys.</string>
+    <string name="proxy_remove">Remove proxy</string>
     <string name="proxy_none">Direct, no proxy.</string>
     <string name="proxy_via">Through %1$s.</string>
     <string name="proxy_invalid">That doesn\'t look like a proxy: it takes http://user:password@host:port.</string>
