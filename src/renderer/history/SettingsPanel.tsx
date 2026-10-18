@@ -342,10 +342,14 @@ function ProxyRow({ value, onChange }: { value: string; onChange: (proxy: string
   const current = parseProxy(value);
   const parsed = parseProxy(typed);
   const invalid = typed.trim() !== "" && !parsed;
+  // Removed (here or by a sync): a check of an earlier proxy isn't shown if it comes back.
+  useEffect(() => {
+    if (!value) setCheck(null);
+  }, [value]);
 
   const runCheck = async (proxy: ProxyAddress) => {
     setCheck({ href: proxy.href, text: tr.proxyChecking(proxyLabel(proxy)) });
-    const r = await ciao.settings.checkProxy();
+    const r = await ciao.settings.checkProxy(proxy.href);
     const text = r.ok ? tr.proxyWorks(r.ms) : r.badLogin ? tr.proxyBadLogin : tr.proxyFailed(r.reason);
     setCheck((c) => (c?.href === proxy.href ? { href: proxy.href, text } : c));
   };
@@ -374,8 +378,7 @@ function ProxyRow({ value, onChange }: { value: string; onChange: (proxy: string
           onClick={() => {
             onChange(parsed!.href);
             setTyped("");
-            // The main process has the new proxy once the save is through (update() saves at once).
-            setTimeout(() => void runCheck(parsed!), 300);
+            void runCheck(parsed!);
           }}
           className={BUTTON}
         >

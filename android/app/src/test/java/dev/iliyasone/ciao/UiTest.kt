@@ -69,16 +69,23 @@ class UiTest {
         assertEquals(false, save.isEnabled)
         assertEquals(true, status.text.contains("That doesn't look like a proxy"))
         // Typing alone saves nothing.
-        field.setText("ciao:secret@212.118.40.237:43129")
+        // Nothing listens on port 1 here: the check fails at once, with no network involved.
+        field.setText("ciao:secret@127.0.0.1:1")
         assertEquals("", prefs.proxy)
         assertEquals(true, save.isEnabled)
         save.performClick()
-        assertEquals("http://ciao:secret@212.118.40.237:43129", prefs.proxy)
+        assertEquals("http://ciao:secret@127.0.0.1:1", prefs.proxy)
         assertEquals("", field.text.toString())
         // Shown without the password, with the check started.
-        assertEquals(true, status.text.startsWith("Proxy on: ciao@212.118.40.237:43129."))
-        assertEquals(true, status.text.contains("Checking ciao@212.118.40.237:43129"))
+        assertEquals(true, status.text.startsWith("Proxy on: ciao@127.0.0.1:1."))
+        assertEquals(true, status.text.contains("Checking ciao@127.0.0.1:1"))
         assertEquals(false, status.text.contains("secret"))
+        val until = System.currentTimeMillis() + 10_000
+        while (!status.text.contains("✗") && System.currentTimeMillis() < until) {
+            Thread.sleep(50)
+            ShadowLooper.idleMainLooper()
+        }
+        assertEquals(true, status.text.contains("✗ Can't get through the proxy"))
         assertEquals(View.VISIBLE, remove.visibility)
         remove.performClick()
         assertEquals("", prefs.proxy)

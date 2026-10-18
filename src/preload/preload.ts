@@ -82,8 +82,8 @@ const api = {
     /** A corrected word was added to the terms from a suggestion. */
     onTermAdded: (cb: (term: string) => void) => on("settings:term-added", cb),
     hasApiKey: (provider: Provider): Promise<boolean> => ipcRenderer.invoke("settings:has-key", provider),
-    /** Checks the saved proxy (src/main/proxy.ts). */
-    checkProxy: (): Promise<ProxyCheck> => ipcRenderer.invoke("settings:check-proxy"),
+    /** Checks a proxy (src/main/proxy.ts). */
+    checkProxy: (url: string): Promise<ProxyCheck> => ipcRenderer.invoke("settings:check-proxy", url),
     /** A key was saved, here or on another device (through sync). */
     onKeys: (cb: () => void) => on("settings:keys", cb),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),

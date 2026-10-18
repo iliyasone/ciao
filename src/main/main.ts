@@ -430,7 +430,7 @@ function registerIpc(): void {
     applySettings({ ...settings, ...next, overlayAnchor, overlayWidth, overlayLines, dismissedTerms });
     return settings;
   });
-  ipcMain.handle("settings:check-proxy", () => checkProxy());
+  ipcMain.handle("settings:check-proxy", (_e, url: string) => checkProxy(String(url)));
   ipcMain.handle("settings:has-key", (_e, provider: Settings["provider"]) => loadApiKey(provider) !== null);
   ipcMain.handle("settings:wake-available", () => WakeWord.available());
   // A Wayland desktop lets no app bring another one forward, or tell which window a key would go to.

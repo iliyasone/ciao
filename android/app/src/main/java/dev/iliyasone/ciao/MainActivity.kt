@@ -63,7 +63,6 @@ class MainActivity : Activity() {
             val field = findViewById<EditText>(R.id.proxy)
             val parsed = ApiProxy.parse(field.text.toString()) ?: return@setOnClickListener
             GoogleSync.edit(this) { it.proxy = parsed.href }
-            prefs.proxy = parsed.href // GoogleSync.edit writes it too; the check below must see it now
             field.setText("")
             Toast.makeText(this, R.string.proxy_saved, Toast.LENGTH_SHORT).show()
             checkProxy()
@@ -71,7 +70,6 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.proxyCheck).setOnClickListener { checkProxy() }
         findViewById<Button>(R.id.proxyRemove).setOnClickListener {
             GoogleSync.edit(this) { it.proxy = "" }
-            prefs.proxy = ""
             findViewById<EditText>(R.id.proxy).setText("")
             proxyResult = null
             showProxy("")
@@ -146,8 +144,9 @@ class MainActivity : Activity() {
         val saved = ApiProxy.parse(prefs.proxy) ?: return
         proxyResult = saved.href to getString(R.string.proxy_checking, saved.label)
         showProxy(findViewById<EditText>(R.id.proxy).text.toString())
+        val app = applicationContext
         Thread {
-            val text = when (val r = ApiProxy.check(this)) {
+            val text = when (val r = ApiProxy.check(app)) {
                 is ApiProxy.Check.Works -> getString(R.string.proxy_works, r.ms)
                 ApiProxy.Check.BadLogin -> getString(R.string.proxy_bad_login)
                 is ApiProxy.Check.Failed -> getString(R.string.proxy_failed, r.reason)
@@ -163,6 +162,8 @@ class MainActivity : Activity() {
     /** The proxy in use and its last check, or what's wrong with the one being typed; buttons to match. */
     private fun showProxy(typed: String) {
         val saved = ApiProxy.parse(prefs.proxy)
+        // Removed (here or by a sync): a check of an earlier proxy isn't shown if it comes back.
+        if (saved == null) proxyResult = null
         val parsed = ApiProxy.parse(typed)
         val lines = mutableListOf(if (saved == null) getString(R.string.proxy_none) else getString(R.string.proxy_via, saved.label))
         proxyResult?.takeIf { it.first == saved?.href }?.let { lines += it.second }
