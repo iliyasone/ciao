@@ -91,7 +91,8 @@ object Updater {
         }
         val prefs = Prefs(activity)
         // Kept in prefs: Android may restart Ciao when the user changes "Install unknown apps".
-        if (prefs.updateAfterPermission) {
+        val afterPermission = prefs.updateAfterPermission
+        if (afterPermission) {
             prefs.updateAfterPermission = false
             if (!activity.packageManager.canRequestPackageInstalls()) set(state.copy(message = activity.getString(R.string.update_allow)))
             else if (release != null) install(activity)
@@ -102,7 +103,7 @@ object Updater {
         }
         // A found update isn't stamped as checked (Updater.check), so a new process finds it again. One
         // found earlier in this process is looked at again too: a newer release may be out since.
-        if (System.currentTimeMillis() - maxOf(prefs.updateCheckedAt, foundAt) > CHECK_EVERY_MS) check(activity, manual = false, refresh = true)
+        if (!afterPermission && System.currentTimeMillis() - maxOf(prefs.updateCheckedAt, foundAt) > CHECK_EVERY_MS) check(activity, manual = false, refresh = true)
     }
 
     fun pause(activity: Activity) {
@@ -136,6 +137,9 @@ object Updater {
                         if (installWhenFound && screen != null) install(screen)
                         installWhenFound = false
                     }
+                } else if (found != null && newer(found.version, current(app)) && release != null) {
+                    // The newest one's APK is still uploading: the one found before can still be installed.
+                    set(before)
                 } else {
                     release = null
                     installWhenFound = false
@@ -204,6 +208,7 @@ object Updater {
             // Found hours ago, perhaps: a newer release since is the one to install, not one more update after this.
             val r = runCatching { fetchLatest(app) }.getOrNull()?.takeIf { it.apk != null && newer(it.version, found.version) } ?: found
             release = r
+            foundAt = System.currentTimeMillis()
             try {
                 val apk = download(app, r)
                 set(State(Phase.INSTALLING, r.version))

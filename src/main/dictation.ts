@@ -243,7 +243,7 @@ export class DictationController {
   /** live: from the mic now (not the wake word's pre-roll), so the start sound's moment may be silenced. */
   onChunk(seq: number, pcm: Uint8Array, live = true): void {
     const a = this.active;
-    if (!a || a.seq !== seq) return;
+    if (!a || a.seq !== seq || a.captureEnded) return; // late, after stop() stopped waiting for the overlay
     if (live && a.muteUntil !== undefined && Date.now() <= a.muteUntil) pcm = new Uint8Array(pcm.byteLength);
     a.wav.write(pcm); // disk first: the recording survives any failure below
     if (!a.offline) a.session.append(pcm);
