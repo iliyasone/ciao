@@ -43,13 +43,15 @@ object GeminiEndpoint {
      * src/main/transcribe.ts.
      */
     fun vertexProject(context: Context, key: String): String? {
+        // First: a proxy changed since forgets what was found the old way.
+        val client = ApiProxy.client(context)
         known[key]?.let { return it.ifEmpty { null } }
         val request = Request.Builder()
             .url("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
             .header("x-goog-api-key", key)
             .build()
         // Every live session and file transcription waits for this: a stalled request must not hold them.
-        val call = ApiProxy.client(context).newCall(request).apply { timeout().timeout(10, TimeUnit.SECONDS) }
+        val call = client.newCall(request).apply { timeout().timeout(10, TimeUnit.SECONDS) }
         val found = call.execute().use { parse(it.code, it.body?.string() ?: "") } ?: return null
         known[key] = found
         return found.ifEmpty { null }

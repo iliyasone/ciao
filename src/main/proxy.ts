@@ -14,7 +14,11 @@ export function setProxy(url: string): void {
   const proxy = parseProxy(url);
   if ((proxy?.href ?? "") === (current?.url ?? "")) return;
   void current?.dispatcher.close().catch(() => {});
-  current = proxy ? { url: proxy.href, dispatcher: new ProxyAgent(proxy.href), agent: new HttpsProxyAgent(proxy.href) } : null;
+  if (!proxy) return void (current = null);
+  // undici sends a login from the address only with both a user and a password: "user@host" too, as token.
+  const token = proxy.username ? `Basic ${Buffer.from(`${proxy.username}:${proxy.password}`).toString("base64")}` : undefined;
+  const dispatcher = new ProxyAgent({ uri: `http://${proxy.host}:${proxy.port}`, token });
+  current = { url: proxy.href, dispatcher, agent: new HttpsProxyAgent(proxy.href) };
 }
 
 /**

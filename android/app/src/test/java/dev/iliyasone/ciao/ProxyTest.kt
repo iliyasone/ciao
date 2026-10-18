@@ -47,6 +47,7 @@ class ProxyTest {
         )
         // A file from an older Ciao has no proxy: this device's stays.
         val old = Sync.parse("""{"version":1,"terms":[{"term":"A","at":0}],"prompt":{"value":"p","at":0}}""")!!
+        assertEquals(edited, Sync.mergeStates(edited, old))
         assertEquals(edited, Sync.mergeStates(old, edited))
         // Keys off: the file keeps no proxy, and none comes in from another device.
         val off = Sync.recordEdit(edited, local("http://u:p@h:1", syncKeys = false), 200)!!
