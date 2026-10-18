@@ -618,6 +618,8 @@ void app.whenReady().then(() => {
         saveKeyFile(provider, key);
         keys = true;
       }
+      // The proxy first too: the spare session keysChanged reopens goes through it.
+      setProxy(state.proxy.value);
       if (keys) keysChanged();
       applySettings({ ...settings, keywords: arrangeTerms(settings.keywords, termsOf(state)), prompt: state.prompt.value, syncKeys: state.syncKeys.value, proxy: state.proxy.value });
       historyWin?.webContents.send("settings:synced", settings);

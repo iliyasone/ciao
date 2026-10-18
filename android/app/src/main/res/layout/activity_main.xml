@@ -166,8 +166,9 @@
                 android:id="@+id/proxy"
                 style="@style/Field"
                 android:hint="@string/proxy_hint"
+                android:imeOptions="flagNoPersonalizedLearning"
                 android:importantForAutofill="no"
-                android:inputType="textUri"
+                android:inputType="textUri|textNoSuggestions"
                 android:singleLine="true" />
 
             <Button
