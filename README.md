@@ -246,23 +246,20 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   default and follows the system live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
-- **OpenAI or Gemini** (*Settings → Recognition → Service* on the desktop,
-  *Service* on Android). OpenAI is the default.
-  With Google's Gemini (`gemini-3.5-transcribe-live` while you speak,
-  `gemini-3.5-transcribe` for the file), live transcription costs about half as much,
-  and **Apply spoken corrections** (right under the service; off by default) cleans up
-  the final text: it drops "um", false starts and repeats, and keeps only the correction
-  when you change your mind ("в два, нет, в три" → "в три"; "at 1 pm, actually no,
-  2 pm" → "at 2 pm"). It is off because it also drops whole sentences now and then;
-  with it off you get the words as said. Before 0.9.15 it was on, and updating turns
-  it off once.
-  While you speak the card shows the words as said, so a correction is applied
-  only when the final text arrives, about 0.3 s after you let go. With corrections
-  on, Gemini often breaks the text into paragraphs itself; then Ciao leaves its
-  layout as it is, otherwise its own rules for lists apply as usual.
+- **Gemini or OpenAI** (*Settings → Who transcribes* on the desktop and on
+  Android). Ciao doesn't recognize speech itself: it sends the audio to one of
+  these services, on your own key and your bill, and the card lists them side by
+  side with their price per hour of speech. Gemini is the default for a new install.
+  An Android install where no service was ever picked moves to Gemini with the
+  update if it has a Gemini key (one with only an OpenAI key stays on OpenAI); the
+  desktop keeps the service it had. With Google's Gemini
+  (`gemini-3.5-transcribe-live` while you speak, `gemini-3.5-transcribe` for the
+  file), live transcription costs about half as much. Gemini transcribes verbatim:
+  its smart mode, which dropped "um" and applied spoken corrections, also dropped
+  whole sentences now and then, and is gone since 0.9.16.
   - Gemini detects the language on its own and takes no free-form context, only
-    the terms (*Settings → Recognition*), so the Languages and Context fields are
-    hidden with it, and so is the delay level.
+    the terms (*Settings → Recognition*), so the Languages and Context fields
+    (under OpenAI in *Who transcribes*) are hidden with it, and so is the delay level.
   - A Gemini live connection lasts about 10 minutes from when it opens, and Ciao
     opens it up to 2 minutes ahead, so a dictation longer than about 8 minutes
     may be transcribed from the saved audio when you stop instead.
@@ -274,6 +271,13 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     an AI Studio key by itself and sends the audio to Vertex AI in the key's
     project. Vertex has no AI Studio tiers (Tier 1 allows the file model only 100
     requests a day) and bills the project's Cloud billing account.
+- **Proxy** (*Settings → Who transcribes → Proxy*, on every platform and on
+  Android). Requests to OpenAI and Gemini, live and file, go through an HTTP proxy
+  (`http://user:password@host:port`), for when Gemini isn't available in your
+  country. Sync, updates and telemetry go direct. The proxy syncs through Google
+  along with the API keys (and not while *Sync API keys* is off). A proxy that
+  can't be reached fails a dictation as when offline ("Couldn't reach …"), and the
+  audio is kept.
 
 ## Requirements
 
@@ -463,8 +467,8 @@ How it differs from Windows:
 Ciao takes the OpenAI key from the `OPENAI_API_KEY` environment variable and the
 Gemini key from `GEMINI_API_KEY`. If that is not set, it reads `openai-key.txt` or
 `gemini-key.txt` in the [data folder](#where-things-are-stored). Saving a key in
-Settings writes that file; the key card shows the service chosen in
-*Settings → Recognition*.
+Settings writes that file; the key field is under the service in use in
+*Settings → Who transcribes*.
 
 ### Hotkeys
 
@@ -522,10 +526,10 @@ yours.
   the file model (`gpt-transcribe`, or `gemini-3.5-transcribe`) when you finish.
   If that fails too (still offline), the card keeps the recording with a
   *Transcribe again* button until you dismiss it.
-- **OpenAI or Gemini**: pick the service at the top of the Ciao screen; the key
-  field below it is for that service's key. With Gemini, *Apply spoken
-  corrections* works as on the desktop ([Features](#features)), the context field
-  isn't used, and the language is detected on its own.
+- **Gemini or OpenAI**: pick the service at the top of the Ciao screen, where
+  each shows its price per hour; the key field below is for that service's key,
+  and the proxy field below that works as on the desktop ([Features](#features)).
+  With Gemini the context field isn't used, and the language is detected on its own.
 
 ### Install on Android
 
@@ -608,19 +612,20 @@ Drive) and your email address, to show which account is signed in. Google's page
 lists Drive access as a box to tick, unticked at first: tick it, or Ciao says it
 has no access.
 
-- What syncs: the terms, the context and the API keys (OpenAI and Gemini).
-  Nothing else: not the other settings, not the history.
+- What syncs: the terms, the context, the API keys (OpenAI and Gemini) and the
+  proxy. Nothing else: not the other settings, not the history.
 - *Sync API keys* is on by default. The keys sit in the file as they are, so
   anyone who can sign in to your Google account can read them. Turned off on any
   device, it turns off everywhere (the switch syncs too): every device keeps its
-  own keys, and the next sync removes them from Drive. A key from
+  own keys and proxy, and the next sync removes them from Drive. The proxy goes
+  with the keys, since its password is a secret too. A key from
   `OPENAI_API_KEY` / `GEMINI_API_KEY` is never synced, only one saved in Settings.
 - When: right after you change them, when you come back to the settings window
   (the app on Android), every 5 minutes on the desktop, and on Android when the
   keyboard shows up, at most every 10 minutes.
 - Merging: each device remembers when every term was added or removed. A term
   added on one device survives a save on another, and a removed one doesn't come
-  back. For the context, each key and the switch, the later edit wins. Each device keeps that history in
+  back. For the context, each key, the proxy and the switch, the later edit wins. Each device keeps that history in
   `sync-state.json` (desktop) or its preferences (Android).
 - Signing out stops syncing on that device and keeps the terms there; the other
   devices stay signed in. To take Ciao's access away everywhere, remove it from
@@ -676,8 +681,7 @@ we can see how many people use it. Two events (Android sends the same ones, with
   - how it was driven: `trigger` (the key or button that started it, such as
     `RControlKey` or `MButton`, `wake_word`, or `pill` for a click on it), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
-  - who transcribed it: `provider` (`openai` or `gemini`) and, with Gemini, `smart`
-    (whether spoken corrections were applied);
+  - who transcribed it: `provider` (`openai` or `gemini`);
   - time and money: `duration_s`, `voice_onset_ms` (not for wake-word starts, whose
     audio begins with speech), `first_text_ms`, `final_after_release_ms`,
     `ready_after_release_ms` (from the stop until the text was pasted or put on the
@@ -796,13 +800,15 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
-  `providers.ts` for which models each uses), PCM/WAV helpers, prices, shared types,
+  `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
+  PCM/WAV helpers, prices, shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is
   meant to be reused as-is by other shells (a T3 Code integration, mobile).
 - `src/main/` — the Electron main process:
   - `dictation.ts` — the hotkey state machine and the pipeline;
   - `history.ts` — storage and crash recovery;
-  - `transcribe.ts` — live and file transcription;
+  - `transcribe.ts` — live and file transcription; `proxy.ts` — the proxy its
+    requests go through;
   - `paste.ts` — clipboard-preserving paste;
   - `input.ts` — talks to the keyboard and paste helper of the system;
   - `corrections.ts` — watches the field a dictation went into for corrections;
@@ -850,7 +856,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     and `transcribeLive` in `src/main/transcribe.ts`; `Player.kt` plays a recording;
   - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
     Gemini calls as `src/core/realtime.ts`, `src/core/gemini.ts` and
-    `src/main/transcribe.ts`; `Revision.kt` — the port of `src/core/revision.ts`,
+    `src/main/transcribe.ts`; `Proxy.kt` — the port of `src/core/proxy.ts` and
+    `src/main/proxy.ts`, whose test holds the TypeScript outputs; `Revision.kt` — the port of `src/core/revision.ts`,
     whose test holds its TypeScript outputs;
   - `Updater.kt` — updates from GitHub Releases through Android's package
     installer, like `src/main/updater.ts`;

@@ -14,16 +14,10 @@ export interface Settings {
   liveModel: string;
   /** OpenAI only. */
   delay: Delay;
-  /** OpenAI only; Gemini detects the language itself (codes would turn its smart mode off). */
+  /** OpenAI only; Gemini detects the language itself. */
   languages: string[];
   /** Free-form context for the recognizer (OpenAI only). */
   prompt: string;
-  /**
-   * Gemini's smart mode: drop fillers and false starts, apply spoken corrections ("at 2, no, 3" →
-   * "at 3"). Off by default: it also drops whole sentences now and then. Stored as "geminiSmart":
-   * the older "smart" was on by default and is dropped, so every install starts with it off.
-   */
-  geminiSmart: boolean;
   /** Literal terms to get right (product names, identifiers). */
   keywords: string[];
   /** OpenAI: model for "transcribe the whole recording again, more accurately". */
@@ -80,7 +74,12 @@ export interface Settings {
   tapHandsFree: boolean;
   /** Send anonymous usage counts (launches, dictations); never text or audio. */
   telemetry: boolean;
-  /** With Google sync: the API keys go into the synced file too, so a new device is ready at once. */
+  /**
+   * HTTP proxy the transcription services are reached through (core/proxy.ts), "" = direct: Gemini
+   * refuses some countries. Synced along with the keys.
+   */
+  proxy: string;
+  /** With Google sync: the API keys (and the proxy) go into the synced file too, so a new device is ready at once. */
   syncKeys: boolean;
   /** Offer to add a word to the terms when the user corrects it in a pasted dictation. */
   learnCorrections: boolean;

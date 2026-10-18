@@ -5,15 +5,21 @@ import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
 import type { Provider, Settings } from "../core/types";
+import { apiFetch, wsAgent } from "./proxy";
 
 export function openLive(provider: Provider, apiKey: string): LiveSession {
   if (provider === "gemini")
     // The key goes in a header, not ?key=: query strings end up in logs.
-    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey } }) as unknown as SocketLike, geminiEndpoint(apiKey));
-  return new RealtimeSession((url) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } }) as unknown as SocketLike);
+    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey }, agent: wsAgent() }) as unknown as SocketLike, geminiEndpoint(apiKey));
+  return new RealtimeSession((url) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent() }) as unknown as SocketLike);
 }
 
 const endpoints = new Map<string, Promise<GeminiEndpoint>>();
+
+/** Through another proxy Google may answer differently (one country refused, another let in): check again. */
+export function forgetEndpoints(): void {
+  endpoints.clear();
+}
 
 /**
  * Where a Gemini key works (see parseGeminiEndpoint), remembered per key. A check with no answer to go
@@ -35,7 +41,7 @@ export function geminiEndpoint(apiKey: string): Promise<GeminiEndpoint> {
 
 async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
   // Every live session and file transcription waits for this: a stalled request must not hold them.
-  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", {
+  const res = await apiFetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", {
     headers: { "x-goog-api-key": apiKey },
     signal: AbortSignal.timeout(10_000),
   });
@@ -199,7 +205,7 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
     // Continuity across parts.
     if (texts.length) form.set("prompt", `${hints} ${texts.at(-1)!.slice(-400)}`.trim());
 
-    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    const res = await apiFetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
@@ -212,10 +218,8 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
 }
 
 /**
- * gemini-3.5-transcribe through the Interactions API: the only Gemini API endpoint where smart mode
- * works (on :generateContent it parses, then returns an empty text). Vertex AI has no Interactions
- * for this model but takes smart mode on :generateContent (transcribeFileVertex). Never add language
- * codes, see core/gemini.ts.
+ * gemini-3.5-transcribe through the Interactions API (Vertex AI has no Interactions for this model:
+ * transcribeFileVertex). Verbatim, as live: no language codes, see core/gemini.ts.
  */
 async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
   const { vertexProject } = await geminiEndpoint(apiKey).catch(() => {
@@ -223,7 +227,6 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
   });
   if (vertexProject) return transcribeFileVertex(apiKey, vertexProject, pcm, settings);
   const config: Record<string, unknown> = {};
-  if (settings.geminiSmart) config.mode = "smart";
   const terms = vocabulary(settings.keywords);
   if (terms.length) config.custom_vocabulary = terms;
   const texts: string[] = [];
@@ -238,7 +241,7 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
     let res: Response;
     let first: GeminiInteraction | undefined;
     for (let attempt = 0; ; attempt++) {
-      res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      res = await apiFetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
         method: "POST",
         headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
         body: request,
@@ -272,7 +275,7 @@ interface GeminiInteraction {
 
 /** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. */
 async function transcribeFileVertex(apiKey: string, project: string, pcm: Buffer, settings: Settings): Promise<string> {
-  const config: Record<string, unknown> = { mode: settings.geminiSmart ? "SMART" : "VERBATIM" };
+  const config: Record<string, unknown> = { mode: "VERBATIM" };
   const terms = vocabulary(settings.keywords);
   if (terms.length) config.customVocabulary = terms;
   const texts: string[] = [];
@@ -284,7 +287,7 @@ async function transcribeFileVertex(apiKey: string, project: string, pcm: Buffer
     let res: Response;
     let first: VertexResponse | undefined;
     for (let attempt = 0; ; attempt++) {
-      res = await fetch(vertexFileUrl(project), {
+      res = await apiFetch(vertexFileUrl(project), {
         method: "POST",
         headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
         body: request,

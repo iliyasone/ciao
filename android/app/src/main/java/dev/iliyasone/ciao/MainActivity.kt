@@ -23,6 +23,7 @@ import android.widget.Switch
 import android.widget.TextView
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
 
 /** Setup (service and key, microphone, accessibility), a field to try it in, sync, the recognition settings, updates. */
 class MainActivity : Activity() {
@@ -49,8 +50,23 @@ class MainActivity : Activity() {
             findViewById<EditText>(R.id.apiKey).setText(prefs.currentKey)
             showProvider()
         }
-        bindSwitch(R.id.smart, prefs.smart) { prefs.smart = it }
+        for ((id, p) in listOf(R.id.providerGemini to Provider.GEMINI, R.id.providerOpenai to Provider.OPENAI)) {
+            val name = if (p == Provider.GEMINI) getString(R.string.provider_gemini) else getString(R.string.provider_openai)
+            findViewById<RadioButton>(id).text = getString(R.string.provider_option, name, "$" + String.format(Locale.US, "%.2f", p.pricePerMinute * 60))
+        }
         showProvider()
+        // As on the desktop, the saved proxy shows without its password; a new one is typed in anew
+        // and saved once it reads as a proxy.
+        bindText(R.id.proxy, "") { s ->
+            ApiProxy.parse(s)?.let { if (it.href != prefs.proxy) GoogleSync.edit(this) { p -> p.proxy = it.href } }
+            showProxy(s)
+        }
+        findViewById<Button>(R.id.proxyRemove).setOnClickListener {
+            GoogleSync.edit(this) { it.proxy = "" }
+            findViewById<EditText>(R.id.proxy).setText("")
+            showProxy("")
+        }
+        showProxy("")
         bindSwitch(R.id.syncKeys, prefs.syncKeys) { on -> GoogleSync.edit(this) { it.syncKeys = on } }
         bindText(R.id.prompt, prefs.prompt) { s -> GoogleSync.edit(this) { it.prompt = s } }
         bindText(R.id.keywords, prefs.keywords.joinToString("\n")) { s -> GoogleSync.edit(this) { it.keywords = s.split("\n") } }
@@ -112,15 +128,25 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.version).text = getString(R.string.version, packageManager.getPackageInfo(packageName, 0).versionName)
     }
 
-    /** The key card, the Gemini note and the smart-mode switch follow the service picked. */
+    /** The saved proxy, or what's wrong with the one being typed. */
+    private fun showProxy(typed: String) {
+        val saved = ApiProxy.parse(prefs.proxy)
+        val status = when {
+            typed.isNotBlank() && ApiProxy.parse(typed) == null -> getString(R.string.proxy_invalid)
+            saved == null -> getString(R.string.proxy_none)
+            else -> getString(R.string.proxy_via, saved.label)
+        }
+        findViewById<TextView>(R.id.proxyText).text = "$status ${getString(R.string.proxy_text)}"
+        findViewById<Button>(R.id.proxyRemove).visibility = if (saved != null) View.VISIBLE else View.GONE
+    }
+
+    /** The key field and the Gemini note follow the service picked. */
     private fun showProvider() {
         val p = prefs.provider
         val gemini = p == Provider.GEMINI
         findViewById<TextView>(R.id.keyText).setText(if (gemini) R.string.key_text_gemini else R.string.key_text_openai)
         findViewById<EditText>(R.id.apiKey).setHint(if (gemini) R.string.key_hint_gemini else R.string.key_hint_openai)
         findViewById<TextView>(R.id.geminiNote).visibility = if (gemini) TextView.VISIBLE else TextView.GONE
-        findViewById<Switch>(R.id.smart).visibility = if (gemini) Switch.VISIBLE else Switch.GONE
-        findViewById<TextView>(R.id.smartHint).visibility = if (gemini) TextView.VISIBLE else TextView.GONE
         // OpenAI only, as on the desktop: Gemini detects the language itself and has no delay level.
         for (id in listOf(R.id.languagesTitle, R.id.languagesText, R.id.languages)) findViewById<View>(id).visibility = if (gemini) View.GONE else View.VISIBLE
         findViewById<View>(R.id.delay).visibility = if (!gemini && prefs.showDelay) View.VISIBLE else View.GONE
@@ -195,6 +221,7 @@ class MainActivity : Activity() {
     private fun showSynced() {
         val key = findViewById<EditText>(R.id.apiKey)
         if (key.text.toString().filter { it in '!'..'~' } != prefs.currentKey) key.setText(prefs.currentKey)
+        showProxy(findViewById<EditText>(R.id.proxy).text.toString())
         findViewById<Switch>(R.id.syncKeys).apply { if (isChecked != prefs.syncKeys) isChecked = prefs.syncKeys }
         updateStatus()
         val prompt = findViewById<EditText>(R.id.prompt)

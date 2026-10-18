@@ -35,7 +35,7 @@ object Retry {
         if (key.isEmpty()) throw IOException(context.getString(R.string.need_key, provider.displayName))
         val audio = history.audioFile(id)
         val text = when (mode) {
-            Mode.FILE -> FileTranscriber.transcribe(context, prefs, audio, provider, key, prefs.smart)
+            Mode.FILE -> FileTranscriber.transcribe(context, prefs, audio, provider, key)
             Mode.LIVE -> if (provider == Provider.GEMINI) synchronized(geminiReplay) { live(context, prefs, audio, provider, key) } else live(context, prefs, audio, provider, key)
         }.trim()
         // Re-read: the entry may have changed while we waited.

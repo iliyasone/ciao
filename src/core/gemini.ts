@@ -67,9 +67,8 @@ export function vocabulary(keywords: string[]): string[] {
  *
  * The turn is ours, not the server's: automatic voice detection is off, so a pause to think doesn't
  * end the dictation; configure() starts the turn and commit() ends it. While you speak the server
- * sends interim guesses, each replacing the last, and a final transcript per finished segment; in
- * smart mode the finals drop fillers and false starts and apply spoken corrections ("в два, нет, в
- * три" → "в три"), so a final may differ from the guesses before it.
+ * sends interim guesses, each replacing the last, and a final transcript per finished segment, which
+ * may differ from the guesses before it.
  *
  * The server ends an activity on its own about 220 s after it started and ignores the audio after
  * that (measured: a 5.5-minute dictation lost its last 100 s), so a long dictation is cut into
@@ -81,9 +80,8 @@ export function vocabulary(keywords: string[]): string[] {
  *
  * Vertex AI speaks the same protocol at another address, with the model named by its full path.
  *
- * Never send language codes along with smart mode: on Gemini's transcription endpoints that silently
- * turns smart mode off (found by google-gemini/jot-gemini-transcribe-macOS). Without them the
- * language is detected per utterance, mixed Russian and English included.
+ * No language codes are sent: without them the language is detected per utterance, mixed Russian and
+ * English included.
  */
 export class GeminiLiveSession implements LiveSession {
   static ROLL_AFTER_MS = 150_000;
@@ -160,8 +158,9 @@ export class GeminiLiveSession implements LiveSession {
     return this.failure === null && !this.closedByUs;
   }
 
-  configure(s: Pick<Settings, "geminiSmart" | "keywords">): void {
-    const transcription: Record<string, unknown> = { mode: s.geminiSmart ? "SMART" : "VERBATIM" };
+  configure(s: Pick<Settings, "keywords">): void {
+    // Verbatim: smart mode (no fillers, spoken corrections applied) drops whole sentences now and then.
+    const transcription: Record<string, unknown> = { mode: "VERBATIM" };
     const terms = vocabulary(s.keywords);
     if (terms.length) transcription.customVocabulary = terms;
     this.send({

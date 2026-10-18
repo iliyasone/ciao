@@ -35,14 +35,14 @@ object FileTranscriber {
     private const val DATA = "@ciao-audio@"
 
     /**
-     * Blocking; call off the main thread. [provider] and [smart] are the dictation's own, as when it
+     * Blocking; call off the main thread. [provider] is the dictation's own, as when it
      * started; [key] is that provider's current key (a retry after fixing a bad key must use the new one).
      */
-    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, smart: Boolean): String =
+    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String): String =
         // Opened once, before any request: a file trimmed from the history meanwhile stays readable,
         // and a missing one fails as such rather than as a network error.
         RandomAccessFile(audio, "r").use { file ->
-            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key, smart) else transcribeOpenAI(context, prefs, file, key)
+            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key) else transcribeOpenAI(context, prefs, file, key)
         }
 
     private fun transcribeOpenAI(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String): String {
@@ -71,7 +71,7 @@ object FileTranscriber {
                 .post(body)
                 .build()
             val response = try {
-                http.newCall(request).execute()
+                ApiProxy.client(context).newCall(request).execute()
             } catch (e: IOException) {
                 throw IOException(context.getString(R.string.error_cannot_reach, RealtimeSession.NAME), e)
             }
@@ -87,19 +87,18 @@ object FileTranscriber {
     }
 
     /**
-     * gemini-3.5-transcribe through the Interactions API: the only Gemini API endpoint where smart
-     * mode works. Vertex AI takes it on :generateContent instead ([transcribeVertex]). Never add
-     * language codes, see Gemini.kt. Mirrors transcribeFileGemini.
+     * gemini-3.5-transcribe through the Interactions API (Vertex AI has no Interactions for this
+     * model: [transcribeVertex]). Verbatim, as live: no language codes, see Gemini.kt. Mirrors
+     * transcribeFileGemini.
      */
-    private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, smart: Boolean): String {
+    private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String): String {
         val project = try {
-            GeminiEndpoint.vertexProject(key)
+            GeminiEndpoint.vertexProject(context, key)
         } catch (e: IOException) {
             throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
         }
-        if (project != null) return transcribeVertex(context, prefs, audio, key, project, smart)
+        if (project != null) return transcribeVertex(context, prefs, audio, key, project)
         val config = JSONObject()
-        if (smart) config.put("mode", "smart")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("custom_vocabulary", JSONArray(terms))
         val texts = mutableListOf<String>()
@@ -136,7 +135,7 @@ object FileTranscriber {
             var attempt = 0
             while (true) {
                 val response = try {
-                    http.newCall(request).execute()
+                    ApiProxy.client(context).newCall(request).execute()
                 } catch (e: IOException) {
                     throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
                 }
@@ -174,8 +173,8 @@ object FileTranscriber {
     }
 
     /** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. Mirrors transcribeFileVertex. */
-    private fun transcribeVertex(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, project: String, smart: Boolean): String {
-        val config = JSONObject().put("mode", if (smart) "SMART" else "VERBATIM")
+    private fun transcribeVertex(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, project: String): String {
+        val config = JSONObject().put("mode", "VERBATIM")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("customVocabulary", JSONArray(terms))
         val url = "https://aiplatform.googleapis.com/v1/${GeminiEndpoint.vertexModel(project, Provider.GEMINI.fileModel)}:generateContent"
@@ -204,7 +203,7 @@ object FileTranscriber {
             var attempt = 0
             while (true) {
                 val response = try {
-                    http.newCall(request).execute()
+                    ApiProxy.client(context).newCall(request).execute()
                 } catch (e: IOException) {
                     throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
                 }

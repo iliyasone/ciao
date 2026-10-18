@@ -6,7 +6,7 @@ import { PROVIDERS } from "../core/providers";
 import type { Provider, Settings } from "../core/types";
 
 export const DEFAULT_SETTINGS: Settings = {
-  provider: "openai",
+  provider: "gemini",
   liveModel: "gpt-live-transcribe",
   delay: "low",
   languages: ["ru", "en"],
@@ -17,7 +17,6 @@ export const DEFAULT_SETTINGS: Settings = {
     "TypeScript", "Python", "Electron", "React", "commit", "pull request", "Wispr Flow", "Windows",
   ],
   fileModel: "gpt-transcribe",
-  geminiSmart: false,
   // Linux can't keep a middle click from the app under the pointer (it would paste the selection there).
   // Mac keyboards mostly have no Right Control; Right Option is the spare key there.
   triggers:
@@ -48,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   formatText: true,
   telemetry: true,
   syncKeys: true,
+  proxy: "",
   learnCorrections: true,
   dismissedTerms: [],
 };
@@ -97,8 +97,10 @@ function parseSettings(text: string): Settings | null {
     raw.overlayAnchor = { x: raw.overlayPosition.x + Math.round(width / 2), y: raw.overlayPosition.y + 320 - 16 };
   }
   delete raw.overlayPosition;
-  // "smart" was on by default and saved as such; its successor starts off for everyone (see types.ts).
+  if (typeof raw.proxy !== "string") raw.proxy = DEFAULT_SETTINGS.proxy;
+  // Gemini's smart mode ("smart", later "geminiSmart") is gone: it dropped whole sentences now and then.
   delete (raw as { smart?: boolean }).smart;
+  delete (raw as { geminiSmart?: boolean }).geminiSmart;
   return { ...DEFAULT_SETTINGS, ...raw };
 }
 

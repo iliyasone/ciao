@@ -1,13 +1,13 @@
-// Terms, the prompt and the API keys, synced between devices through a file in the user's Google
+// Terms, the prompt, the API keys and the proxy, synced between devices through a file in the user's Google
 // Drive (src/main/sync.ts on the desktop, android/…/Sync.kt on the phone, which ports this file).
 //
 // Each device keeps the whole history it knows: every term ever added or removed, with the time
 // of its last change. Merging two histories keeps the later change of each term, so a term added
 // on the phone survives a save on the computer, and a removed one doesn't come back. The prompt,
-// each key and the "sync keys" switch are single values: the later edit wins.
+// each key, the proxy and the "sync keys" switch are single values: the later edit wins.
 //
-// The switch is synced too: turned off on one device, it stops every device from sending keys, and
-// the file keeps none (each device still has its own).
+// The switch is synced too: turned off on one device, it stops every device from sending keys and
+// the proxy (its password is a secret too), and the file keeps none (each device still has its own).
 
 export interface TermChange {
   term: string;
@@ -33,6 +33,8 @@ export interface SyncState {
   keys: Record<string, Stamped<string>>;
   /** Whether keys go into the synced file. On by default. */
   syncKeys: Stamped<boolean>;
+  /** The proxy to the transcription services (Settings.proxy), "" for none; synced with the keys. */
+  proxy: Stamped<string>;
 }
 
 /** What a device has now: its settings and its API keys ("" or missing when it has none). */
@@ -41,6 +43,7 @@ export interface Local {
   prompt: string;
   keys: Record<string, string>;
   syncKeys: boolean;
+  proxy: string;
 }
 
 /** Trimmed, without empty lines and repeats (the settings keep what's typed, blank lines included). */
@@ -82,6 +85,7 @@ export function initialState(local: Local, defaults: { keywords: string[]; promp
         .map(([provider, key]) => [provider, { value: key, at: 0 }]),
     ),
     syncKeys: { value: local.syncKeys, at: local.syncKeys === defaults.syncKeys ? -1 : 0 },
+    proxy: { value: local.proxy, at: local.proxy ? 0 : -1 },
   };
 }
 
@@ -142,12 +146,14 @@ export function recordEdit(state: SyncState, local: Local, now: number): SyncSta
   }
   const promptChanged = prompt !== state.prompt.value;
   const switched = local.syncKeys !== state.syncKeys.value;
-  if (!changed && !promptChanged && !switched) return null;
+  const proxyChanged = local.proxy !== state.proxy.value;
+  if (!changed && !promptChanged && !switched && !proxyChanged) return null;
   return {
     terms,
     prompt: promptChanged ? { value: prompt, at: now } : state.prompt,
     keys,
     syncKeys: switched ? { value: local.syncKeys, at: now } : state.syncKeys,
+    proxy: proxyChanged ? { value: local.proxy, at: now } : state.proxy,
   };
 }
 
@@ -165,7 +171,7 @@ function laterValue(a: Stamped<string>, b: Stamped<string>): Stamped<string> {
 
 /**
  * Both histories in one: the later change of each term and value. Order: `local`'s, then new ones.
- * While keys aren't synced, `local` keeps its own and takes none from `remote`.
+ * While keys aren't synced, `local` keeps its own keys and proxy and takes none from `remote`.
  */
 export function mergeStates(local: SyncState, remote: SyncState): SyncState {
   const theirs = new Map(remote.terms.map((t) => [t.term, t]));
@@ -182,13 +188,17 @@ export function mergeStates(local: SyncState, remote: SyncState): SyncState {
   if (syncKeys.value) {
     for (const [provider, key] of Object.entries(remote.keys)) keys[provider] = keys[provider] ? laterValue(keys[provider], key) : key;
   }
-  return { terms, prompt: laterValue(local.prompt, remote.prompt), keys, syncKeys };
+  const proxy = syncKeys.value ? laterValue(local.proxy, remote.proxy) : local.proxy;
+  return { terms, prompt: laterValue(local.prompt, remote.prompt), keys, syncKeys, proxy };
 }
 
-/** What goes into the synced file: no keys while the switch is off. */
+/** What goes into the synced file: no keys and no proxy while the switch is off. */
 export function shared(state: SyncState): SyncState {
-  return state.syncKeys.value ? state : { ...state, keys: {} };
+  return state.syncKeys.value ? state : { ...state, keys: {}, proxy: NO_PROXY };
 }
+
+/** The proxy of a file without one: an untouched default. */
+const NO_PROXY: Stamped<string> = { value: "", at: -1 };
 
 /** Same content, whatever the order: nothing to upload or apply. */
 export function sameState(a: SyncState, b: SyncState): boolean {
@@ -202,18 +212,24 @@ export function sameState(a: SyncState, b: SyncState): boolean {
         .map(([provider, key]) => [provider, key.value, key.at]),
       s.syncKeys.value,
       s.syncKeys.at,
+      s.proxy.value,
+      s.proxy.at,
     ]);
   return key(a) === key(b);
 }
 
 /** The synced file's content. */
 export function serializeState(state: SyncState): string {
-  return JSON.stringify({ version: 1, terms: state.terms, prompt: state.prompt, keys: state.keys, syncKeys: state.syncKeys });
+  // Still version 1: an older Ciao reads the file and ignores the proxy (an upload of its drops it,
+  // and the next one from a newer Ciao puts it back). No proxy is left out, as in such a file.
+  const proxy = state.proxy.at === NO_PROXY.at && !state.proxy.value ? {} : { proxy: state.proxy };
+  return JSON.stringify({ version: 1, terms: state.terms, prompt: state.prompt, keys: state.keys, syncKeys: state.syncKeys, ...proxy });
 }
 
 /**
  * The synced file read back; null if it isn't one (a newer format, or damaged). A file from before
- * keys were synced has no `keys` and no `syncKeys`: an untouched default then.
+ * keys were synced has no `keys` and no `syncKeys`, one from before the proxy no `proxy`: an
+ * untouched default then.
  */
 export function parseState(text: string): SyncState | null {
   try {
@@ -223,6 +239,7 @@ export function parseState(text: string): SyncState | null {
       prompt?: { value?: unknown; at?: unknown };
       keys?: Record<string, { value?: unknown; at?: unknown }>;
       syncKeys?: { value?: unknown; at?: unknown };
+      proxy?: { value?: unknown; at?: unknown };
     };
     if (raw.version !== 1 || !Array.isArray(raw.terms) || typeof raw.prompt?.value !== "string" || typeof raw.prompt.at !== "number") return null;
     const terms: TermChange[] = [];
@@ -243,7 +260,12 @@ export function parseState(text: string): SyncState | null {
       if (typeof raw.syncKeys?.value !== "boolean" || typeof raw.syncKeys.at !== "number") return null;
       syncKeys = { value: raw.syncKeys.value, at: raw.syncKeys.at };
     }
-    return { terms, prompt: { value: raw.prompt.value, at: raw.prompt.at }, keys, syncKeys };
+    let proxy = NO_PROXY;
+    if (raw.proxy !== undefined) {
+      if (typeof raw.proxy?.value !== "string" || typeof raw.proxy.at !== "number") return null;
+      proxy = { value: raw.proxy.value, at: raw.proxy.at };
+    }
+    return { terms, prompt: { value: raw.prompt.value, at: raw.prompt.at }, keys, syncKeys, proxy };
   } catch {
     return null;
   }

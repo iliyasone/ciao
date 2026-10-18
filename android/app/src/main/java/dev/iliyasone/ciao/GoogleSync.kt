@@ -228,6 +228,7 @@ object GoogleSync {
                     prefs.syncKeys = merged.syncKeys.value
                     merged.keys["openai"]?.let { prefs.apiKey = it.value }
                     merged.keys["gemini"]?.let { prefs.geminiKey = it.value }
+                    prefs.proxy = merged.proxy.value
                     main.post { applied?.invoke() }
                 }
                 prefs.syncState = Sync.serialize(merged)
@@ -237,8 +238,8 @@ object GoogleSync {
             if (remote == null || !Sync.sameState(out, remote) || ids.size > 1) {
                 val json = "application/json".toMediaType()
                 val body = Sync.serialize(out).toRequestBody(json)
-                // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys in them) for a while.
-                val replace = remote != null && remote.keys.isNotEmpty() && out.keys.isEmpty()
+                // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys and the proxy's password in them) for a while.
+                val replace = remote != null && ((remote.keys.isNotEmpty() && out.keys.isEmpty()) || (remote.proxy.value.isNotEmpty() && out.proxy.value.isEmpty()))
                 if (ids.isNotEmpty() && !replace) {
                     drive(Request.Builder().url("$UPLOAD/${ids[0]}?uploadType=media").patch(body))
                 } else {

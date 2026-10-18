@@ -222,8 +222,8 @@ export class GoogleSync {
       const out = shared(merged);
       if (!remote || !sameState(out, remote) || extra.length) {
         const body = serializeState(out);
-        // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys in them) for a while.
-        const replace = !!remote && Object.keys(remote.keys).length > 0 && Object.keys(out.keys).length === 0;
+        // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys and the proxy's password in them) for a while.
+        const replace = !!remote && ((Object.keys(remote.keys).length > 0 && Object.keys(out.keys).length === 0) || (!!remote.proxy.value && !out.proxy.value));
         if (first && !replace) {
           await this.drive(`${UPLOAD}/${first.id}?uploadType=media`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
         } else {

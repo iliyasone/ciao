@@ -110,6 +110,7 @@
             style="@style/Section"
             android:text="@string/section_setup" />
 
+        <!-- The services side by side with what they cost, the key of the one in use, the proxy (MainActivity.showProvider). -->
         <LinearLayout style="@style/Card">
 
             <TextView
@@ -128,34 +129,18 @@
                 android:orientation="vertical">
 
                 <RadioButton
-                    android:id="@+id/providerOpenai"
-                    style="@style/Toggle"
-                    android:text="@string/provider_openai" />
+                    android:id="@+id/providerGemini"
+                    style="@style/Toggle" />
 
                 <RadioButton
-                    android:id="@+id/providerGemini"
-                    style="@style/Toggle"
-                    android:text="@string/provider_gemini" />
+                    android:id="@+id/providerOpenai"
+                    style="@style/Toggle" />
             </RadioGroup>
-
-            <!-- Right under the service, as on the desktop: Gemini only (MainActivity.showProvider). -->
-            <Switch
-                android:id="@+id/smart"
-                style="@style/Toggle"
-                android:text="@string/smart" />
-
-            <TextView
-                android:id="@+id/smartHint"
-                style="@style/CardText"
-                android:layout_marginTop="0dp"
-                android:text="@string/smart_hint" />
-        </LinearLayout>
-
-        <LinearLayout style="@style/Card">
 
             <TextView
                 android:id="@+id/keyTitle"
-                style="@style/CardTitle" />
+                style="@style/CardTitle"
+                android:layout_marginTop="12dp" />
 
             <TextView
                 android:id="@+id/keyText"
@@ -167,6 +152,29 @@
                 android:importantForAutofill="no"
                 android:inputType="textPassword"
                 android:singleLine="true" />
+
+            <TextView
+                style="@style/CardTitle"
+                android:layout_marginTop="12dp"
+                android:text="@string/proxy_title" />
+
+            <TextView
+                android:id="@+id/proxyText"
+                style="@style/CardText" />
+
+            <EditText
+                android:id="@+id/proxy"
+                style="@style/Field"
+                android:hint="@string/proxy_hint"
+                android:imeOptions="flagNoPersonalizedLearning"
+                android:importantForAutofill="no"
+                android:inputType="textUri|textNoSuggestions"
+                android:singleLine="true" />
+
+            <Button
+                android:id="@+id/proxyRemove"
+                style="@style/Action"
+                android:text="@string/proxy_remove" />
         </LinearLayout>
 
         <LinearLayout style="@style/Card">

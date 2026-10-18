@@ -26,28 +26,63 @@ class UiTest {
         val prefs = Prefs(RuntimeEnvironment.getApplication())
         prefs.apiKey = "sk-openai"
         prefs.geminiKey = "AQ.gemini"
-        RuntimeEnvironment.getApplication().getSharedPreferences("ciao", 0).edit().putBoolean("smart", true).commit()
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
-        val key = activity.findViewById<EditText>(R.id.apiKey)
-        assertEquals("sk-openai", key.text.toString())
-        assertEquals(View.GONE, activity.findViewById<Switch>(R.id.smart).visibility)
-
-        activity.findViewById<RadioButton>(R.id.providerGemini).performClick()
+        // None picked yet: Gemini, the cheaper, listed first with its price.
         assertEquals(Provider.GEMINI, prefs.provider)
+        assertEquals("Google Gemini · ≈ $0.54 per hour of speech", activity.findViewById<RadioButton>(R.id.providerGemini).text.toString())
+        val key = activity.findViewById<EditText>(R.id.apiKey)
         assertEquals("AQ.gemini", key.text.toString())
-        // Smart mode is off by default, also where the older "smart" key was saved on, and the switch turns it on.
-        val smart = activity.findViewById<Switch>(R.id.smart)
-        assertEquals(View.VISIBLE, smart.visibility)
-        assertEquals(false, smart.isChecked)
-        smart.performClick()
-        assertEquals(true, prefs.smart)
         assertEquals("✓  Gemini API key", activity.findViewById<TextView>(R.id.keyTitle).text.toString())
 
-        // Each service keeps its own key.
-        key.setText("AQ.other")
         activity.findViewById<RadioButton>(R.id.providerOpenai).performClick()
+        assertEquals(Provider.OPENAI, prefs.provider)
         assertEquals("sk-openai", key.text.toString())
-        assertEquals("AQ.other", prefs.geminiKey)
+
+        // Each service keeps its own key.
+        key.setText("sk-other")
+        activity.findViewById<RadioButton>(R.id.providerGemini).performClick()
+        assertEquals("AQ.gemini", key.text.toString())
+        assertEquals("sk-other", prefs.apiKey)
+    }
+
+    @Test
+    fun oldInstallWithOnlyAnOpenAIKeyStaysOnIt() {
+        val prefs = Prefs(RuntimeEnvironment.getApplication())
+        prefs.apiKey = "sk-openai"
+        assertEquals(Provider.OPENAI, prefs.provider)
+        prefs.geminiKey = "AQ.gemini" // arriving later, through sync
+        assertEquals(Provider.OPENAI, prefs.provider)
+    }
+
+    @Test
+    fun savesTheProxyOnceItReadsAsOne() {
+        val prefs = Prefs(RuntimeEnvironment.getApplication())
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val field = activity.findViewById<EditText>(R.id.proxy)
+        val status = activity.findViewById<TextView>(R.id.proxyText)
+        val remove = activity.findViewById<android.widget.Button>(R.id.proxyRemove)
+        assertEquals(true, status.text.startsWith("Direct, no proxy."))
+        assertEquals(View.GONE, remove.visibility)
+        field.setText("ciao:secret@")
+        assertEquals("", prefs.proxy)
+        assertEquals(true, status.text.startsWith("That doesn't look like a proxy"))
+        field.setText("ciao:secret@212.118.40.237:43129")
+        assertEquals("http://ciao:secret@212.118.40.237:43129", prefs.proxy)
+        // Shown without the password.
+        assertEquals(true, status.text.startsWith("Through ciao@212.118.40.237:43129."))
+        assertEquals(false, status.text.contains("secret"))
+        remove.performClick()
+        assertEquals("", prefs.proxy)
+        assertEquals("", field.text.toString())
+        assertEquals(true, status.text.startsWith("Direct, no proxy."))
+    }
+
+    @Test
+    fun aSavedProxyShowsWithoutItsPassword() {
+        Prefs(RuntimeEnvironment.getApplication()).proxy = "http://ciao:secret@212.118.40.237:43129"
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        assertEquals("", activity.findViewById<EditText>(R.id.proxy).text.toString())
+        assertEquals(true, activity.findViewById<TextView>(R.id.proxyText).text.startsWith("Through ciao@212.118.40.237:43129."))
     }
 
     @Test
