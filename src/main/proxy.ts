@@ -2,6 +2,7 @@ import type { Agent } from "node:http";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { ProxyAgent } from "undici";
 import { parseProxy } from "../core/proxy";
+import type { ProxyCheck } from "../core/types";
 
 // The connection to the transcription services (OpenAI, Gemini) may go through an HTTP proxy
 // (Settings.proxy): Gemini refuses some countries, and a proxy elsewhere lets it in. Only these
@@ -27,6 +28,25 @@ export function setProxy(url: string): void {
  */
 export const apiFetch: typeof fetch = (input, init) =>
   fetch(input, current ? ({ ...init, dispatcher: current.dispatcher } as RequestInit) : init);
+
+/**
+ * Asks Gemini for its models through the proxy now set, without a key: any answer from Google means
+ * the way through works; a 407 is the proxy refusing the login. As ApiProxy.check on Android.
+ */
+export async function checkProxy(): Promise<ProxyCheck> {
+  const started = Date.now();
+  try {
+    const res = await apiFetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", { signal: AbortSignal.timeout(15_000) });
+    await res.body?.cancel();
+    return { ok: true, ms: Date.now() - started };
+  } catch (e) {
+    // The reason sits down the chain: fetch failed ← Request was cancelled ← "Proxy response (407) !== 200 when HTTP Tunneling".
+    const chain: string[] = [];
+    for (let x = e as (Error & { cause?: unknown }) | undefined; x instanceof Error; x = x.cause as typeof x) chain.push(x.message);
+    const reason = chain.at(-1) ?? String(e);
+    return { ok: false, badLogin: chain.some((m) => /\(407\)/.test(m)), reason };
+  }
+}
 
 /** The agent a WebSocket to a transcription service connects through; undefined = direct. */
 export function wsAgent(): Agent | undefined {

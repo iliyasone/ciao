@@ -55,26 +55,34 @@ class UiTest {
     }
 
     @Test
-    fun savesTheProxyOnceItReadsAsOne() {
+    fun savesTheProxyWithSave() {
         val prefs = Prefs(RuntimeEnvironment.getApplication())
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         val field = activity.findViewById<EditText>(R.id.proxy)
-        val status = activity.findViewById<TextView>(R.id.proxyText)
+        val status = activity.findViewById<TextView>(R.id.proxyStatus)
+        val save = activity.findViewById<android.widget.Button>(R.id.proxySave)
         val remove = activity.findViewById<android.widget.Button>(R.id.proxyRemove)
-        assertEquals(true, status.text.startsWith("Direct, no proxy."))
+        assertEquals("No proxy: requests go direct.", status.text.toString())
         assertEquals(View.GONE, remove.visibility)
+        assertEquals(false, save.isEnabled)
         field.setText("ciao:secret@")
-        assertEquals("", prefs.proxy)
-        assertEquals(true, status.text.startsWith("That doesn't look like a proxy"))
+        assertEquals(false, save.isEnabled)
+        assertEquals(true, status.text.contains("That doesn't look like a proxy"))
+        // Typing alone saves nothing.
         field.setText("ciao:secret@212.118.40.237:43129")
+        assertEquals("", prefs.proxy)
+        assertEquals(true, save.isEnabled)
+        save.performClick()
         assertEquals("http://ciao:secret@212.118.40.237:43129", prefs.proxy)
-        // Shown without the password.
-        assertEquals(true, status.text.startsWith("Through ciao@212.118.40.237:43129."))
+        assertEquals("", field.text.toString())
+        // Shown without the password, with the check started.
+        assertEquals(true, status.text.startsWith("Proxy on: ciao@212.118.40.237:43129."))
+        assertEquals(true, status.text.contains("Checking ciao@212.118.40.237:43129"))
         assertEquals(false, status.text.contains("secret"))
+        assertEquals(View.VISIBLE, remove.visibility)
         remove.performClick()
         assertEquals("", prefs.proxy)
-        assertEquals("", field.text.toString())
-        assertEquals(true, status.text.startsWith("Direct, no proxy."))
+        assertEquals("No proxy: requests go direct.", status.text.toString())
     }
 
     @Test
@@ -82,7 +90,7 @@ class UiTest {
         Prefs(RuntimeEnvironment.getApplication()).proxy = "http://ciao:secret@212.118.40.237:43129"
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         assertEquals("", activity.findViewById<EditText>(R.id.proxy).text.toString())
-        assertEquals(true, activity.findViewById<TextView>(R.id.proxyText).text.startsWith("Through ciao@212.118.40.237:43129."))
+        assertEquals("Proxy on: ciao@212.118.40.237:43129.", activity.findViewById<TextView>(R.id.proxyStatus).text.toString())
     }
 
     @Test

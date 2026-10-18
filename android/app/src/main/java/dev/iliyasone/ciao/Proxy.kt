@@ -35,6 +35,29 @@ object ApiProxy {
         return ProxyAddress("http://$auth$host:${uri.port}", host, uri.port, decode(user), decode(password))
     }
 
+    sealed interface Check {
+        data class Works(val ms: Long) : Check
+        data object BadLogin : Check
+        data class Failed(val reason: String) : Check
+    }
+
+    /**
+     * Blocking. Asks Gemini for its models through the proxy now set, without a key: any answer from
+     * Google means the way through works; 407 is the proxy refusing the login. As checkProxy on the desktop.
+     */
+    fun check(context: Context): Check {
+        val started = System.nanoTime()
+        val request = okhttp3.Request.Builder().url("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1").build()
+        return try {
+            client(context).newBuilder().callTimeout(15, java.util.concurrent.TimeUnit.SECONDS).build().newCall(request).execute().use {
+                if (it.code == 407) Check.BadLogin else Check.Works((System.nanoTime() - started) / 1_000_000)
+            }
+        } catch (e: java.io.IOException) {
+            // OkHttp gives up on a refused login with "Failed to authenticate with proxy".
+            if (e.message?.contains("authenticate with proxy") == true) Check.BadLogin else Check.Failed(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
     private var cached: Pair<String, OkHttpClient>? = null
 
     /** The client for requests to OpenAI and Gemini: through the proxy when one is set. */
