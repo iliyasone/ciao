@@ -274,7 +274,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Proxy** (*Settings → Who transcribes → Proxy*, on every platform and on
   Android). Requests to OpenAI and Gemini, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
-  country. Sync, updates and telemetry go direct. The proxy syncs through Google
+  country. Paste it, press *Save*, and *Check* (run on its own after a save) says
+  whether Gemini answers through it, or that the proxy refused the login or can't be
+  reached; *Remove* goes back to direct. The proxy in use shows without its
+  password. Sync, updates and telemetry go direct. The proxy syncs through Google
   along with the API keys (and not while *Sync API keys* is off). A proxy that
   can't be reached fails a dictation as when offline ("Couldn't reach …"), and the
   audio is kept.

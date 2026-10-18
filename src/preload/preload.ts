@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, TermSuggestion, UpdateState } from "../core/types";
+import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, TermSuggestion, UpdateState, ProxyCheck } from "../core/types";
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
@@ -82,6 +82,8 @@ const api = {
     /** A corrected word was added to the terms from a suggestion. */
     onTermAdded: (cb: (term: string) => void) => on("settings:term-added", cb),
     hasApiKey: (provider: Provider): Promise<boolean> => ipcRenderer.invoke("settings:has-key", provider),
+    /** Checks a proxy (src/main/proxy.ts). */
+    checkProxy: (url: string): Promise<ProxyCheck> => ipcRenderer.invoke("settings:check-proxy", url),
     /** A key was saved, here or on another device (through sync). */
     onKeys: (cb: () => void) => on("settings:keys", cb),
     wakeAvailable: (): Promise<boolean> => ipcRenderer.invoke("settings:wake-available"),

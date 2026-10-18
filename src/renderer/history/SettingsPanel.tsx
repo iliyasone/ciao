@@ -4,7 +4,7 @@ import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } 
 import type { Strings } from "../../core/i18n";
 import { pricePerMinute } from "../../core/cost";
 import { models, PROVIDERS } from "../../core/providers";
-import { parseProxy, proxyLabel } from "../../core/proxy";
+import { parseProxy, proxyLabel, type ProxyAddress } from "../../core/proxy";
 import { DELAYS, type Lang, type Provider, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
 import { useStrings } from "../lang";
 import { errorText, listMics, openMicStream, trackName } from "../mic";
@@ -335,39 +335,73 @@ function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }
 /** The proxy: shown without its password; typed in anew to change it. */
 function ProxyRow({ value, onChange }: { value: string; onChange: (proxy: string) => void }) {
   const [typed, setTyped] = useState("");
+  /** The last check of the proxy in use (its address), or null before one. */
+  const [check, setCheck] = useState<{ href: string; text: string } | null>(null);
   const strings = useStrings().settings;
   const tr = strings.providers;
   const current = parseProxy(value);
   const parsed = parseProxy(typed);
   const invalid = typed.trim() !== "" && !parsed;
-  const hint = invalid ? tr.proxyInvalid : `${current ? tr.proxyVia(proxyLabel(current)) : tr.proxyNone} ${tr.proxyHint}`;
+  // Removed (here or by a sync): a check of an earlier proxy isn't shown if it comes back.
+  useEffect(() => {
+    if (!value) setCheck(null);
+  }, [value]);
+
+  const runCheck = async (proxy: ProxyAddress) => {
+    setCheck({ href: proxy.href, text: tr.proxyChecking(proxyLabel(proxy)) });
+    const r = await ciao.settings.checkProxy(proxy.href);
+    const text = r.ok ? tr.proxyWorks(r.ms) : r.badLogin ? tr.proxyBadLogin : tr.proxyFailed(r.reason);
+    setCheck((c) => (c?.href === proxy.href ? { href: proxy.href, text } : c));
+  };
+
+  const status = [
+    current ? tr.proxyVia(proxyLabel(current)) : tr.proxyNone,
+    check && check.href === current?.href ? check.text : "",
+    invalid ? tr.proxyInvalid : "",
+  ].filter(Boolean);
   return (
-    <Row label={tr.proxy} hint={hint}>
-      <div className="flex shrink-0 items-center gap-2">
+    <Field label={tr.proxy} hint={tr.proxyHint}>
+      <div className="flex flex-col gap-1 text-[12.5px] text-fg">
+        {status.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
         <input
           value={typed}
           placeholder="http://user:password@host:port"
           onChange={(e) => setTyped(e.target.value)}
-          className={`${INPUT} w-56`}
+          className={`${INPUT} min-w-0 flex-1`}
         />
-        {typed.trim() || !current ? (
+        <button
+          disabled={!parsed || parsed.href === current?.href}
+          onClick={() => {
+            onChange(parsed!.href);
+            setTyped("");
+            void runCheck(parsed!);
+          }}
+          className={BUTTON}
+        >
+          {strings.apiKey.save}
+        </button>
+        {current && (
+          <button onClick={() => void runCheck(current)} className={BUTTON}>
+            {tr.proxyCheck}
+          </button>
+        )}
+        {current && (
           <button
-            disabled={!parsed}
             onClick={() => {
-              onChange(parsed!.href);
-              setTyped("");
+              onChange("");
+              setCheck(null);
             }}
             className={BUTTON}
           >
-            {strings.apiKey.save}
-          </button>
-        ) : (
-          <button onClick={() => onChange("")} className={BUTTON}>
             {tr.proxyRemove}
           </button>
         )}
       </div>
-    </Row>
+    </Field>
   );
 }
 

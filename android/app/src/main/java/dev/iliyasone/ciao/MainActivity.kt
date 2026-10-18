@@ -21,6 +21,7 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,15 +56,22 @@ class MainActivity : Activity() {
             findViewById<RadioButton>(id).text = getString(R.string.provider_option, name, "$" + String.format(Locale.US, "%.2f", p.pricePerMinute * 60))
         }
         showProvider()
-        // As on the desktop, the saved proxy shows without its password; a new one is typed in anew
-        // and saved once it reads as a proxy.
-        bindText(R.id.proxy, "") { s ->
-            ApiProxy.parse(s)?.let { if (it.href != prefs.proxy) GoogleSync.edit(this) { p -> p.proxy = it.href } }
-            showProxy(s)
+        // As on the desktop: the saved proxy shows without its password; a new one is typed in, saved
+        // with Save, and checked right away.
+        bindText(R.id.proxy, "") { s -> showProxy(s) }
+        findViewById<Button>(R.id.proxySave).setOnClickListener {
+            val field = findViewById<EditText>(R.id.proxy)
+            val parsed = ApiProxy.parse(field.text.toString()) ?: return@setOnClickListener
+            GoogleSync.edit(this) { it.proxy = parsed.href }
+            field.setText("")
+            Toast.makeText(this, R.string.proxy_saved, Toast.LENGTH_SHORT).show()
+            checkProxy()
         }
+        findViewById<Button>(R.id.proxyCheck).setOnClickListener { checkProxy() }
         findViewById<Button>(R.id.proxyRemove).setOnClickListener {
             GoogleSync.edit(this) { it.proxy = "" }
             findViewById<EditText>(R.id.proxy).setText("")
+            proxyResult = null
             showProxy("")
         }
         showProxy("")
@@ -128,15 +136,41 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.version).text = getString(R.string.version, packageManager.getPackageInfo(packageName, 0).versionName)
     }
 
-    /** The saved proxy, or what's wrong with the one being typed. */
+    /** What the last check of the proxy in use found, for that proxy (href); null before one. */
+    private var proxyResult: Pair<String, String>? = null
+
+    /** Checks the saved proxy off the main thread and shows what it found. */
+    private fun checkProxy() {
+        val saved = ApiProxy.parse(prefs.proxy) ?: return
+        proxyResult = saved.href to getString(R.string.proxy_checking, saved.label)
+        showProxy(findViewById<EditText>(R.id.proxy).text.toString())
+        val app = applicationContext
+        Thread {
+            val text = when (val r = ApiProxy.check(app)) {
+                is ApiProxy.Check.Works -> getString(R.string.proxy_works, r.ms)
+                ApiProxy.Check.BadLogin -> getString(R.string.proxy_bad_login)
+                is ApiProxy.Check.Failed -> getString(R.string.proxy_failed, r.reason)
+            }
+            runOnUiThread {
+                if (isDestroyed || prefs.proxy != saved.href) return@runOnUiThread
+                proxyResult = saved.href to text
+                showProxy(findViewById<EditText>(R.id.proxy).text.toString())
+            }
+        }.start()
+    }
+
+    /** The proxy in use and its last check, or what's wrong with the one being typed; buttons to match. */
     private fun showProxy(typed: String) {
         val saved = ApiProxy.parse(prefs.proxy)
-        val status = when {
-            typed.isNotBlank() && ApiProxy.parse(typed) == null -> getString(R.string.proxy_invalid)
-            saved == null -> getString(R.string.proxy_none)
-            else -> getString(R.string.proxy_via, saved.label)
-        }
-        findViewById<TextView>(R.id.proxyText).text = "$status ${getString(R.string.proxy_text)}"
+        // Removed (here or by a sync): a check of an earlier proxy isn't shown if it comes back.
+        if (saved == null) proxyResult = null
+        val parsed = ApiProxy.parse(typed)
+        val lines = mutableListOf(if (saved == null) getString(R.string.proxy_none) else getString(R.string.proxy_via, saved.label))
+        proxyResult?.takeIf { it.first == saved?.href }?.let { lines += it.second }
+        if (typed.isNotBlank() && parsed == null) lines += getString(R.string.proxy_invalid)
+        findViewById<TextView>(R.id.proxyStatus).text = lines.joinToString("\n")
+        findViewById<Button>(R.id.proxySave).isEnabled = parsed != null && parsed.href != prefs.proxy
+        findViewById<Button>(R.id.proxyCheck).visibility = if (saved != null) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.proxyRemove).visibility = if (saved != null) View.VISIBLE else View.GONE
     }
 

@@ -19,10 +19,17 @@
     <string name="key_hint_gemini" translatable="false">AQ.…</string>
     <string name="proxy_title">Proxy</string>
     <string name="proxy_text">Requests to the service go through it, for when Gemini isn\'t available in your country. HTTP only. Synced along with the keys.</string>
-    <string name="proxy_remove">Remove proxy</string>
-    <string name="proxy_none">Direct, no proxy.</string>
-    <string name="proxy_via">Through %1$s.</string>
+    <string name="proxy_remove">Remove</string>
+    <string name="proxy_save">Save</string>
+    <string name="proxy_check">Check</string>
+    <string name="proxy_none">No proxy: requests go direct.</string>
+    <string name="proxy_via">Proxy on: %1$s.</string>
     <string name="proxy_invalid">That doesn\'t look like a proxy: it takes http://user:password@host:port.</string>
+    <string name="proxy_saved">Proxy saved.</string>
+    <string name="proxy_checking">Checking %1$s…</string>
+    <string name="proxy_works">✓ The proxy works: Gemini answered through it in %1$d ms.</string>
+    <string name="proxy_bad_login">✗ The proxy refused the login: the user name or password is wrong.</string>
+    <string name="proxy_failed">✗ Can\'t get through the proxy: %1$s</string>
     <string name="proxy_hint" translatable="false">http://user:password@host:port</string>
     <string name="mic_title">Microphone</string>
     <string name="mic_text">Recording starts only when you tap the Ciao button and stops when you finish.</string>

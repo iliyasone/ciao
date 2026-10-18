@@ -158,9 +158,15 @@
                 android:layout_marginTop="12dp"
                 android:text="@string/proxy_title" />
 
+            <!-- What is in use now, and what the last check found (MainActivity.showProxy). -->
             <TextView
-                android:id="@+id/proxyText"
-                style="@style/CardText" />
+                android:id="@+id/proxyStatus"
+                style="@style/CardText"
+                android:textColor="@color/fg" />
+
+            <TextView
+                style="@style/CardText"
+                android:text="@string/proxy_text" />
 
             <EditText
                 android:id="@+id/proxy"
@@ -171,10 +177,28 @@
                 android:inputType="textUri|textNoSuggestions"
                 android:singleLine="true" />
 
-            <Button
-                android:id="@+id/proxyRemove"
-                style="@style/Action"
-                android:text="@string/proxy_remove" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/proxySave"
+                    style="@style/Action"
+                    android:text="@string/proxy_save" />
+
+                <Button
+                    android:id="@+id/proxyCheck"
+                    style="@style/Action"
+                    android:layout_marginStart="12dp"
+                    android:text="@string/proxy_check" />
+
+                <Button
+                    android:id="@+id/proxyRemove"
+                    style="@style/Action"
+                    android:layout_marginStart="12dp"
+                    android:text="@string/proxy_remove" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout style="@style/Card">

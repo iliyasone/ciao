@@ -173,6 +173,9 @@ export type UpdateState =
   | { phase: "installing"; current: string; version: string }
   | { phase: "error"; current: string; message: string; version?: string };
 
+/** What checking the proxy found (src/main/proxy.ts checkProxy). */
+export type ProxyCheck = { ok: true; ms: number } | { ok: false; badLogin: boolean; reason: string };
+
 /** Syncing terms and the prompt through Google Drive (src/main/sync.ts). */
 export interface SyncStatus {
   /** False in a build without Google's OAuth client: the Sync card is hidden. */
