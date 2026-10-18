@@ -3,6 +3,8 @@ import type { Provider, Settings } from "./types";
 /** Who transcribes: the models each provider uses, and where its API key lives. */
 export interface ProviderInfo {
   name: string;
+  /** Who runs it, shown next to the name in Settings. */
+  company: string;
   /** Streams while you speak. */
   liveModel: string;
   /** Re-transcribes a whole recording ("More accurate", and when the live transcript failed). */
@@ -13,22 +15,25 @@ export interface ProviderInfo {
   keyPlaceholder: string;
 }
 
+/** In the order Settings lists them: the cheaper first. */
 export const PROVIDERS: Record<Provider, ProviderInfo> = {
-  openai: {
-    name: "OpenAI",
-    liveModel: "gpt-live-transcribe",
-    fileModel: "gpt-transcribe",
-    keyEnv: "OPENAI_API_KEY",
-    keyFile: "openai-key.txt",
-    keyPlaceholder: "sk-…",
-  },
   gemini: {
     name: "Gemini",
+    company: "Google",
     liveModel: "gemini-3.5-transcribe-live",
     fileModel: "gemini-3.5-transcribe",
     keyEnv: "GEMINI_API_KEY",
     keyFile: "gemini-key.txt",
     keyPlaceholder: "AQ.…",
+  },
+  openai: {
+    name: "OpenAI",
+    company: "OpenAI",
+    liveModel: "gpt-live-transcribe",
+    fileModel: "gpt-transcribe",
+    keyEnv: "OPENAI_API_KEY",
+    keyFile: "openai-key.txt",
+    keyPlaceholder: "sk-…",
   },
 };
 

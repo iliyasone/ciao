@@ -39,14 +39,14 @@ object GeminiEndpoint {
      * with no answer to go by (a 5xx) counts as AI Studio this once. Mirrors geminiEndpoint in
      * src/main/transcribe.ts.
      */
-    fun vertexProject(key: String): String? {
+    fun vertexProject(context: Context, key: String): String? {
         known[key]?.let { return it.ifEmpty { null } }
         val request = Request.Builder()
             .url("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
             .header("x-goog-api-key", key)
             .build()
         // Every live session and file transcription waits for this: a stalled request must not hold them.
-        val call = http.newCall(request).apply { timeout().timeout(10, TimeUnit.SECONDS) }
+        val call = ApiProxy.client(context).newCall(request).apply { timeout().timeout(10, TimeUnit.SECONDS) }
         val found = call.execute().use { parse(it.code, it.body?.string() ?: "") } ?: return null
         known[key] = found
         return found.ifEmpty { null }
@@ -80,9 +80,8 @@ object GeminiEndpoint {
  *
  * The turn is ours, not the server's: automatic voice detection is off, so a pause to think doesn't
  * end the dictation; configure() starts the turn and commit() ends it. While you speak the server
- * sends interim guesses, each replacing the last, and a final transcript per finished segment; in
- * smart mode the finals drop fillers and false starts and apply spoken corrections ("в два, нет, в
- * три" → "в три"), so a final may differ from the guesses before it.
+ * sends interim guesses, each replacing the last, and a final transcript per finished segment, which
+ * may differ from the guesses before it.
  *
  * The server ends an activity on its own about 220 s after it started and ignores the audio after
  * that, so a long dictation is cut into several, each with its own final: [ROLL_AFTER_MS] into one,
@@ -93,8 +92,7 @@ object GeminiEndpoint {
  * Vertex AI speaks the same protocol at another address, with the model named by its full path; the
  * socket opens once [GeminiEndpoint] knows which, and what is sent before waits in [pending].
  *
- * Never send language codes along with smart mode: on Gemini's transcription endpoints that silently
- * turns smart mode off. Without them the language is detected per utterance.
+ * No language codes are sent: without them the language is detected per utterance.
  *
  * Everything the socket reports is handled on the main thread, so the state needs no locks, except
  * what [append] shares from the recorder's thread: that is under [lock].
@@ -140,7 +138,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     init {
         Thread {
             val project = try {
-                Result.success(GeminiEndpoint.vertexProject(apiKey))
+                Result.success(GeminiEndpoint.vertexProject(context, apiKey))
             } catch (e: IOException) {
                 Result.failure(e)
             }
@@ -154,7 +152,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     private fun open(project: String?) {
         vertexProject = project
         // The key goes in a header, not ?key=: query strings end up in logs.
-        val ws = http.newWebSocket(
+        val ws = ApiProxy.client(context).newWebSocket(
             Request.Builder().url(if (project != null) GeminiEndpoint.VERTEX_LIVE_URL else URL).header("x-goog-api-key", apiKey).build(),
             object : WebSocketListener() {
                 override fun onMessage(webSocket: WebSocket, text: String) {
@@ -191,7 +189,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     override val queued: Long get() = synchronized(lock) { socket?.queueSize() ?: pendingBytes }
 
     override fun configure(prefs: Prefs) {
-        val transcription = JSONObject().put("mode", if (prefs.smart) "SMART" else "VERBATIM")
+        val transcription = JSONObject().put("mode", "VERBATIM")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) transcription.put("customVocabulary", JSONArray(terms))
         val setup = JSONObject()

@@ -2,12 +2,12 @@ import { ArrowDownToLine, Check, Cloud, KeyRound, Loader2, Mic, Monitor, Moon, M
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
 import type { Strings } from "../../core/i18n";
+import { pricePerMinute } from "../../core/cost";
 import { models, PROVIDERS } from "../../core/providers";
+import { parseProxy, proxyLabel } from "../../core/proxy";
 import { DELAYS, type Lang, type Provider, type Settings, type SyncStatus, type Theme, type UpdateState } from "../../core/types";
 import { useStrings } from "../lang";
 import { errorText, listMics, openMicStream, trackName } from "../mic";
-
-const PROVIDER_OPTIONS: { value: Provider; label: string }[] = (Object.keys(PROVIDERS) as Provider[]).map((value) => ({ value, label: PROVIDERS[value].name }));
 
 const THEMES: { value: Theme; icon: typeof Sun }[] = [
   { value: "system", icon: Monitor },
@@ -41,7 +41,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     // Terms and context merged from another device replace what's shown here.
     const offSynced = ciao.settings.onSynced((synced) => {
       if (!latest.current) return;
-      latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt, syncKeys: synced.syncKeys };
+      latest.current = { ...latest.current, keywords: synced.keywords, prompt: synced.prompt, syncKeys: synced.syncKeys, proxy: synced.proxy };
       setS(latest.current);
     });
     // A word added from a suggestion joins the list as shown, so terms being typed aren't lost.
@@ -85,37 +85,13 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
       <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 pt-5 pb-16">
         <div className="h-4 text-right text-[12px] text-emerald-700 dark:text-emerald-400/80">{saved && <><Check className="mr-1 inline size-3.5" />{tr.saved}</>}</div>
 
-        <ApiKeyCard provider={s.provider} />
+        <ProvidersCard s={s} update={update} />
         <PermissionsCard />
         <SyncCard syncKeys={s.syncKeys} onSyncKeys={(syncKeys) => update({ syncKeys })} />
 
         <MicCard value={s.microphone} onChange={(microphone) => update({ microphone })} />
 
         <Card title={tr.recognition.title}>
-          <Row label={tr.recognition.provider} hint={tr.recognition.providerHint(models(s).live, models(s).file)}>
-            <Segmented value={s.provider} options={PROVIDER_OPTIONS} onChange={(provider) => update({ provider })} />
-          </Row>
-          {s.provider === "gemini" ? (
-            <Toggle label={tr.recognition.smart} hint={tr.recognition.smartHint} value={s.geminiSmart} onChange={(v) => update({ geminiSmart: v })} />
-          ) : (
-            <>
-              <Row label={tr.recognition.languages} hint={tr.recognition.languagesHint}>
-                <input
-                  value={s.languages.join(", ")}
-                  onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)}
-                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-                />
-              </Row>
-              <Field label={tr.recognition.context} hint={tr.recognition.contextHint}>
-                <textarea
-                  value={s.prompt}
-                  onChange={(e) => update({ prompt: e.target.value }, true)}
-                  rows={3}
-                  className="selectable w-full resize-none rounded-xl bg-tint/5 px-3 py-2 text-[13px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-                />
-              </Field>
-            </>
-          )}
           <Field label={tr.recognition.terms} hint={s.provider === "gemini" ? `${tr.recognition.termsHint} ${tr.recognition.geminiNote}` : tr.recognition.termsHint}>
             <textarea
               value={s.keywords.join("\n")}
@@ -235,47 +211,163 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   );
 }
 
-function ApiKeyCard({ provider }: { provider: Provider }) {
-  const [value, setValue] = useState("");
-  const [hasKey, setHasKey] = useState(true);
-  const tr = useStrings().settings.apiKey;
+const INPUT = "selectable rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20";
+const BUTTON = "rounded-lg bg-tint/10 px-3 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-tint/15 disabled:opacity-40";
+
+/**
+ * The transcription services, side by side with what they cost: the one in use with its key (and,
+ * for OpenAI, its own settings), the others one click away; then the proxy they are reached through.
+ */
+function ProvidersCard({ s, update }: { s: Settings; update: (patch: Partial<Settings>, debounce?: boolean) => void }) {
+  const strings = useStrings().settings;
+  const tr = strings.providers;
+  const hasKey = useHasKeys();
+  return (
+    <Card title={tr.title}>
+      <div className="px-4 pt-0.5 pb-3 text-[12px] text-faint">{tr.intro}</div>
+      {(Object.keys(PROVIDERS) as Provider[]).map((provider) => {
+        const info = PROVIDERS[provider];
+        const inUse = s.provider === provider;
+        const m = models({ ...s, provider });
+        return (
+          <div key={provider} className={inUse ? "bg-accent/[0.04]" : ""}>
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 text-[13.5px] text-fg">
+                  <span className="font-medium">{info.company === info.name ? info.name : `${info.company} ${info.name}`}</span>
+                  <span className="text-[12px] text-muted">{tr.perHour(`$${(pricePerMinute(m.live) * 60).toFixed(2)}`)}</span>
+                </div>
+                <div className="text-[12px] text-faint">
+                  {tr.models(m.live, m.file)}{" "}
+                  {!inUse && hasKey[provider] !== undefined && (
+                    <span className={hasKey[provider] ? "" : "text-amber-700 dark:text-amber-300"}>{hasKey[provider] ? tr.hasKey : tr.noKey}</span>
+                  )}
+                </div>
+              </div>
+              {inUse ? (
+                <span className="inline-flex shrink-0 items-center gap-1 text-[12.5px] text-emerald-700 dark:text-emerald-400">
+                  <Check className="size-3.5" />
+                  {tr.inUse}
+                </span>
+              ) : (
+                <button onClick={() => update({ provider })} className={`${BUTTON} shrink-0`}>
+                  {tr.use}
+                </button>
+              )}
+            </div>
+            {inUse && <ApiKeyRow provider={provider} hasKey={hasKey[provider] ?? true} />}
+            {inUse && provider === "openai" && (
+              <>
+                <Row label={strings.recognition.languages} hint={strings.recognition.languagesHint}>
+                  <input
+                    value={s.languages.join(", ")}
+                    onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)}
+                    className={`${INPUT} w-48`}
+                  />
+                </Row>
+                <Field label={strings.recognition.context} hint={strings.recognition.contextHint}>
+                  <textarea
+                    value={s.prompt}
+                    onChange={(e) => update({ prompt: e.target.value }, true)}
+                    rows={3}
+                    className="selectable w-full resize-none rounded-xl bg-tint/5 px-3 py-2 text-[13px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+                  />
+                </Field>
+              </>
+            )}
+          </div>
+        );
+      })}
+      <ProxyRow value={s.proxy} onChange={(proxy) => update({ proxy })} />
+    </Card>
+  );
+}
+
+/** Whether each provider has a key, kept up to date (one may come from another device). */
+function useHasKeys(): Partial<Record<Provider, boolean>> {
+  const [has, setHas] = useState<Partial<Record<Provider, boolean>>>({});
   useEffect(() => {
     let current = true;
-    setValue("");
-    const check = () => void ciao.settings.hasApiKey(provider).then((has) => current && setHasKey(has));
+    const check = () => {
+      for (const provider of Object.keys(PROVIDERS) as Provider[])
+        void ciao.settings.hasApiKey(provider).then((v) => current && setHas((h) => ({ ...h, [provider]: v })));
+    };
     check();
-    const off = ciao.settings.onKeys(check); // one may have come from another device
+    const off = ciao.settings.onKeys(check);
     return () => {
       current = false;
       off();
     };
-  }, [provider]);
+  }, []);
+  return has;
+}
+
+function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }) {
+  const [value, setValue] = useState("");
+  const tr = useStrings().settings.apiKey;
+  useEffect(() => setValue(""), [provider]);
   return (
-    <Card title={PROVIDERS[provider].name}>
-      <Row label={tr.label} hint={hasKey ? tr.saved : tr.missing}>
-        <div className="flex items-center gap-2">
-          <KeyRound className={`size-4 ${hasKey ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
-          <input
-            type="password"
-            value={value}
-            placeholder={hasKey ? tr.replace : PROVIDERS[provider].keyPlaceholder}
-            onChange={(e) => setValue(e.target.value)}
-            className="selectable w-56 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-          />
+    <Row label={tr.label} hint={hasKey ? tr.saved : tr.missing}>
+      <div className="flex items-center gap-2">
+        <KeyRound className={`size-4 ${hasKey ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
+        <input
+          type="password"
+          value={value}
+          placeholder={hasKey ? tr.replace : PROVIDERS[provider].keyPlaceholder}
+          onChange={(e) => setValue(e.target.value)}
+          className={`${INPUT} w-56`}
+        />
+        <button
+          disabled={!value.trim()}
+          onClick={async () => {
+            await ciao.settings.setApiKey(provider, value);
+            setValue("");
+          }}
+          className={BUTTON}
+        >
+          {tr.save}
+        </button>
+      </div>
+    </Row>
+  );
+}
+
+/** The proxy: shown without its password; typed in anew to change it. */
+function ProxyRow({ value, onChange }: { value: string; onChange: (proxy: string) => void }) {
+  const [typed, setTyped] = useState("");
+  const strings = useStrings().settings;
+  const tr = strings.providers;
+  const current = parseProxy(value);
+  const parsed = parseProxy(typed);
+  const invalid = typed.trim() !== "" && !parsed;
+  const hint = invalid ? tr.proxyInvalid : `${current ? tr.proxyVia(proxyLabel(current)) : tr.proxyNone} ${tr.proxyHint}`;
+  return (
+    <Row label={tr.proxy} hint={hint}>
+      <div className="flex shrink-0 items-center gap-2">
+        <input
+          value={typed}
+          placeholder="http://user:password@host:port"
+          onChange={(e) => setTyped(e.target.value)}
+          className={`${INPUT} w-56`}
+        />
+        {typed.trim() || !current ? (
           <button
-            disabled={!value.trim()}
-            onClick={async () => {
-              await ciao.settings.setApiKey(provider, value);
-              setValue("");
-              setHasKey(true);
+            disabled={!parsed}
+            onClick={() => {
+              onChange(parsed!.href);
+              setTyped("");
             }}
-            className="rounded-lg bg-tint/10 px-3 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-tint/15 disabled:opacity-40"
+            className={BUTTON}
           >
-            {tr.save}
+            {strings.apiKey.save}
           </button>
-        </div>
-      </Row>
-    </Card>
+        ) : (
+          <button onClick={() => onChange("")} className={BUTTON}>
+            {tr.proxyRemove}
+          </button>
+        )}
+      </div>
+    </Row>
   );
 }
 

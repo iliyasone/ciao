@@ -7,15 +7,22 @@
     <string name="bubble_description">Dictate with Ciao</string>
 
     <string name="section_setup">Setup</string>
-    <string name="provider_title">Service</string>
-    <string name="provider_text">Who turns your speech into text. You pay them directly with your own API key.</string>
+    <string name="provider_title">Who transcribes</string>
+    <string name="provider_text">Ciao doesn\'t recognize speech itself: the audio goes to one of these services, on your own API key and your bill.</string>
+    <string name="provider_option">%1$s · ≈ %2$s per hour of speech</string>
     <string name="provider_openai" translatable="false">OpenAI</string>
     <string name="provider_gemini" translatable="false">Google Gemini</string>
     <string name="key_title">%1$s API key</string>
-    <string name="key_text_openai">Needs access to gpt-live-transcribe. Live dictation costs $0.017 per minute of speech; idle time is free. The key stays on this phone.</string>
-    <string name="key_text_gemini">Get one at aistudio.google.com/apikey. Live dictation with gemini-3.5-transcribe-live costs about $0.009 per minute of speech; idle time is free. The key stays on this phone.</string>
+    <string name="key_text_openai">Needs access to gpt-live-transcribe. Idle time is free.</string>
+    <string name="key_text_gemini">Get one at aistudio.google.com/apikey. Live: gemini-3.5-transcribe-live. Idle time is free.</string>
     <string name="key_hint_openai" translatable="false">sk-…</string>
     <string name="key_hint_gemini" translatable="false">AQ.…</string>
+    <string name="proxy_title">Proxy</string>
+    <string name="proxy_text">Requests to the service go through it, for when Gemini isn\'t available in your country. HTTP only. Synced along with the keys.</string>
+    <string name="proxy_none">Direct, no proxy.</string>
+    <string name="proxy_via">Through %1$s.</string>
+    <string name="proxy_invalid">That doesn\'t look like a proxy: it takes http://user:password@host:port.</string>
+    <string name="proxy_hint" translatable="false">http://user:password@host:port</string>
     <string name="mic_title">Microphone</string>
     <string name="mic_text">Recording starts only when you tap the Ciao button and stops when you finish.</string>
     <string name="mic_allow">Allow microphone</string>
@@ -55,8 +62,6 @@
     <string name="pause_media">Pause music while you dictate</string>
     <string name="stop_phrase">Say “ciao ciao” to finish</string>
     <string name="show_cost">Show the cost of a dictation</string>
-    <string name="smart">Apply spoken corrections</string>
-    <string name="smart_hint">Drops “um”, false starts and repeats, and applies corrections: “at 2, no, at 3” becomes “at 3”. In the final text only: while you speak you see everything as said. Now and then it drops whole sentences too.</string>
     <string name="version">Ciao %1$s for Android</string>
 
     <string name="update_check">Check for updates</string>

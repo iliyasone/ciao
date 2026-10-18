@@ -26,35 +26,36 @@ class Prefs(context: Context) {
         get() = sp.getString("geminiKey", "")!!.filter { it in '!'..'~' }
         set(v) = sp.edit().putString("geminiKey", v).apply()
 
-    /** With Google sync: the API keys go into the synced file too (Sync.kt). */
+    /**
+     * HTTP proxy OpenAI and Gemini are reached through (Proxy.kt), "" = direct: Gemini refuses some
+     * countries. Synced along with the keys, as on the desktop (Settings.proxy).
+     */
+    var proxy: String
+        get() = sp.getString("proxy", "")!!
+        set(v) = sp.edit().putString("proxy", v).apply()
+
+    /** With Google sync: the API keys (and the proxy) go into the synced file too (Sync.kt). */
     var syncKeys: Boolean
         get() = sp.getBoolean("syncKeys", true)
         set(v) = sp.edit().putBoolean("syncKeys", v).apply()
 
     /** What GoogleSync compares with its history. */
-    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey), syncKeys)
+    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey), syncKeys, proxy)
 
-    /** Not synced, as on the desktop: each device picks its own. */
+    /**
+     * Not synced, as on the desktop: each device picks its own. Gemini until one is picked, as on the
+     * desktop since 0.9.16; before, it was OpenAI, so an install with only an OpenAI key stays on it.
+     */
     var provider: Provider
-        get() = Provider.entries.firstOrNull { it.id == sp.getString("provider", null) } ?: Provider.OPENAI
+        get() = Provider.entries.firstOrNull { it.id == sp.getString("provider", null) }
+            // Kept once chosen, so a key arriving later doesn't switch the service.
+            ?: (if (apiKey.isNotEmpty() && geminiKey.isEmpty()) Provider.OPENAI else Provider.GEMINI).also { provider = it }
         set(v) = sp.edit().putString("provider", v.id).apply()
 
     fun keyOf(p: Provider): String = if (p == Provider.GEMINI) geminiKey else apiKey
 
     /** The key of the service in use. */
     val currentKey: String get() = keyOf(provider)
-
-    /**
-     * Gemini's smart mode: drops fillers and false starts, applies spoken corrections. Off by default:
-     * it also drops whole sentences now and then. Stored as "geminiSmart": the older "smart" was on by
-     * default, so every install starts with it off. As on the desktop (src/core/types.ts).
-     */
-    var smart: Boolean
-        get() {
-            if (sp.contains("smart")) sp.edit().remove("smart").apply()
-            return sp.getBoolean("geminiSmart", false)
-        }
-        set(v) = sp.edit().putBoolean("geminiSmart", v).apply()
 
     val liveModel: String get() = provider.liveModel
     val fileModel: String get() = provider.fileModel

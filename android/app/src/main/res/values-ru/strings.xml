@@ -6,11 +6,17 @@
     <string name="bubble_description">Диктовать с Ciao</string>
 
     <string name="section_setup">Настройка</string>
-    <string name="provider_title">Сервис</string>
-    <string name="provider_text">Кто превращает речь в текст. Вы платите ему напрямую своим API-ключом.</string>
+    <string name="provider_title">Кто распознаёт</string>
+    <string name="provider_text">Ciao сам речь не распознаёт: звук уходит в один из этих сервисов, по вашему API-ключу и за ваш счёт.</string>
+    <string name="provider_option">%1$s · ≈ %2$s за час речи</string>
     <string name="key_title">Ключ %1$s API</string>
-    <string name="key_text_openai">Нужен доступ к gpt-live-transcribe. Живая диктовка стоит $0.017 за минуту речи, простой бесплатен. Ключ хранится только на телефоне.</string>
-    <string name="key_text_gemini">Ключ берётся на aistudio.google.com/apikey. Живая диктовка через gemini-3.5-transcribe-live стоит около $0.009 за минуту речи, простой бесплатен. Ключ хранится только на телефоне.</string>
+    <string name="key_text_openai">Нужен доступ к gpt-live-transcribe. Простой бесплатен.</string>
+    <string name="key_text_gemini">Ключ берётся на aistudio.google.com/apikey. Вживую — gemini-3.5-transcribe-live. Простой бесплатен.</string>
+    <string name="proxy_title">Прокси</string>
+    <string name="proxy_text">Запросы к сервису идут через него — например, если Gemini недоступен в вашей стране. Только HTTP. Синхронизируется вместе с ключами.</string>
+    <string name="proxy_none">Напрямую, без прокси.</string>
+    <string name="proxy_via">Через %1$s.</string>
+    <string name="proxy_invalid">Не похоже на адрес прокси: нужно http://логин:пароль@адрес:порт.</string>
     <string name="mic_title">Микрофон</string>
     <string name="mic_text">Запись начинается, только когда вы нажимаете кнопку Ciao, и заканчивается, когда вы закончили.</string>
     <string name="mic_allow">Разрешить микрофон</string>
@@ -50,8 +56,6 @@
     <string name="pause_media">Ставить музыку на паузу, пока диктуешь</string>
     <string name="stop_phrase">«Чао-чао» заканчивает диктовку</string>
     <string name="show_cost">Показывать стоимость диктовки</string>
-    <string name="smart">Понимать поправки</string>
-    <string name="smart_hint">Убирает «э-э», оговорки и повторы, а поправки применяет: «в два, нет, в три» — будет «в три». Только в готовом тексте: пока говорите, видно всё как есть. Иногда выбрасывает и целые фразы.</string>
     <string name="version">Ciao %1$s для Android</string>
 
     <string name="update_check">Проверить обновления</string>

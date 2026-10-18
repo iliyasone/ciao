@@ -68,7 +68,7 @@ class RealtimeSession(private val context: Context, apiKey: String) : LiveSessio
     @Volatile private var closedByUs = false
     private val main = Handler(Looper.getMainLooper())
 
-    private val socket: WebSocket = http.newWebSocket(
+    private val socket: WebSocket = ApiProxy.client(context).newWebSocket(
         Request.Builder().url(URL).header("Authorization", "Bearer $apiKey").build(),
         object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) = handle(text)

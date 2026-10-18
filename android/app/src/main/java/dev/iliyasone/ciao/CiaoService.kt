@@ -74,7 +74,6 @@ class CiaoService : AccessibilityService() {
     private inner class Dictation(val target: AccessibilityNodeInfo?, val session: LiveSession, val pushToTalk: Boolean) {
         /** As when it started: the settings may change before it is delivered. */
         val provider = prefs.provider
-        val smart = prefs.smart
         val startedAt = SystemClock.elapsedRealtime()
         var endedAt = 0L
         val entry = history.create(provider)
@@ -594,7 +593,7 @@ class CiaoService : AccessibilityService() {
 
     private fun transcribeFile(d: Dictation) {
         Thread {
-            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile, d.provider, prefs.keyOf(d.provider), d.smart) }
+            val result = runCatching { FileTranscriber.transcribe(this, prefs, d.audioFile, d.provider, prefs.keyOf(d.provider)) }
             main.post {
                 if (dictation !== d) return@post
                 result.fold(onSuccess = { deliver(d, it, History.Source.RETRY_FILE) }, onFailure = { fail(d, it.message ?: getString(R.string.error_provider, d.provider.displayName)) })
@@ -607,9 +606,7 @@ class CiaoService : AccessibilityService() {
         var text = raw.trim()
         if (d.stoppedByPhrase) text = VoiceCommands.stripStopPhrase(text)
         val heard = text
-        // Gemini's smart mode often lays out paragraphs itself; leave its layout alone when it did.
-        val laidOutByModel = d.provider == Provider.GEMINI && d.smart && text.contains('\n')
-        if (prefs.formatText && text.isNotEmpty() && !laidOutByModel) {
+        if (prefs.formatText && text.isNotEmpty()) {
             // Pauses are offsets in the live deltas; the final text has the same words, so shift them over.
             val live = d.liveText.toString()
             val lead = live.length - live.trimStart().length
@@ -744,7 +741,6 @@ class CiaoService : AccessibilityService() {
             "ended_by" to d.endedBy,
             "hands_free" to !d.pushToTalk,
             "provider" to d.provider.id,
-            "smart" to if (d.provider == Provider.GEMINI) d.smart else null,
             "duration_s" to Math.round(seconds * 10) / 10.0,
             "first_text_ms" to if (d.firstTextAt != 0L) d.firstTextAt - d.startedAt else null,
             "final_after_release_ms" to if (d.endedAt != 0L && transcripts.isNotEmpty()) SystemClock.elapsedRealtime() - d.endedAt else null,

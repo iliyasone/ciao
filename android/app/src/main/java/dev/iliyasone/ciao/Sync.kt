@@ -3,12 +3,13 @@ package dev.iliyasone.ciao
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Terms, the prompt and the API keys, synced between devices; a port of src/core/sync.ts. Each
+// Terms, the prompt, the API keys and the proxy, synced between devices; a port of src/core/sync.ts. Each
 // device keeps every term ever added or removed with the time of its last change; merging keeps the
 // later change of each term, so an added term survives a save elsewhere and a removed one doesn't
-// come back. The prompt, each key and the "sync keys" switch are single values: the later edit wins.
-// The switch is synced too: turned off on one device, it stops every device from sending keys, and
-// the file keeps none (each device still has its own).
+// come back. The prompt, each key, the proxy and the "sync keys" switch are single values: the later
+// edit wins. The switch is synced too: turned off on one device, it stops every device from sending
+// keys and the proxy (its password is a secret too), and the file keeps none (each device still has
+// its own).
 
 /**
  * [at]: epoch ms of the last add or remove. What a device had before it started syncing: 0 for the
@@ -23,18 +24,23 @@ data class Flag(val value: Boolean, val at: Long)
 /**
  * [terms] in display order; removed terms stay as tombstones. [keys]: API keys by provider
  * ("openai", "gemini"), "" for one removed. [syncKeys]: whether keys go into the synced file.
+ * [proxy]: the proxy to the transcription services (Prefs.proxy), "" for none; synced with the keys.
  */
 data class SyncState(
     val terms: List<TermChange>,
     val prompt: Stamped,
     val keys: Map<String, Stamped> = emptyMap(),
     val syncKeys: Flag = Flag(true, -1),
+    val proxy: Stamped = Sync.NO_PROXY,
 )
 
 /** What a device has now: its settings and its API keys ("" or missing when it has none). */
-data class Local(val keywords: List<String>, val prompt: String, val keys: Map<String, String>, val syncKeys: Boolean)
+data class Local(val keywords: List<String>, val prompt: String, val keys: Map<String, String>, val syncKeys: Boolean, val proxy: String = "")
 
 object Sync {
+    /** The proxy of a file without one: an untouched default. */
+    val NO_PROXY = Stamped("", -1)
+
     /** Trimmed, without empty lines and repeats. */
     fun normalizeTerms(list: List<String>): List<String> = list.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
@@ -55,6 +61,7 @@ object Sync {
             Stamped(prompt, if (prompt == defaultPrompt) -1 else 0),
             local.keys.filterValues { it.isNotEmpty() }.mapValues { Stamped(it.value, 0) },
             Flag(local.syncKeys, if (local.syncKeys == defaultSyncKeys) -1 else 0),
+            Stamped(local.proxy, if (local.proxy.isNotEmpty()) 0 else -1),
         )
     }
 
@@ -111,12 +118,14 @@ object Sync {
         }
         val promptChanged = prompt != state.prompt.value
         val switched = local.syncKeys != state.syncKeys.value
-        if (!changed && !promptChanged && !switched) return null
+        val proxyChanged = local.proxy != state.proxy.value
+        if (!changed && !promptChanged && !switched && !proxyChanged) return null
         return SyncState(
             terms,
             if (promptChanged) Stamped(prompt, now) else state.prompt,
             keys,
             if (switched) Flag(local.syncKeys, now) else state.syncKeys,
+            if (proxyChanged) Stamped(local.proxy, now) else state.proxy,
         )
     }
 
@@ -131,7 +140,7 @@ object Sync {
 
     /**
      * Both histories in one: the later change of each term and value. Order: [local]'s, then new
-     * ones. While keys aren't synced, [local] keeps its own and takes none from [remote].
+     * ones. While keys aren't synced, [local] keeps its own keys and proxy and takes none from [remote].
      */
     fun mergeStates(local: SyncState, remote: SyncState): SyncState {
         val theirs = LinkedHashMap<String, TermChange>()
@@ -144,18 +153,23 @@ object Sync {
         val syncKeys = if (x.at != y.at) (if (x.at > y.at) x else y) else if (x.value) y else x
         val keys = local.keys.toMutableMap()
         if (syncKeys.value) for ((provider, key) in remote.keys) keys[provider] = keys[provider]?.let { later(it, key) } ?: key
-        return SyncState(terms, later(local.prompt, remote.prompt), keys, syncKeys)
+        val proxy = if (syncKeys.value) later(local.proxy, remote.proxy) else local.proxy
+        return SyncState(terms, later(local.prompt, remote.prompt), keys, syncKeys, proxy)
     }
 
-    /** What goes into the synced file: no keys while the switch is off. */
-    fun shared(state: SyncState): SyncState = if (state.syncKeys.value) state else state.copy(keys = emptyMap())
+    /** What goes into the synced file: no keys and no proxy while the switch is off. */
+    fun shared(state: SyncState): SyncState = if (state.syncKeys.value) state else state.copy(keys = emptyMap(), proxy = NO_PROXY)
 
     /** Same content, whatever the order: nothing to upload or apply. */
     fun sameState(a: SyncState, b: SyncState): Boolean =
         a.terms.sortedBy { it.term }.map { Triple(it.term, it.at, it.removed) } == b.terms.sortedBy { it.term }.map { Triple(it.term, it.at, it.removed) } &&
-            a.prompt == b.prompt && a.keys == b.keys && a.syncKeys == b.syncKeys
+            a.prompt == b.prompt && a.keys == b.keys && a.syncKeys == b.syncKeys && a.proxy == b.proxy
 
-    /** The synced file's content. */
+    /**
+     * The synced file's content. Still version 1: an older Ciao reads the file and ignores the proxy
+     * (an upload of its drops it, and the next one from a newer Ciao puts it back). No proxy is left
+     * out, as in such a file.
+     */
     fun serialize(state: SyncState): String = JSONObject()
         .put("version", 1)
         .put("terms", JSONArray().apply {
@@ -164,12 +178,13 @@ object Sync {
         .put("prompt", JSONObject().put("value", state.prompt.value).put("at", state.prompt.at))
         .put("keys", JSONObject().apply { for ((provider, k) in state.keys) put(provider, JSONObject().put("value", k.value).put("at", k.at)) })
         .put("syncKeys", JSONObject().put("value", state.syncKeys.value).put("at", state.syncKeys.at))
+        .apply { if (state.proxy != NO_PROXY) put("proxy", JSONObject().put("value", state.proxy.value).put("at", state.proxy.at)) }
         .toString()
 
     /**
      * The synced file read back; null if it isn't one (a newer format, or damaged). As strict about
      * types as the desktop, so both refuse the same files. A file from before keys were synced has
-     * no `keys` and no `syncKeys`: an untouched default then.
+     * no `keys` and no `syncKeys`, one from before the proxy no `proxy`: an untouched default then.
      */
     fun parse(text: String): SyncState? = runCatching {
         val raw = JSONObject(text)
@@ -198,6 +213,11 @@ object Sync {
             val f = raw.opt("syncKeys") as? JSONObject ?: return null
             syncKeys = Flag(f.opt("value") as? Boolean ?: return null, (f.opt("at") as? Number ?: return null).toLong())
         }
-        SyncState(terms, Stamped(value, at.toLong()), keys, syncKeys)
+        var proxy = NO_PROXY
+        if (raw.has("proxy")) {
+            val f = raw.opt("proxy") as? JSONObject ?: return null
+            proxy = Stamped(f.opt("value") as? String ?: return null, (f.opt("at") as? Number ?: return null).toLong())
+        }
+        SyncState(terms, Stamped(value, at.toLong()), keys, syncKeys, proxy)
     }.getOrNull()
 }
