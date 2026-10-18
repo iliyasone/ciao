@@ -45,6 +45,8 @@ const LANDED_CHECK_MS = 400;
 /** T3 mode: when the paste wasn't seen landing, another look this much later. */
 const RECHECK_MS = 1000;
 const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shortcut, drop the recording
+/** How long stop() waits for the overlay to report the capture stopped (it flushes the last 40 ms). */
+const CAPTURE_STOP_TIMEOUT_MS = 3_000;
 const COMPLETION_TIMEOUT_MS = 6000;
 const VOICE_LEVEL = 600;
 
@@ -522,6 +524,14 @@ export class DictationController {
     if (!a.replay) this.deps.overlay.stopCapture(a.seq);
     if (a.beeped) this.deps.overlay.sound("stop");
     this.push(a);
+    // Should the overlay never answer (its capture stuck, the window gone), the dictation still ends:
+    // waiting for it held the active dictation forever, and every key after it did nothing.
+    if (!a.replay)
+      setTimeout(() => {
+        if (this.active !== a || a.captureEnded) return;
+        console.warn("dictation", a.entry.id, "capture:stopped never came; finishing with the audio received");
+        this.captureEnded(a);
+      }, CAPTURE_STOP_TIMEOUT_MS);
   }
 
   /** keep = true: Esc — the recording stays in history, untranscribed. false: it was a shortcut, drop it. */

@@ -44,6 +44,8 @@ object Updater {
     val page: String? get() = release?.page
 
     @Volatile private var release: Release? = null
+    /** When [release] was found. */
+    @Volatile private var foundAt = 0L
     /** The installer's confirmation screen, waiting for the settings screen to come back to show it. */
     private var confirm: Intent? = null
     /** The last confirmation screen: the user may have left it without answering (Home, a tap outside). */
@@ -98,8 +100,9 @@ object Updater {
                 check(activity, manual = false)
             }
         }
-        // A found update isn't stamped as checked (Updater.check), so a new process finds it again.
-        if (release == null && System.currentTimeMillis() - prefs.updateCheckedAt > CHECK_EVERY_MS) check(activity, manual = false)
+        // A found update isn't stamped as checked (Updater.check), so a new process finds it again. One
+        // found earlier in this process is looked at again too: a newer release may be out since.
+        if (System.currentTimeMillis() - maxOf(prefs.updateCheckedAt, foundAt) > CHECK_EVERY_MS) check(activity, manual = false, refresh = true)
     }
 
     fun pause(activity: Activity) {
@@ -115,10 +118,10 @@ object Updater {
      * [manual]: the user pressed "Check": only then is a failure shown (offline is normal in the
      * background). A background check leaves an update already found alone, so its button stays.
      */
-    fun check(context: Context, manual: Boolean = true) {
+    fun check(context: Context, manual: Boolean = true, refresh: Boolean = false) {
         val before = state
         if (before.phase == Phase.CHECKING || before.phase == Phase.DOWNLOADING || before.phase == Phase.INSTALLING) return
-        if (!manual && release != null) return
+        if (!manual && !refresh && release != null) return
         val app = context.applicationContext
         set(State(Phase.CHECKING))
         worker.execute {
@@ -126,6 +129,7 @@ object Updater {
                 val found = fetchLatest(app)
                 if (found != null && newer(found.version, current(app)) && found.apk != null) {
                     release = found
+                    foundAt = System.currentTimeMillis()
                     set(State(Phase.AVAILABLE, found.version))
                     main.post {
                         val screen = foreground
@@ -179,7 +183,7 @@ object Updater {
 
     /** Download the APK found and hand it to the installer; first, if needed, ask to be allowed to install apps. */
     fun install(activity: Activity) {
-        val r = release ?: return
+        val found = release ?: return
         if (state.phase == Phase.DOWNLOADING || state.phase == Phase.INSTALLING || state.phase == Phase.CHECKING) return
         if (!activity.packageManager.canRequestPackageInstalls()) {
             val prefs = Prefs(activity)
@@ -195,8 +199,11 @@ object Updater {
         val app = activity.applicationContext
         // Until the new session exists, resume() must not take a failed earlier one for it.
         sessionId = -1
-        set(State(Phase.DOWNLOADING, r.version, 0))
+        set(State(Phase.DOWNLOADING, found.version, 0))
         worker.execute {
+            // Found hours ago, perhaps: a newer release since is the one to install, not one more update after this.
+            val r = runCatching { fetchLatest(app) }.getOrNull()?.takeIf { it.apk != null && newer(it.version, found.version) } ?: found
+            release = r
             try {
                 val apk = download(app, r)
                 set(State(Phase.INSTALLING, r.version))
