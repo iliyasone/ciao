@@ -1,6 +1,6 @@
 ---
 name: babysit-pr
-description: Drive a PR to a clean review. Each round a fresh reviewer (GPT-6.1 Sol, Opus as fallback) hunts bugs in the whole diff against the PR's pinned scope; you defend your code, fix the real findings minimally, push, and repeat until a round needs no fix. Use when asked to babysit a PR, "review and fix until clean", or run a review-fix loop on the current branch.
+description: Drive a PR to a clean review. Each round a fresh T3 Code reviewer (GPT-6.1 Sol, Opus as fallback) hunts bugs in the whole diff against the PR's pinned scope; you defend your code, fix the real findings minimally, push, and repeat until a round needs no fix. Use when asked to babysit a PR, "review and fix until clean", or run a review-fix loop on the current branch.
 ---
 
 # Babysit PR
@@ -45,24 +45,49 @@ instead of conceding to whatever a reviewer says.
 Start a fresh reviewer every round; never reuse the previous one or tell it
 what earlier reviewers said beyond the pushback list below.
 
-**Reviewer model: GPT-6.1 Sol on high reasoning**, through the Codex CLI in a
-read-only sandbox. Write the prompt to a file and run, from the repo root:
+Reviewers run as T3 Code delegated tasks (`delegate_task` from the `t3-code`
+MCP server), never as the agent's own native sub-agents: only T3 applies the
+model and reasoning options.
 
-```bash
-codex exec -m gpt-6.1-sol -c model_reasoning_effort=high -s read-only \
-  -o /tmp/review-round-<N>.md - < /tmp/review-prompt-<N>.md 2> /tmp/review-round-<N>.log
-grep -E '^(model|reasoning effort):' /tmp/review-round-<N>.log
+**Reviewer: GPT-6.1 Sol on high reasoning.** Each round is a new call:
+
+```json
+{
+  "title": "babysit-pr #<PR> round <N>",
+  "role": "review",
+  "mode": "wait",
+  "timeoutMs": 1800000,
+  "clientRequestId": "babysit-pr-<repo>-<PR>-round-<N>",
+  "target": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-sol",
+    "options": { "reasoningEffort": "high" }
+  },
+  "task": "<the reviewer prompt below>"
+}
 ```
 
-The review lands in `/tmp/review-round-<N>.md`. The `model:` and
-`reasoning effort:` lines in the log are the proof of which model and effort
-actually ran; the stamp in step 5 relies on them. A large diff is fine: the
-model has a context window of about a million tokens.
+- The review is the result's `summary`.
+- The result's `providerInstanceId`, `model` and `options` are the proof of
+  which model and effort actually ran; the stamp in step 5 relies on them. If
+  they differ from the request, say so in the report.
+- `timeoutMs` is only how long this call waits; it doesn't stop the review.
+  `waitTimedOut: true` means the review is still running: end the turn; its
+  completion wakes the thread. Read it with `task_status` and the `taskId`.
+- Start the next round with a new `delegate_task` call and a new
+  `clientRequestId`, never by messaging the previous reviewer's thread.
+- A large diff is fine: the model has a context window of about a million
+  tokens.
 
-**Fallback: Claude Opus**, when `codex` is missing, not logged in, the model is
-unavailable, or the run fails twice. In Claude Code use the Agent tool
-(`general-purpose`, model `opus`, read-only stated in the prompt); elsewhere `claude -p --model opus "<prompt>"`.
-Say in the report which rounds used the fallback and why.
+A failure is a rejected call or a task that ends with a provider error instead
+of a review. Retry once with `-retry` appended to the `clientRequestId`.
+
+**Fallback: Claude Opus 5.5 on high**, when the retry fails too or the Codex
+provider or the model is missing from `orchestrator_capabilities`: the same
+call with a Claude provider instance that lists `claude-opus-5-5` (prefer the
+one this thread runs on), `"model": "claude-opus-5-5"`,
+`"options": { "effort": "high" }`. Say in the report which rounds used the
+fallback and why. Every round tries GPT-6.1 Sol first.
 
 This reviewer is the only one: don't also request `@codex`, CodeRabbit or other
 review bots on the PR unless the user asks.
@@ -192,7 +217,8 @@ Reviewed with babysit-pr: <N> rounds with <model> on <effort>. Verdict: approved
   two, add `, open: <short list of the unfixed blocker/should items>`.
 - `<model>` is the reviewer of the last round (e.g. `GPT-6.1 Sol`,
   `Claude Opus 5.5`); name both when rounds used different models.
-- Write `on <effort>` only when the Codex log confirmed it; otherwise drop it.
+- Write `on <effort>` only when the task result's `options` confirmed it;
+  otherwise drop it.
 - Replace an earlier stamp instead of adding a second one.
 
 Then tell the user: rounds and the model of each, what each reviewer found,
