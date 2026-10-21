@@ -28,6 +28,8 @@ export interface OverlayPort {
   stopCapture(seq: number): void;
   /** The short sound for "listening now" (start) or "done listening" (stop). */
   sound(kind: "start" | "stop"): void;
+  /** The page didn't answer (it crashed or is stuck): load it again, so the next dictation records. */
+  restart(why: string): void;
 }
 
 const TAP_MS = 350; // a shorter press is a tap: switch to hands-free (or drop it, see dropsTaps)
@@ -530,6 +532,7 @@ export class DictationController {
       setTimeout(() => {
         if (this.active !== a || a.captureEnded) return;
         console.warn("dictation", a.entry.id, "capture:stopped never came; finishing with the audio received");
+        this.deps.overlay.restart("capture:stopped never came");
         this.captureEnded(a);
       }, CAPTURE_STOP_TIMEOUT_MS);
   }
