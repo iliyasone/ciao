@@ -2,6 +2,7 @@ import path from "node:path";
 import { BrowserWindow, screen, type Rectangle } from "electron";
 import type { OverlayState, TermSuggestion } from "../core/types";
 import type { OverlayPort } from "./dictation";
+import { logRenderer } from "./rendererLog";
 
 // Transparent window a bit larger than the card (room for its shadow); the card grows
 // smoothly inside and the empty area lets clicks through. Never focusable, so the app you
@@ -25,6 +26,9 @@ import type { OverlayPort } from "./dictation";
 // comes (a few pixels on from the press after a flick). If a later Electron stops eating it, every
 // press arrives twice: check this on an upgrade. The page's press doesn't capture the mouse, so a
 // release outside the window (a resize stopped by its limits) isn't seen until the pointer is back.
+//
+// The page records the mic too, so a crashed or stuck page means no pill and every dictation empty
+// until it is loaded again: it is, after a crash, a hang, or a stop it didn't answer (restart).
 //
 // Dragging follows the cursor from here, not the pointer positions the renderer sees: those are
 // measured against a window that is itself moving, and stall or jump while it does.
@@ -51,6 +55,8 @@ const DRAG_MS = 16;
 const WM_MOUSEACTIVATE = 0x0021;
 const WM_LBUTTONDOWN = 0x0201;
 const WM_LBUTTONDBLCLK = 0x0203;
+/** After a crash, before loading the page again: a page that crashes on load doesn't spin the CPU. */
+const RELOAD_AFTER_MS = 1000;
 
 export interface OverlayPlacement {
   /** The middle of the card's bottom edge on screen; null = bottom-centre of the display under the cursor. */
@@ -127,6 +133,14 @@ export class OverlayWindow implements OverlayPort {
     screen.on("display-removed", replace);
     screen.on("display-metrics-changed", replace);
     void this.win.loadFile(path.join(rendererDir, "overlay.html"));
+    const wc = this.win.webContents;
+    logRenderer(wc, "overlay");
+    wc.on("render-process-gone", () => {
+      setTimeout(() => {
+        if (!this.win.isDestroyed() && wc.isCrashed()) wc.reload(); // in a new process
+      }, RELOAD_AFTER_MS);
+    });
+    wc.on("unresponsive", () => this.restart("not responding"));
     this.win.on("closed", () => {
       this.stopPoll();
       this.stopDragTimer();
@@ -137,11 +151,21 @@ export class OverlayWindow implements OverlayPort {
       this.drag0 = null;
       this.stopDragTimer();
       this.setRegion([]);
+      // It shows nothing yet: the next card is placed and shown afresh.
+      this.busy = false;
+      this.visibleSeq = -1;
       this.win.webContents.send("capture:mic", this.mic); // before the wake word opens it
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
       if (this.pill) this.win.showInactive();
     });
+  }
+
+  /** The page is stuck or didn't answer: end its process, and render-process-gone loads it again in a new one. */
+  restart(why: string): void {
+    if (this.win.isDestroyed() || this.win.webContents.isCrashed()) return;
+    console.warn("overlay: loading the page again:", why);
+    this.win.webContents.forcefullyCrashRenderer();
   }
 
   /** Keep the mic open for the wake-word detector (or not). */

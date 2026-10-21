@@ -50,6 +50,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     the history.
   - **Stop** on the card finishes a dictation however it started (a key, the pill,
     the wake word), the same as a second press.
+  - The card's window also records the microphone. Should it crash or get stuck (no
+    pill, dictations come out empty), Ciao loads it again by itself: at once after a
+    crash or a hang, and when a dictation's stop gets no answer from it, so the next
+    dictation records again.
 - **A pill between dictations.** A small Ciao pill stays at the bottom of the
   screen; the card unfolds out of it when you start and folds back when the text
   is in. Click it to dictate hands-free (click **Stop** or the red dot on the card to
@@ -659,7 +663,7 @@ on macOS and `~/.config/Ciao` on Linux:
   `entry.json` (transcripts, timings, cost, where it was pasted). The `<id>`
   starts with the UTC start time, `YYYYMMDD-HHMMSS`. The **Folder** button in the
   history window opens it.
-- `ciao.log` — the app log.
+- `ciao.log` — the app log, with the warnings and errors of its windows (a crash or hang of one too).
 - `telemetry-id` — the random install id for [anonymous usage counts](#telemetry).
 - `google-account.json` — the Google account for [sync](#sync): its email and
   refresh token, encrypted with the system keychain where there is one.

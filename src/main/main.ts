@@ -16,6 +16,7 @@ import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
 import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
+import { logRenderer } from "./rendererLog";
 import { checkProxy, setProxy } from "./proxy";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
@@ -179,6 +180,7 @@ function openHistory(tab?: "settings"): void {
       : { titleBarOverlay: { color: chrome().background, symbolColor: chrome().symbols, height: 44 } }),
     webPreferences: { preload: PRELOAD },
   });
+  logRenderer(historyWin.webContents, "history");
   void historyWin.loadFile(path.join(RENDERER, "history.html"), { hash: tab ?? "" });
   historyWin.on("closed", () => (historyWin = null));
   // Terms edited on another device show up when you come back to the window.
