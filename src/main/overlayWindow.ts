@@ -76,6 +76,8 @@ export class OverlayWindow implements OverlayPort {
   private wake = false;
   private mic = "";
   private pill: boolean;
+  /** The dictation recording now: a page loaded meanwhile (after a crash) is told to record it. */
+  private capturing: number | null = null;
   /** The renderer shows a card or a suggestion; without the pill the window hides when it shows nothing. */
   private busy = false;
   /** What the renderer draws, in window pixels. */
@@ -157,6 +159,7 @@ export class OverlayWindow implements OverlayPort {
       this.win.webContents.send("capture:mic", this.mic); // before the wake word opens it
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
+      if (this.capturing !== null) this.win.webContents.send("capture:start", this.capturing);
       if (this.pill) this.win.showInactive();
     });
   }
@@ -384,6 +387,7 @@ export class OverlayWindow implements OverlayPort {
   }
 
   startCapture(seq: number): void {
+    this.capturing = seq;
     this.win.webContents.send("capture:start", seq);
   }
 
@@ -392,6 +396,7 @@ export class OverlayWindow implements OverlayPort {
   }
 
   stopCapture(seq: number): void {
+    if (this.capturing === seq) this.capturing = null;
     this.win.webContents.send("capture:stop", seq);
   }
 
