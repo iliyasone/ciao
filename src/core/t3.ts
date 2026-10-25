@@ -12,6 +12,45 @@ export function isT3Code(w: { process: string; title: string }): boolean {
 /** The T3 Code app's process, for the input helper's "activate" (a case-insensitive regex). */
 export const T3_PROCESS = "^t3[ -]?code";
 
+/**
+ * AI chats a T3-mode dictation stays in instead of going to T3 Code: started with one in front, it works
+ * as without T3 mode (pasted where you are), and the card shows the chat's icon (public/chats/<id>.png).
+ * Known in a browser by the page's address (see InputHelper.page) or, failing that, by the window title,
+ * and by their own desktop apps. A conversation in ChatGPT is titled by its subject alone: there only the
+ * address tells.
+ */
+export const AI_CHATS = {
+  chatgpt: { name: "ChatGPT", hosts: ["chatgpt.com", "chat.openai.com"], titles: ["ChatGPT"] },
+  claude: { name: "Claude", hosts: ["claude.ai"], titles: ["Claude"] },
+  gemini: { name: "Gemini", hosts: ["gemini.google.com", "aistudio.google.com"], titles: ["Gemini", "Google Gemini", "Google AI Studio"] },
+  perplexity: { name: "Perplexity", hosts: ["perplexity.ai"], titles: ["Perplexity"] },
+  grok: { name: "Grok", hosts: ["grok.com"], titles: ["Grok"] },
+  deepseek: { name: "DeepSeek", hosts: ["chat.deepseek.com"], titles: ["DeepSeek"] },
+  copilot: { name: "Copilot", hosts: ["copilot.microsoft.com", "copilot.com"], titles: ["Microsoft Copilot", "Copilot"] },
+} as const;
+
+export type AiChat = keyof typeof AI_CHATS;
+
+/** The AI chat in window `w` (`url`: the address of the page it shows, if known), or null. */
+export function aiChat(w: { process: string; title: string }, url: string | null): AiChat | null {
+  const app = appLabel(w.process);
+  if (app === "chatgpt" || app === "claude") return app; // their desktop apps
+  // No process at all: a Wayland desktop, which names no window; then only the address tells.
+  if (app !== "browser" && w.process) return null;
+  const ids = Object.keys(AI_CHATS) as AiChat[];
+  let host = "";
+  try {
+    host = url ? new URL(url).hostname.toLowerCase() : "";
+  } catch {
+    // not an address after all: go by the title
+  }
+  if (host) return ids.find((id) => AI_CHATS[id].hosts.some((h) => host === h || host.endsWith(`.${h}`))) ?? null;
+  if (isT3Code(w)) return null; // T3 Code's web app
+  // "Topic - Claude - Google Chrome", "Google Gemini — Mozilla Firefox", "ChatGPT and 3 more pages - Microsoft Edge".
+  const parts = w.title.split(/\s[-–—|]\s/).map((part) => part.replace(/ and \d+ more pages?$/, "").trim());
+  return ids.find((id) => parts.some((part) => (AI_CHATS[id].titles as readonly string[]).includes(part))) ?? null;
+}
+
 /** The prompt as pasted: the user's words between the optional prefix and suffix (say, "Клауди," to get a spoken answer). */
 export function t3Prompt(text: string, prefix: string, suffix: string): string {
   return [prefix.trim(), text, suffix.trim()].filter(Boolean).join(" ");

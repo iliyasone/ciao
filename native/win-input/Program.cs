@@ -35,6 +35,10 @@ namespace Ciao.Input;
 ///                                           "no-field": nothing editable is focused, or it is a password field; "too-long":
 ///                                           over 100 000 characters. Answers within about a second whatever the app does.
 ///                                           Line breaks come as "\n" ("text" of "key" events too).
+///   {"id":6,"cmd":"page","hwnd":123}      → the address of the web page holding the focused element, if that window is
+///                                           still in front (hwnd 0 = whatever is): {"id":6,"url":"https://…"}, or
+///                                           {"id":6,"url":null} (not a browser, focus outside the page, unreadable). The
+///                                           top page, not a frame in it. Answers within about a second, like "field"
 ///   {"cmd":"watch","on":true,"hwnd":123} start/stop reporting key presses as "key" events (see above). Enter reads the
 ///                                           field only while window "hwnd" is in front; otherwise (or hwnd 0) its text is null
 ///   {"id":4,"cmd":"activate","process":"^t3 code"} → brings the main window of a running app whose process name
@@ -360,6 +364,12 @@ static class Program
                     if (t.Result.Reason is { } reason) reply["reason"] = reason;
                     Emit(reply);
                 }, TaskScheduler.Default);
+                break;
+            }
+            case "page":
+            {
+                var wanted = new IntPtr(msg["hwnd"]?.GetValue<long>() ?? 0);
+                FieldReader.ReadPage(wanted).ContinueWith(t => Emit(new JsonObject { ["id"] = id, ["url"] = t.Result.Text }), TaskScheduler.Default);
                 break;
             }
             case "watch":

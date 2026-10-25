@@ -1,5 +1,7 @@
 // Shared, platform-neutral types. Nothing here may import Electron or Node.
 
+import type { AiChat } from "./t3";
+
 export type Delay = "minimal" | "low" | "medium" | "high" | "xhigh";
 export type Theme = "system" | "light" | "dark";
 /** Interface language (src/core/i18n.ts). */
@@ -137,6 +139,8 @@ export interface OverlayState {
   keep?: boolean;
   /** A T3-mode dictation (hands-free): its text is headed for T3 Code, and the card shows T3 Code's logo. */
   t3?: boolean;
+  /** A T3-mode dictation started in an AI chat (core/t3.ts): it stays there, and the card shows the chat's icon instead. */
+  chat?: AiChat;
   handsFree: boolean;
   /** Epoch ms; the timer runs in the renderer. */
   startedAt: number;

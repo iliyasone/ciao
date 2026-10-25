@@ -99,7 +99,19 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   T3 Code*. It is for hands-free dictations: a short press (unless *A short press
   starts hands-free mode* is off), the wake word, or a click on the pill. A hold
   works as without T3 mode: the text goes where your cursor is, with no T3 Code
-  brought forward, no prefix and no check. For a hands-free dictation:
+  brought forward, no prefix and no check. So does a dictation started in an AI
+  chat: ChatGPT, Claude, Gemini (and Google AI Studio), Perplexity, Grok, DeepSeek
+  or Microsoft Copilot open in the browser in front, or the ChatGPT or Claude
+  desktop app. It stays there (T3 Code isn't brought forward, no prefix, no
+  Enter) and the card shows that chat's icon instead of T3 Code's. Ciao knows the
+  chat by the page's address, read through accessibility from the page that has
+  focus (Windows: Chromium browsers and Firefox; macOS: Safari and Chromium
+  browsers, with the Accessibility permission; Linux: only with desktop
+  accessibility on), or else by the window title. A ChatGPT conversation is
+  titled by its subject alone, so there only the address tells: with focus in the
+  address bar, or on Linux without accessibility, only its start page is known.
+  macOS and Wayland give no window titles, so there it is the address or nothing. For a
+  hands-free dictation anywhere else:
   - the card shows T3 Code's logo by its clock, so you know where the text goes;
   - the text is pasted only into T3 Code, whichever chat is open there, wherever
     you went meanwhile: when it ends, Ciao brings T3 Code's window forward

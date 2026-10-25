@@ -85,6 +85,9 @@ export class Atspi {
       atspi_hypertext_get_link_index: [a, "int atspi_hypertext_get_link_index(void *, int, _Out_ void **)"],
       atspi_hypertext_get_link: [a, "void *atspi_hypertext_get_link(void *, int, _Out_ void **)"],
       atspi_hyperlink_get_object: [a, "void *atspi_hyperlink_get_object(void *, int, _Out_ void **)"],
+      atspi_accessible_get_parent: [a, "void *atspi_accessible_get_parent(void *, _Out_ void **)"],
+      atspi_accessible_get_document_iface: [a, "void *atspi_accessible_get_document_iface(void *)"],
+      atspi_document_get_document_attribute_value: [a, "void *atspi_document_get_document_attribute_value(void *, const char *, _Out_ void **)"],
       g_object_unref: [gobject, "void g_object_unref(void *)"],
       g_free: [glib, "void g_free(void *)"],
       g_error_free: [glib, "void g_error_free(void *)"],
@@ -126,6 +129,49 @@ export class Atspi {
     } finally {
       for (const r of this.refs) this.f.g_object_unref!(r);
       this.refs = [];
+    }
+  }
+
+  /**
+   * The address of the top web page holding the focused element in the window in front (found as by
+   * focusedText), or null: walks up from the focus and keeps the outermost document that names one, so
+   * a frame doesn't count. Firefox calls it DocURL, Chromium URI.
+   */
+  pageUrl(pid: number | null, budget: number): string | null {
+    this.timeout = Math.max(50, Math.min(300, budget));
+    this.deadline = Date.now() + budget;
+    this.f.atspi_set_timeout!(this.timeout, 0);
+    let url: string | null = null;
+    try {
+      let node = this.focusedField(pid);
+      for (let depth = 0; node && depth < 60; depth++) {
+        const doc = this.own(this.timed("atspi_accessible_get_document_iface", node));
+        if (doc)
+          for (const name of ["DocURL", "URI"]) {
+            const value = this.optional(() => this.string(this.call("atspi_document_get_document_attribute_value", "no-field", doc, name)));
+            if (value && /^https?:\/\//i.test(value)) {
+              url = value;
+              break;
+            }
+          }
+        node = this.own(this.call("atspi_accessible_get_parent", "no-field", node));
+      }
+    } catch (e) {
+      if (!(e instanceof Miss)) throw e;
+    } finally {
+      for (const r of this.refs) this.f.g_object_unref!(r);
+      this.refs = [];
+    }
+    return url;
+  }
+
+  /** null where the app lacks it; a timeout still ends the read. */
+  private optional<T>(read: () => T): T | null {
+    try {
+      return read();
+    } catch (e) {
+      if (!(e instanceof Miss) || e.reason === "timeout") throw e;
+      return null;
     }
   }
 
