@@ -481,13 +481,14 @@ export class DictationController {
   /** The AI chat in the window the dictation started in (see Active.chat). */
   private async chatIn(a: Active): Promise<AiChat | null> {
     const w = await a.target;
-    if (!w || isT3Code(w)) return null;
+    if (!w) return null;
     // The page's address only in a browser (or in whatever is in front on Wayland, which names no window):
     // a slow read must not hold up a dictation anywhere else. Not before a tap is over either: the Linux
     // helper reads synchronously, and a release it hears late would make the tap a hold.
     const unnamed = w.hwnd === 0 && !w.process;
     if (appLabel(w.process) !== "browser" && !unnamed) return aiChat(w, null);
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, a.startedAt + TAP_MS - Date.now())));
+    if (this.active !== a) return null; // cancelled: its read would only hold up the next one
     return aiChat(w, await this.deps.input.page(w.hwnd));
   }
 

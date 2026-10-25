@@ -36,7 +36,7 @@ export function aiChat(w: { process: string; title: string }, url: string | null
   const app = appLabel(w.process);
   if (app === "chatgpt" || app === "claude") return app; // their desktop apps
   // No process at all: a Wayland desktop, which names no window; then only the address tells.
-  if ((app !== "browser" && w.process) || isT3Code(w)) return null;
+  if (app !== "browser" && w.process) return null;
   const ids = Object.keys(AI_CHATS) as AiChat[];
   let host = "";
   try {
@@ -45,6 +45,7 @@ export function aiChat(w: { process: string; title: string }, url: string | null
     // not an address after all: go by the title
   }
   if (host) return ids.find((id) => AI_CHATS[id].hosts.some((h) => host === h || host.endsWith(`.${h}`))) ?? null;
+  if (isT3Code(w)) return null; // T3 Code's web app
   // "Topic - Claude - Google Chrome", "Google Gemini — Mozilla Firefox", "ChatGPT and 3 more pages - Microsoft Edge".
   const parts = w.title.split(/\s[-–—|]\s/).map((part) => part.replace(/ and \d+ more pages?$/, "").trim());
   return ids.find((id) => parts.some((part) => (AI_CHATS[id].titles as readonly string[]).includes(part))) ?? null;
