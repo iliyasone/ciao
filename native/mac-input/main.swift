@@ -15,6 +15,8 @@
 // - "field" answers "unsupported" without Accessibility. Chromium and Electron apps expose their
 //   fields only to an assistive client that asks, so the first read in such an app turns that on
 //   (AXManualAccessibility) and, if nothing showed yet, tries once more a moment later.
+// - "page" reads the AXURL of the browser's AXWebArea (Safari and Chromium browsers expose it), with
+//   Accessibility only, turning a Chromium browser's accessibility on like "field".
 // - "activate" matches the app bundle's file name ("T3 Code (Nightly)") and answers with its pid.
 // - "key" needs Accessibility too, like "paste"; without it it answers ok:false.
 // - "media" pauses only Music and Spotify, through AppleScript (macOS asks the user once per app).
@@ -569,6 +571,50 @@ func answerField(id: Int?, wanted: pid_t, retry: Bool) {
     }
 }
 
+/// The address of the top web page holding the focused element of the app `pid` (a browser's AXWebArea
+/// carries it as AXURL), or nil: walks up from the focus and keeps the outermost, so a frame doesn't count.
+func readPage(pid: pid_t, _ reader: AXReader) -> String? {
+    guard AXIsProcessTrusted() else { return nil }
+    var url: String?
+    do {
+        guard let ref = try reader.get(AXUIElementCreateApplication(pid), kAXFocusedUIElementAttribute),
+              CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
+        var element: AXUIElement? = (ref as! AXUIElement)
+        for _ in 0..<60 {
+            guard let el = element else { break }
+            if try reader.get(el, kAXRoleAttribute) as? String == "AXWebArea",
+               let value = try reader.get(el, kAXURLAttribute) {
+                let s = CFGetTypeID(value) == CFURLGetTypeID() ? (value as! URL).absoluteString : value as? String
+                if let s, s.hasPrefix("https://") || s.hasPrefix("http://") { url = s }
+            }
+            guard let parent = try reader.get(el, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+            element = (parent as! AXUIElement)
+        }
+    } catch {
+        // out of time: what was found so far
+    }
+    return url
+}
+
+/// Answers "page" like answerField: a Chromium browser seen for the first time gets its accessibility turned
+/// on, and one more try a moment later.
+func answerPage(id: Int?, wanted: pid_t, retry: Bool) {
+    guard let pid = frontmost()?.processIdentifier, wanted == 0 || pid == wanted else {
+        emit(["id": id, "url": nil])
+        return
+    }
+    axQueue.async {
+        let reader = AXReader(budget: 0.5)
+        let asked = AXIsProcessTrusted() && askForAccessibility(pid, reader)
+        let url = readPage(pid: pid, reader)
+        if retry && asked && url == nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { answerPage(id: id, wanted: wanted, retry: false) }
+            return
+        }
+        emit(["id": id, "url": url])
+    }
+}
+
 func handle(_ line: String) {
     guard let data = line.data(using: .utf8),
           let msg = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
@@ -602,6 +648,8 @@ func handle(_ line: String) {
         if msg["on"] as? Bool ?? false { startCapture() } else { capturing = false }
     case "field":
         answerField(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
+    case "page":
+        answerPage(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
     case "activate":
         activateApp(id: id, pattern: msg["process"] as? String ?? "$^")
     case "key":

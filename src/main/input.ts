@@ -202,6 +202,16 @@ export class InputHelper extends EventEmitter<InputEvents> {
     return { text: null, reason: typeof r.reason === "string" ? (r.reason as FieldMiss) : "no-helper" };
   }
 
+  /**
+   * The address of the web page that has focus in `hwnd` if it is still in front (0 = whatever is): the
+   * top page holding the focused element, read through accessibility. null if unknown (not a browser, focus
+   * in its address bar, accessibility off or slow).
+   */
+  async page(hwnd: number): Promise<string | null> {
+    const r = await this.request({ cmd: "page", hwnd });
+    return typeof r.url === "string" && r.url ? r.url : null;
+  }
+
   /** Pause the media players that are playing, or (false) resume those of them still paused. */
   media(pause: boolean): void {
     this.send({ cmd: "media", pause });
@@ -252,7 +262,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
         resolve({ ok: false, reason: "timeout" });
         // A quick command unanswered twice in a row: the helper hangs, and hears no keys either. Restart it
         // (the exit handler does). Not for the slow ones: a field read or a window switch may take long.
-        if (msg.cmd === "field" || msg.cmd === "activate" || ++this.unanswered < 2 || this.child !== child) return;
+        if (msg.cmd === "field" || msg.cmd === "page" || msg.cmd === "activate" || ++this.unanswered < 2 || this.child !== child) return;
         console.warn("input helper not answering: restarting it");
         this.unanswered = 0;
         child.kill();

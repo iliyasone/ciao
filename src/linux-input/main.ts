@@ -13,6 +13,8 @@
 //   front is the one owning the active X11 window, or on Wayland the one whose window says it is
 //   active. Chromium and Electron apps show their fields only with accessibility turned on for
 //   the desktop (GNOME: toolkit-accessibility, or a screen reader running); otherwise "no-field".
+// - "page" reads through AT-SPI too, with the same limits: without desktop accessibility a Chromium
+//   browser shows no page, and it answers null.
 // - "key" events: since keys come from evdev, the app gets them at the same time, so the text read
 //   on Enter may already be gone (null). "paste" goes by the key's position (where QWERTY has V).
 //   On Wayland the watched window has no id, so Enter reads nothing, and "field" sticks with the app
@@ -202,6 +204,23 @@ function readField(hwnd: number, budget: number): FieldResult | { text: null; re
   return r;
 }
 
+/** See "page" in Program.cs; `budget` in ms. */
+function readPage(hwnd: number, budget: number): string | null {
+  let pid: number | null = null;
+  if (!wayland && x11) {
+    const front = x11.activeWindow();
+    if (hwnd !== 0 && front !== hwnd) return null;
+    pid = x11.pid(front);
+  }
+  connectAtspi();
+  try {
+    return atspi?.pageUrl(pid, budget) ?? null;
+  } catch (e) {
+    log(`reading the page: ${(e as Error).message}`);
+    return null;
+  }
+}
+
 /** Connects once, at the first watch or read: an Enter read can't wait for the accessibility bus. */
 function connectAtspi(): void {
   if (atspi === undefined) {
@@ -262,6 +281,8 @@ function handle(msg: Record<string, unknown>): void {
       return;
     case "field":
       return emit({ id, ...readField(typeof msg.hwnd === "number" ? msg.hwnd : 0, 700) });
+    case "page":
+      return emit({ id, url: readPage(typeof msg.hwnd === "number" ? msg.hwnd : 0, 700) });
     case "watch":
       watching = msg.on === true;
       watchWindow = typeof msg.hwnd === "number" ? msg.hwnd : 0;

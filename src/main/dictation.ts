@@ -13,7 +13,7 @@ import { endsWithStopPhrase, stripStopPhrase, stripWakeWord } from "../core/voic
 import { applyLayout, layout, PARAGRAPH_PAUSE_MS, type Pause } from "../core/liveLayout";
 import { appLabel } from "../core/apps";
 import { revisePauses } from "../core/revision";
-import { isT3Code, occurrences, T3_PROCESS, t3Prompt } from "../core/t3";
+import { aiChat, isT3Code, occurrences, T3_PROCESS, t3Prompt, type AiChat } from "../core/t3";
 import { isLoneModifierTrigger } from "../core/triggers";
 
 /** What the controller needs from the overlay window. */
@@ -107,6 +107,12 @@ interface Active {
   muteUntil?: number;
   /** T3 mode, hands-free from a tap: T3 Code comes forward once the first words are transcribed. */
   forwardOnVoice?: boolean;
+  /**
+   * T3 mode: the AI chat (ChatGPT, Claude, …, see core/t3.ts) in front as it started. Such a dictation
+   * stays there, as without T3 mode, and T3 Code isn't brought forward. `chatId` once known.
+   */
+  chat: Promise<AiChat | null>;
+  chatId?: AiChat | null;
   /** T3 mode: T3 Code is being called forward; true once a window was. */
   forwarded?: Promise<boolean>;
   targetMoved?: boolean;
@@ -368,6 +374,7 @@ export class DictationController {
       seq, entry, wav, session, settings, apiKey,
       startedAt: Date.now(),
       target: this.deps.input.foreground(),
+      chat: Promise.resolve(null),
       phase: "recording",
       shown: false,
       liveText: "",
@@ -418,6 +425,13 @@ export class DictationController {
     void a.target.then((t) => {
       if (t) a.entry.target = { title: t.title, process: t.process };
     });
+    if (!replay && settings.t3Mode)
+      a.chat = this.chatIn(a).then((chat) => {
+        a.chatId = chat;
+        if (chat) console.log("t3: started in", chat, "- staying there");
+        if (this.active === a) this.push(a);
+        return chat;
+      });
     this.deps.input.arm(true);
     if (!replay) this.deps.overlay.startCapture(seq);
     // At once, so you hear that it listens; later only where the press may still turn out to be nothing:
@@ -456,11 +470,21 @@ export class DictationController {
     // held Ctrl turning into Ctrl+C. After a tap or the wake word, only once words come in (not just
     // noise, like keys clicking, or a false alarm): a stray one must not take the focus from your typing.
     if (!replay && settings.t3Mode && settings.t3Forward && settings.autoPaste)
-      setTimeout(() => {
+      setTimeout(async () => {
+        if (await a.chat) return; // started in an AI chat: it stays there
         if (this.active !== a || a.phase !== "recording" || !this.handsFree) return;
         if (trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
         else a.forwarded = this.bringT3Forward(a);
       }, TAP_MS); // hands-free by then means the key was let go: no shortcut can claim it any more
+  }
+
+  /** The AI chat in the window the dictation started in (see Active.chat). */
+  private async chatIn(a: Active): Promise<AiChat | null> {
+    const w = await a.target;
+    if (!w || isT3Code(w)) return null;
+    // The page's address only in a browser: a slow read must not hold up a dictation anywhere else.
+    const url = appLabel(w.process) === "browser" && w.hwnd !== 0 ? await this.deps.input.page(w.hwnd) : null;
+    return aiChat(w, url);
   }
 
   /**
@@ -659,7 +683,8 @@ export class DictationController {
       // A T3 dictation lands in T3 Code wherever you went meanwhile (another app, another desktop): T3
       // Code is brought forward now, whatever is in front, and the paste waits for it. Without T3 Code
       // running, the text waits on the clipboard; it never goes into the app in front.
-      if (settings.t3Mode && settings.t3Forward && settings.autoPaste && a.handsFree && !a.replay) {
+      const chat = await a.chat;
+      if (settings.t3Mode && settings.t3Forward && settings.autoPaste && a.handsFree && !a.replay && !chat) {
         const earlier = a.forwarded;
         a.forwardOnVoice = true;
         this.forwardNow(a);
@@ -668,8 +693,9 @@ export class DictationController {
         a.stopTarget = this.stopTarget(a);
       }
       const target = await this.target(a);
-      // A hold pastes where you are, T3 mode or not: T3 mode is for hands-free dictations.
-      const t3 = settings.t3Mode && !!a.handsFree;
+      // A hold pastes where you are, T3 mode or not: T3 mode is for hands-free dictations. So does one
+      // started in an AI chat.
+      const t3 = settings.t3Mode && !!a.handsFree && !chat;
       /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
       let sent = text;
       // Paste last gives the words alone: the prefix and suffix belong to T3 Code's chat box.
@@ -751,6 +777,7 @@ export class DictationController {
     const state: OverlayState = {
       ...base,
       t3: base.t3 && phase !== "clipboard", // the text waits on the clipboard: it isn't going to T3 Code
+      chat: phase !== "clipboard" ? base.chat : undefined,
       phase,
       keep,
       message:
@@ -860,6 +887,7 @@ export class DictationController {
   }
 
   private baseState(a: Active): OverlayState {
+    const t3 = a.settings.t3Mode && a.settings.autoPaste && (a.phase === "recording" ? this.handsFree : !!a.handsFree) && a.miss?.reason !== "not-t3";
     return {
       seq: a.seq,
       phase: a.phase,
@@ -871,7 +899,9 @@ export class DictationController {
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
       layout: a.settings.formatText,
-      t3: a.settings.t3Mode && a.settings.autoPaste && (a.phase === "recording" ? this.handsFree : !!a.handsFree) && a.miss?.reason !== "not-t3",
+      // No logo until it is known which one: never T3 Code's for a moment over a chat.
+      t3: t3 && a.chatId === null,
+      chat: t3 && a.chatId ? a.chatId : undefined,
     };
   }
 

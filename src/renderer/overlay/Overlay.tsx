@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, 
 import { formatCost } from "../../core/cost";
 import { layout, PARAGRAPH_PAUSE_MS, type Pause } from "../../core/liveLayout";
 import { revisePauses } from "../../core/revision";
+import { AI_CHATS } from "../../core/t3";
 import type { OverlayState, TermSuggestion } from "../../core/types";
 import { useStrings } from "../lang";
 import { meter, setMicrophone, setWake, startCapture, stopCapture } from "./capture";
@@ -717,8 +718,11 @@ export function Overlay() {
             {state.offline && state.phase === "recording" && <CloudOff className="size-3.5 text-amber-700 dark:text-amber-300/80" />}
           </div>
           <div className={`flex items-center gap-1.5 text-[13px] font-medium tracking-wide tabular-nums ${finishing ? "text-faint" : "text-fg2"}`}>
-            {/* Headed for T3 Code: its logo by the clock. */}
+            {/* Headed for T3 Code: its logo by the clock; or, started in an AI chat, that chat's. */}
             {state.t3 && <img src="./t3code.png" alt="T3 Code" title={tr.t3Badge} draggable={false} className="size-4 rounded-[4px]" />}
+            {state.chat && (
+              <img src={`./chats/${state.chat}.png`} alt={AI_CHATS[state.chat].name} title={tr.chatBadge(AI_CHATS[state.chat].name)} draggable={false} className="size-4 rounded-[4px]" />
+            )}
             {clock(elapsed)}
           </div>
           <div className="mr-3 flex items-center justify-self-end gap-2 text-[12px] text-faint tabular-nums">

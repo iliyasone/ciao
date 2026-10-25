@@ -4,7 +4,8 @@ using System.Runtime.InteropServices;
 namespace Ciao.Input;
 
 /// <summary>
-/// Reads the text of the focused editable field through UI Automation (the COM client, CUIAutomation8).
+/// Reads the text of the focused editable field through UI Automation (the COM client, CUIAutomation8), and
+/// the address of the web page it is in (<see cref="ReadPage"/>).
 /// A UIA call goes into the target app and can hang as long as that app does, so the calls run on a
 /// worker thread — MTA, as UIA clients should, and never the hook thread, whose hooks Windows drops if
 /// it stalls — and every read answers within <see cref="Timeout"/> whatever the app does.
@@ -26,7 +27,15 @@ static class FieldReader
     }
 
     /// <summary>hwnd 0 = whatever is in front. Completes within about <see cref="Timeout"/>, never faults.</summary>
-    public static Task<Result> Read(IntPtr wanted)
+    public static Task<Result> Read(IntPtr wanted) => Ask(wanted, ReadFocused);
+
+    /// <summary>
+    /// The address of the top web page holding the focused element (Text; null if none, as with focus in a
+    /// browser's address bar). Like <see cref="Read"/>.
+    /// </summary>
+    public static Task<Result> ReadPage(IntPtr wanted) => Ask(wanted, ReadUrl);
+
+    static Task<Result> Ask(IntPtr wanted, Func<IUIAutomation2?, Result> read)
     {
         if (wanted != IntPtr.Zero && Native.GetForegroundWindow() != wanted)
             return Task.FromResult(new Result(null, "focus-changed"));
@@ -39,7 +48,7 @@ static class FieldReader
             if (done.Task.IsCompleted) return; // timed out already
             // Again here: an earlier slow read may have kept this one waiting while the user switched apps.
             if (wanted != IntPtr.Zero && Native.GetForegroundWindow() != wanted) done.TrySetResult(new Result(null, "focus-changed"));
-            else done.TrySetResult(ReadFocused(uia));
+            else done.TrySetResult(read(uia));
         });
         Task.Delay(Timeout).ContinueWith(_ =>
         {
@@ -152,6 +161,54 @@ static class FieldReader
         }
     }
 
+    const int UIA_LegacyIAccessibleValuePropertyId = 30093;
+    /// <summary>Ancestors looked at, at most: a page's editor sits a few dozen levels deep.</summary>
+    const int MaxDepth = 60;
+
+    /// <summary>
+    /// A browser's page is a Document whose value is its address (Chromium and Firefox alike). Walks up from the
+    /// focus and keeps the outermost one, so a frame inside the page doesn't count.
+    /// </summary>
+    static Result ReadUrl(IUIAutomation2? uia)
+    {
+        if (uia is null) return new(null, "unsupported");
+        IUIAutomationTreeWalker? walker = null;
+        IUIAutomationElement? el = null;
+        string? url = null;
+        try
+        {
+            walker = uia.get_RawViewWalker();
+            el = uia.GetFocusedElement();
+            for (int depth = 0; el is not null && depth < MaxDepth; depth++)
+            {
+                if (el.GetCurrentPropertyValue(UIA_ControlTypePropertyId) as int? == UIA_DocumentControlTypeId)
+                {
+                    var value = el.GetCurrentPropertyValue(UIA_ValueValuePropertyId) as string;
+                    if (string.IsNullOrEmpty(value)) value = el.GetCurrentPropertyValue(UIA_LegacyIAccessibleValuePropertyId) as string;
+                    if (value is not null && (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                        || value.StartsWith("http://", StringComparison.OrdinalIgnoreCase))) url = value;
+                }
+                var parent = walker.GetParentElement(el);
+                Marshal.FinalReleaseComObject(el);
+                el = parent;
+            }
+            return new(url, null);
+        }
+        catch (COMException e) when (e.HResult == UIA_E_TIMEOUT)
+        {
+            return new(url, url is null ? "timeout" : null);
+        }
+        catch (Exception)
+        {
+            return new(url, null);
+        }
+        finally
+        {
+            foreach (var o in new object?[] { el, walker })
+                if (o is not null) Marshal.FinalReleaseComObject(o);
+        }
+    }
+
     static Result Text(string s) =>
         s.Length > MaxLength ? new(null, "too-long") : new(s.Replace("\r\n", "\n").Replace('\r', '\n'), null);
 
@@ -167,7 +224,9 @@ static class FieldReader
         // IUIAutomation (55 methods)
         void _1(); void _2(); void _3(); void _4(); void _5();
         IUIAutomationElement? GetFocusedElement();
-        void _7(); void _8(); void _9(); void _10(); void _11(); void _12(); void _13(); void _14(); void _15();
+        void _7(); void _8(); void _9(); void _10(); void _11(); void _12(); void _13();
+        IUIAutomationTreeWalker get_RawViewWalker();
+        void _15();
         void _16(); void _17(); void _18(); void _19(); void _20(); void _21(); void _22(); void _23(); void _24(); void _25();
         void _26(); void _27(); void _28(); void _29(); void _30(); void _31(); void _32(); void _33(); void _34(); void _35();
         void _36(); void _37(); void _38(); void _39(); void _40(); void _41(); void _42(); void _43(); void _44(); void _45();
@@ -179,6 +238,12 @@ static class FieldReader
         void put_ConnectionTimeout(uint ms);
         uint get_TransactionTimeout();
         void put_TransactionTimeout(uint ms);
+    }
+
+    [ComImport, Guid("4042c624-389c-4afc-a630-9df854a541fc"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IUIAutomationTreeWalker
+    {
+        IUIAutomationElement? GetParentElement(IUIAutomationElement element);
     }
 
     [ComImport, Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
