@@ -65,12 +65,11 @@ function startOfDay(at: number): number {
   return d.getTime();
 }
 
-/** The next local midnight: a day around a clock change is 23 or 25 hours long. */
-function nextDay(day: number): number {
-  const d = new Date(day);
-  d.setDate(d.getDate() + 1);
-  return d.getTime();
-}
+/**
+ * The start of the next local day. A day around a clock change is 23 or 25 hours long, and where the
+ * clocks change at midnight a day starts at 01:00: 26 hours on always lands within the next day.
+ */
+const nextDay = (day: number): number => startOfDay(day + 26 * HOUR);
 
 /**
  * A dictation counts once, with all its minutes, for the provider of its first paid transcript (the
@@ -79,16 +78,17 @@ function nextDay(day: number): number {
 export function summarizeUsage(entries: readonly UsageEntry[], window: UsageWindow, now: number): UsageSummary {
   const resolution = window === 1 ? "hour" : "day";
   let from: number;
-  if (window === 1) from = Math.floor(now / HOUR) * HOUR - 23 * HOUR;
+  if (window === 1) from = now - 24 * HOUR;
   else if (window === "all") from = startOfDay(entries.reduce((min, e) => Math.min(min, e.createdAt), now));
   else {
-    const d = new Date(startOfDay(now));
-    d.setDate(d.getDate() - (window - 1));
-    from = d.getTime();
+    from = startOfDay(now);
+    for (let i = 1; i < window; i++) from = startOfDay(from - 12 * HOUR);
   }
 
+  // By the hour, the first column is the hour [from] falls in: 25 columns, the first and last partial.
   const starts: number[] = [];
-  for (let at = from; at <= now; at = resolution === "hour" ? at + HOUR : nextDay(at)) starts.push(at);
+  const first = resolution === "hour" ? Math.floor(from / HOUR) * HOUR : from;
+  for (let at = first; at <= now; at = resolution === "hour" ? at + HOUR : nextDay(at)) starts.push(at);
   const columns: UsageColumn[] = starts.map((start) => ({
     start,
     total: zero(),

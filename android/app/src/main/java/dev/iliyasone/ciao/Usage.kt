@@ -79,8 +79,11 @@ object Usage {
         set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-    /** The next local midnight: a day around a clock change is 23 or 25 hours long. */
-    private fun nextDay(day: Long) = Calendar.getInstance().apply { timeInMillis = day; add(Calendar.DAY_OF_MONTH, 1) }.timeInMillis
+    /**
+     * The start of the next local day. A day around a clock change is 23 or 25 hours long, and where the
+     * clocks change at midnight a day starts at 01:00: 26 hours on always lands within the next day.
+     */
+    private fun nextDay(day: Long) = startOfDay(day + 26 * HOUR)
 
     /**
      * A dictation counts once, with all its minutes, for the provider of its first paid transcript (the
@@ -89,12 +92,13 @@ object Usage {
     fun summarize(entries: List<Entry>, window: Int, now: Long): Summary {
         val hourly = window == 1
         val from = when (window) {
-            1 -> Math.floorDiv(now, HOUR) * HOUR - 23 * HOUR
+            1 -> now - 24 * HOUR
             ALL -> startOfDay(entries.minOfOrNull { it.createdAt }?.coerceAtMost(now) ?: now)
-            else -> Calendar.getInstance().apply { timeInMillis = startOfDay(now); add(Calendar.DAY_OF_MONTH, -(window - 1)) }.timeInMillis
+            else -> (1 until window).fold(startOfDay(now)) { day, _ -> startOfDay(day - 12 * HOUR) }
         }
+        // By the hour, the first column is the hour [from] falls in: 25 columns, the first and last partial.
         val columns = mutableListOf<Column>()
-        var at = from
+        var at = if (hourly) Math.floorDiv(from, HOUR) * HOUR else from
         while (at <= now) {
             columns += Column(at)
             at = if (hourly) at + HOUR else nextDay(at)

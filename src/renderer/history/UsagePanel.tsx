@@ -28,9 +28,16 @@ export function UsagePanel() {
     );
   }, []);
 
+  // The periods end now: move them on while the tab stays open (past midnight, the next hour).
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const summary = useMemo(
-    () => entries && summarizeUsage(entries.map((e) => ({ ...e, createdAt: Date.parse(e.createdAt) })), period, Date.now()),
-    [entries, period],
+    () => entries && summarizeUsage(entries.map((e) => ({ ...e, createdAt: Date.parse(e.createdAt) })), period, now),
+    [entries, period, now],
   );
   if (!summary) return null;
 
