@@ -1,6 +1,7 @@
 package dev.iliyasone.ciao
 
-import java.util.Calendar
+import java.time.Instant
+import java.time.ZoneId
 
 /**
  * What dictation costs over a period, as summarizeUsage in src/core/usage.ts: totals, a column per
@@ -74,10 +75,11 @@ object Usage {
 
     private const val HOUR = 3_600_000L
 
-    private fun startOfDay(at: Long) = Calendar.getInstance().apply {
-        timeInMillis = at
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
+    /** Where midnight comes twice (the clocks go back at 01:00), the first one, as JavaScript's Date. */
+    private fun startOfDay(at: Long): Long {
+        val zone = ZoneId.systemDefault()
+        return Instant.ofEpochMilli(at).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
+    }
 
     /**
      * The start of the next local day. A day around a clock change is 23 or 25 hours long, and where the

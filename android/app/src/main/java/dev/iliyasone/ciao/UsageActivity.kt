@@ -9,6 +9,8 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.MotionEvent
@@ -70,14 +72,33 @@ class UsageActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        Thread {
-            val list = History(File(filesDir, "history")).list().map(Usage::of)
-            runOnUiThread {
-                if (isDestroyed) return@runOnUiThread
-                entries = list
-                render()
-            }
-        }.start()
+        reload.run()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(reload)
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Read the history again every minute while shown: a retry started in History may finish after this
+     * screen opened, and the periods end now.
+     */
+    private val reload: Runnable = object : Runnable {
+        override fun run() {
+            handler.removeCallbacks(this)
+            Thread {
+                val list = History(File(filesDir, "history")).list().map(Usage::of)
+                runOnUiThread {
+                    if (isDestroyed) return@runOnUiThread
+                    entries = list
+                    render()
+                }
+            }.start()
+            handler.postDelayed(this, 60_000)
+        }
     }
 
     private fun windowLabel(w: Int) = getString(

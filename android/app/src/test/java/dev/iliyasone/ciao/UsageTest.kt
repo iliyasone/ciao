@@ -116,6 +116,21 @@ class UsageTest {
     }
 
     @Test
+    fun daysWhereMidnightComesTwice() {
+        // In Havana the clocks go from 01:00 back to 00:00 on 2026-11-01: the day starts at the first midnight.
+        TimeZone.setDefault(TimeZone.getTimeZone("America/Havana"))
+        val e = listOf(Usage.Entry(Instant.parse("2026-11-01T04:30:00Z").toEpochMilli(), 60_000, listOf(paid("gpt-live-transcribe", 0.017))))
+        val all = Usage.summarize(e, Usage.ALL, Instant.parse("2026-11-02T15:00:00Z").toEpochMilli())
+        assertEquals(1793505600000L, all.from)
+        assertEquals(listOf(1793505600000L, 1793595600000L), all.columns.map { it.start })
+        assertEquals(1, all.total.count)
+        val week = Usage.summarize(e, 7, Instant.parse("2026-11-07T15:00:00Z").toEpochMilli())
+        assertEquals(1793505600000L, week.from)
+        assertEquals(listOf(1793505600000L, 1793595600000L, 1793682000000L), week.columns.take(3).map { it.start })
+        assertEquals(0.017, week.total.usd, 1e-9)
+    }
+
+    @Test
     fun noDictations() {
         val s = Usage.summarize(emptyList(), Usage.ALL, now)
         assertEquals(at("2026-10-25T00:00:00Z"), s.from)
