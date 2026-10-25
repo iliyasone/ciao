@@ -35,7 +35,8 @@ export type AiChat = keyof typeof AI_CHATS;
 export function aiChat(w: { process: string; title: string }, url: string | null): AiChat | null {
   const app = appLabel(w.process);
   if (app === "chatgpt" || app === "claude") return app; // their desktop apps
-  if (app !== "browser" || isT3Code(w)) return null;
+  // No process at all: a Wayland desktop, which names no window; then only the address tells.
+  if ((app !== "browser" && w.process) || isT3Code(w)) return null;
   const ids = Object.keys(AI_CHATS) as AiChat[];
   let host = "";
   try {

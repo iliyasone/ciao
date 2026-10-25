@@ -110,7 +110,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   accessibility on), or else by the window title. A ChatGPT conversation is
   titled by its subject alone, so there only the address tells: with focus in the
   address bar, or on Linux without accessibility, only its start page is known.
-  macOS gives no window titles, so there it is the address or nothing. For a
+  macOS and Wayland give no window titles, so there it is the address or nothing. For a
   hands-free dictation anywhere else:
   - the card shows T3 Code's logo by its clock, so you know where the text goes;
   - the text is pasted only into T3 Code, whichever chat is open there, wherever
