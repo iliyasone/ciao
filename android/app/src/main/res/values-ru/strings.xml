@@ -174,4 +174,25 @@
     <string name="section_developer">Для разработчика</string>
     <string name="show_delay">Показывать задержку</string>
     <string name="show_delay_hint">Уровень задержки распознавания OpenAI: меньше — слова появляются раньше, больше — точнее. На цену не влияет.</string>
+    <string name="usage_title">Аналитика</string>
+    <string name="usage_open">Аналитика</string>
+    <string name="usage_window_day">24 часа</string>
+    <string name="usage_window_week">7 дней</string>
+    <string name="usage_window_month">30 дней</string>
+    <string name="usage_window_quarter">90 дней</string>
+    <string name="usage_window_all">Всё время</string>
+    <string name="usage_metric_cost">Стоимость</string>
+    <string name="usage_metric_minutes">Минуты</string>
+    <string name="usage_cost">Стоимость</string>
+    <string name="usage_spoken">Наговорено</string>
+    <string name="usage_dictations">Диктовок</string>
+    <string name="usage_per_day">В среднем за день</string>
+    <string name="usage_per_day_hint">дней с диктовкой: %1$d</string>
+    <string name="usage_since">с %1$s</string>
+    <string name="usage_by_model">По моделям</string>
+    <string name="usage_other">Другое</string>
+    <string name="usage_minutes">%1$d мин</string>
+    <string name="usage_hours">%1$d ч %2$d мин</string>
+    <string name="usage_empty">За этот период диктовок нет.</string>
+    <string name="usage_note">Оценка Ciao по прейскуранту: минуты записи × цена модели. Счёт у OpenAI и Google может немного отличаться. Считаются только диктовки на этом телефоне.</string>
 </resources>

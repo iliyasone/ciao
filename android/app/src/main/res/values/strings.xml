@@ -180,4 +180,25 @@
     <string name="section_developer">For developers</string>
     <string name="show_delay">Show delay</string>
     <string name="show_delay_hint">The OpenAI recognizer’s delay level: lower shows words sooner, higher is more accurate. The price is the same.</string>
+    <string name="usage_title">Usage</string>
+    <string name="usage_open">Usage</string>
+    <string name="usage_window_day">24 hours</string>
+    <string name="usage_window_week">7 days</string>
+    <string name="usage_window_month">30 days</string>
+    <string name="usage_window_quarter">90 days</string>
+    <string name="usage_window_all">All time</string>
+    <string name="usage_metric_cost">Cost</string>
+    <string name="usage_metric_minutes">Minutes</string>
+    <string name="usage_cost">Cost</string>
+    <string name="usage_spoken">Spoken</string>
+    <string name="usage_dictations">Dictations</string>
+    <string name="usage_per_day">Average per day</string>
+    <string name="usage_per_day_hint">days with dictation: %1$d</string>
+    <string name="usage_since">since %1$s</string>
+    <string name="usage_by_model">By model</string>
+    <string name="usage_other">Other</string>
+    <string name="usage_minutes">%1$d min</string>
+    <string name="usage_hours">%1$d h %2$d min</string>
+    <string name="usage_empty">No dictations in this period.</string>
+    <string name="usage_note">Ciao’s estimate at list prices: minutes recorded × the model’s price. OpenAI’s and Google’s bills may differ a little. Counts dictations on this phone only.</string>
 </resources>

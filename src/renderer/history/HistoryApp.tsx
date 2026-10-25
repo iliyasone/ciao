@@ -10,8 +10,9 @@ import type { HistoryEntry, Provider, RetryMode } from "../../core/types";
 import { useStrings } from "../lang";
 import { SettingsPanel } from "./SettingsPanel";
 import { UpdateButton, useUpdateState } from "./update";
+import { UsagePanel } from "./UsagePanel";
 
-type Tab = "history" | "settings";
+type Tab = "history" | "usage" | "settings";
 
 export function HistoryApp() {
   const [tab, setTab] = useState<Tab>(location.hash === "#settings" ? "settings" : "history");
@@ -26,7 +27,7 @@ export function HistoryApp() {
           <span className="text-[14px] font-semibold tracking-tight text-fg">Ciao</span>
         </div>
         <nav className="no-drag flex gap-1">
-          {(["history", "settings"] as const).map((t) => (
+          {(["history", "usage", "settings"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -40,7 +41,9 @@ export function HistoryApp() {
           <UpdateButton state={update} />
         </div>
       </header>
-      <main className="min-h-0 flex-1">{tab === "history" ? <History /> : <SettingsPanel updateState={update} />}</main>
+      <main className="min-h-0 flex-1">
+        {tab === "history" ? <History /> : tab === "usage" ? <UsagePanel /> : <SettingsPanel updateState={update} />}
+      </main>
     </div>
   );
 }

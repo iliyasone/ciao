@@ -90,7 +90,24 @@ const ru = {
     restarting: "Перезапуск…",
   },
 
-  tabs: { history: "История", settings: "Настройки" },
+  tabs: { history: "История", usage: "Аналитика", settings: "Настройки" },
+
+  usage: {
+    windows: { 1: "24 часа", 7: "7 дней", 30: "30 дней", 90: "90 дней", all: "Всё время" },
+    metrics: { cost: "Стоимость", minutes: "Минуты" },
+    cost: "Стоимость",
+    minutes: "Наговорено",
+    dictations: "Диктовок",
+    perDay: "В среднем за день",
+    perDayHint: (days: number) => `дней с диктовкой: ${days}`,
+    duration: (minutes: number) => (minutes < 60 ? `${minutes} мин` : `${Math.floor(minutes / 60)} ч ${minutes % 60} мин`),
+    since: (date: string) => `с ${date}`,
+    byModel: "По моделям",
+    model: "Модель",
+    other: "Другое",
+    empty: "За этот период диктовок нет.",
+    note: "Оценка Ciao по прейскуранту: минуты записи × цена модели. Счёт у OpenAI и Google может немного отличаться. Считаются только диктовки на этом устройстве.",
+  },
 
   history: {
     today: "Сегодня",
@@ -427,7 +444,24 @@ const en: Strings = {
     restarting: "Restarting…",
   },
 
-  tabs: { history: "History", settings: "Settings" },
+  tabs: { history: "History", usage: "Usage", settings: "Settings" },
+
+  usage: {
+    windows: { 1: "24 hours", 7: "7 days", 30: "30 days", 90: "90 days", all: "All time" },
+    metrics: { cost: "Cost", minutes: "Minutes" },
+    cost: "Cost",
+    minutes: "Spoken",
+    dictations: "Dictations",
+    perDay: "Average per day",
+    perDayHint: (days) => `days with dictation: ${days}`,
+    duration: (minutes) => (minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`),
+    since: (date) => `since ${date}`,
+    byModel: "By model",
+    model: "Model",
+    other: "Other",
+    empty: "No dictations in this period.",
+    note: "Ciao's estimate at list prices: minutes recorded × the model's price. OpenAI's and Google's bills may differ a little. Counts dictations on this device only.",
+  },
 
   history: {
     today: "Today",

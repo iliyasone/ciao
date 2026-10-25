@@ -121,6 +121,26 @@ class UiTest {
     }
 
     @Test
+    fun usageSumsTheHistory() {
+        val app = RuntimeEnvironment.getApplication()
+        val history = History(File(app.filesDir, "history"))
+        history.save(history.create(Provider.OPENAI).plus(History.Transcript(History.Source.LIVE, "gpt-live-transcribe", "a", 0)).copy(durationMs = 60_000))
+        history.save(history.create(Provider.GEMINI).plus(History.Transcript(History.Source.LIVE, "gemini-3.5-transcribe-live", "b", 0)).copy(durationMs = 120_000))
+        val activity = Robolectric.buildActivity(UsageActivity::class.java).setup().get()
+        // The history is read off the main thread.
+        val deadline = System.currentTimeMillis() + 5000
+        while (findAll(activity.window.decorView).none { (it as? TextView)?.text == "3,5 ¢" } && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+            ShadowLooper.idleMainLooper()
+        }
+        findText(activity.window.decorView, "3,5 ¢") // 1 min of OpenAI live and 2 of Gemini live
+        findText(activity.window.decorView, "3 min")
+        findText(activity.window.decorView, "gemini-3.5-transcribe-live")
+        findText(activity.window.decorView, "24 hours").performClick()
+        findText(activity.window.decorView, "3,5 ¢")
+    }
+
+    @Test
     fun languageAndThemeOverrideTheSystem() {
         val app = RuntimeEnvironment.getApplication()
         val prefs = Prefs(app)
