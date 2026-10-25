@@ -5,11 +5,13 @@ import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateUtils
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
@@ -97,7 +99,12 @@ class HistoryActivity : Activity() {
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(28), dp(20), 0)
-            addView(title)
+            // The title, with Usage on the right; as the desktop's tabs.
+            addView(LinearLayout(this@HistoryActivity).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(action(R.string.usage_open) { startActivity(Intent(this@HistoryActivity, UsageActivity::class.java)) }.apply { setPadding(dp(16), 0, 0, 0) })
+            })
             addView(stats)
             addView(search, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             addView(empty)

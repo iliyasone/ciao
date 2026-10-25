@@ -262,6 +262,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   default and follows the system live.
 - **Cost meter.** Shows how many cents the current dictation costs. You can turn
   it off in Settings.
+- **Usage** (the *Usage* tab of the history window, *Usage* on Android's history
+  screen): what dictation cost and how much you said over the last 24 hours, 7,
+  30 or 90 days or all time, after T3 Code's Usage page. Totals (cost since the
+  period's first day, minutes, dictations, the average per day with dictation), a
+  column per day (per hour for 24 hours) split into OpenAI and Gemini, switchable
+  between cost and minutes, and each model's share. It is Ciao's estimate at list
+  prices (minutes recorded × the model's price, `src/core/cost.ts`), not the
+  providers' bill, and counts the dictations of this device's history only.
 - **Gemini or OpenAI** (*Settings → Who transcribes* on the desktop and on
   Android). Ciao doesn't recognize speech itself: it sends the audio to one of
   these services, on your own key and your bill, and the card lists them side by
@@ -585,6 +593,10 @@ ones keep only their text. Entries from Ciao 0.8.3 keep their text as the live
 one. The history stays on the
 phone: it isn't synced.
 
+*Usage*, at the top of the history, is the desktop's Usage tab for the phone's
+dictations: the same periods, totals, chart and models (`Usage.kt`, a port of
+`src/core/usage.ts`, and `UsageActivity.kt`).
+
 While you dictate, a *Ciao is listening* notification shows with *Done* and
 *Cancel*: the dictation goes on with the screen off or locked, and you can finish
 it from the shade or the lock screen. With the shade pulled down, the bubble and
@@ -820,7 +832,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
   `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
-  PCM/WAV helpers, prices, shared types,
+  PCM/WAV helpers, prices, `usage.ts` (the Usage tab's sums), shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is
   meant to be reused as-is by other shells (a T3 Code integration, mobile).
 - `src/main/` — the Electron main process:
@@ -837,7 +849,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     `src/core/sync.ts`.
 - `src/renderer/` — React 19 + Tailwind 4:
   - `overlay/` — the pill, the live card, the word suggestions and microphone capture;
-  - `history/` — the history and settings window;
+  - `history/` — the history, usage and settings window;
   - `mic.ts` — the connected microphones and opening the one chosen in Settings.
 - `src/preload/` — the IPC bridge exposed to the renderer as `window.ciao`.
 - `native/win-input/` — the Windows keyboard and paste helper (C#); it also reads
@@ -869,6 +881,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     running dictation; `Recovery.kt` — transcribes dictations cut off by a kill;
   - `History.kt`, `HistoryActivity.kt` — the history, stored as on the desktop
     (`src/main/history.ts`), one folder per dictation, and its screen;
+    `Usage.kt`, `UsageActivity.kt` — the Usage screen, as `src/core/usage.ts`
+    and `src/renderer/history/UsagePanel.tsx`;
     `Telemetry.kt` — the usage counts of `src/main/telemetry.ts`; `Ui.kt` — the
     interface language and theme; `PasteLastTile.kt` — *Paste last*;
     `Retry.kt` — its *More accurate* and *Live*, as `retry` in `src/main/main.ts`
