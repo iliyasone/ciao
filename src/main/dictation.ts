@@ -144,6 +144,8 @@ interface Active {
   check?: T3Check;
   /** T3 mode, Enter pressed: the box gave the text up (false: it stayed; null: the box couldn't be read after). */
   sent?: boolean | null;
+  /** T3 mode: the paste was seen in the box, and the card was told to fold then (before the send). */
+  foldedEarly?: boolean;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
   /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
@@ -725,6 +727,11 @@ export class DictationController {
         a.boxBefore = r.before;
         if (r.delivery === "clipboard") a.miss = r.miss;
         else a.check = r.check;
+        // Seen in the box: nothing more to show, so the card folds now, not after the send below.
+        if (r.delivery === "pasted" && r.check === "landed") {
+          this.deps.overlay.state({ ...this.baseState(a), phase: "done" });
+          a.foldedEarly = true;
+        }
         // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
         // name (not on Wayland, where Enter would go to whatever is in front), and with no trigger held:
         // a held Right Ctrl would make it Ctrl+Enter, which T3 Code takes as steering the running turn.
@@ -794,7 +801,7 @@ export class DictationController {
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     };
-    this.deps.overlay.state(state);
+    if (!a.foldedEarly) this.deps.overlay.state(state);
     if (keep) {
       this.kept = { state, text: keptText };
       // T3 Code busy (an agent streaming) may take the paste in later than the check waited.

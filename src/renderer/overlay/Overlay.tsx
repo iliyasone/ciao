@@ -585,7 +585,8 @@ export function Overlay() {
   // Fold away after a terminal phase (not while the pointer is over the card).
   useEffect(() => {
     if (!state) return;
-    const delay = state.keep ? undefined : HIDE_AFTER[state.phase];
+    // A done T3 card has nothing more to show (the text is in T3 Code's box): it folds at once.
+    const delay = state.keep ? undefined : state.t3 && state.phase === "done" ? 0 : HIDE_AFTER[state.phase];
     if (delay === undefined) return;
     let timer = setTimeout(function leave() {
       if (hovered.current) {
