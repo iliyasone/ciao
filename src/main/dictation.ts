@@ -142,8 +142,8 @@ interface Active {
   boxBefore?: string | null;
   /** T3 mode: how the paste was checked (src/main/paste.ts). */
   check?: T3Check;
-  /** T3 mode, Enter pressed: the box gave the text up (false: it stayed; null: the box couldn't be read after). */
-  sent?: boolean | null;
+  /** T3 mode: the paste was seen in the box, and the card was told to fold then (before the send). */
+  foldedEarly?: boolean;
   /** The mic failed after the key was released (it was still opening); finish() reports it. */
   micError?: string;
   /** The renderer's capture ended (or failed): the WAV is closed and finish() has started. */
@@ -672,6 +672,8 @@ export class DictationController {
     let keep = false;
     let keptText = "";
     let keptHwnd = 0;
+    /** T3 mode, Send right away: the window and text to press Enter for once the dictation is over. */
+    let sendTo: { hwnd: number; text: string } | null = null;
     if (!text) {
       if (entry.durationMs < 1500 && !entry.error) {
         console.log("dictation", entry.id, "dropped", "empty", `${entry.durationMs}ms`);
@@ -725,18 +727,15 @@ export class DictationController {
         a.boxBefore = r.before;
         if (r.delivery === "clipboard") a.miss = r.miss;
         else a.check = r.check;
-        // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
-        // name (not on Wayland, where Enter would go to whatever is in front), and with no trigger held:
-        // a held Right Ctrl would make it Ctrl+Enter, which T3 Code takes as steering the running turn.
-        if (r.delivery === "pasted" && r.check === "landed" && settings.t3Send && target.hwnd !== 0 && !this.hotkeyDown) {
-          await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
-          if (!this.hotkeyDown && (await this.deps.input.enter(target.hwnd))) {
-            // Sent: the box gave the text up. (A T3 window under 640 px takes Enter as a new line.)
-            await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
-            const box = await this.deps.input.field(target.hwnd);
-            a.sent = box.text === null ? null : occurrences(box.text, r.text) === 0;
-          }
+        // Seen in the box: nothing more to show, so the card folds now, not after the send below.
+        if (r.delivery === "pasted" && r.check === "landed") {
+          this.deps.overlay.state({ ...this.baseState(a), phase: "done" });
+          a.foldedEarly = true;
         }
+        // Sent only when the text is known to be in the box (never on a guess), into a window Ciao can
+        // name (not on Wayland, where Enter would go to whatever is in front). After this dictation is
+        // over (see sendT3), so the next one can start while the card is gone.
+        if (r.delivery === "pasted" && r.check === "landed" && settings.t3Send && target.hwnd !== 0) sendTo = { hwnd: target.hwnd, text: r.text };
         this.deps.delivered(r.text, r.delivery === "pasted" ? target.hwnd : null);
       } else if (settings.autoPaste && target) {
         const r = await pasteText(this.deps.input, text, target.hwnd, settings.restoreClipboard);
@@ -769,12 +768,13 @@ export class DictationController {
     }
     entry.delivery = delivery;
     // What happened, without the text: the only way to tell later why a dictation didn't show up.
-    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", a.sent === undefined ? "" : a.sent === null ? "enter" : a.sent ? "sent" : "not-sent", entry.target?.process ?? "", `${entry.durationMs}ms`);
+    console.log("dictation", entry.id, entry.status, delivery, a.miss?.reason ?? a.check ?? "", entry.target?.process ?? "", `${entry.durationMs}ms`);
     this.deps.store.save(entry);
     this.deps.changed(entry);
     this.ended(a, entry.status === "failed" ? "failed" : text && delivery !== "none" ? delivery : "empty");
     if (this.active === a) this.active = null;
     this.deps.idle();
+    if (sendTo) void this.sendT3(entry.id, sendTo.hwnd, sendTo.text);
     // Nothing said: a kept card from before comes back rather than folding away.
     if (phase === "empty" && this.kept) return this.emptyOrKept(a);
     this.kept = null;
@@ -794,12 +794,26 @@ export class DictationController {
             ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
             : undefined,
     };
-    this.deps.overlay.state(state);
+    if (!a.foldedEarly) this.deps.overlay.state(state);
     if (keep) {
       this.kept = { state, text: keptText };
       // T3 Code busy (an agent streaming) may take the paste in later than the check waited.
       if (delivery === "pasted" && a.boxBefore != null && keptHwnd) void this.recheckT3(a, keptHwnd, keptText, a.boxBefore);
     }
+  }
+
+  /**
+   * T3 mode, Send right away: Enter for a prompt seen in the box, once its dictation is over. Not with a
+   * trigger held (the next dictation's): a held Right Ctrl would make it Ctrl+Enter, which T3 Code takes
+   * as steering the running turn.
+   */
+  private async sendT3(id: string, hwnd: number, text: string): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
+    if (this.hotkeyDown || !(await this.deps.input.enter(hwnd))) return;
+    // Sent: the box gave the text up. (A T3 window under 640 px takes Enter as a new line.)
+    await new Promise((resolve) => setTimeout(resolve, SEND_AFTER_MS));
+    const box = await this.deps.input.field(hwnd);
+    console.log("dictation", id, box.text === null ? "enter" : occurrences(box.text, text) === 0 ? "sent" : "not-sent");
   }
 
   /**
