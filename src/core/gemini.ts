@@ -78,6 +78,14 @@ export function vocabulary(keywords: string[]): string[] {
  * after it: nothing is lost. Should the server end one first, the next starts right away; then the
  * ~2 s before that are lost.
  *
+ * A connection lasts about 10 minutes (the server sends goAway, then closes it; measured: a dictation
+ * failed 9 minutes in), so a long dictation moves to a new one at a cut: at a pause once the
+ * connection is RECONNECT_AFTER_MS old, at RECONNECT_BY_MS without one, or right after a goAway. The
+ * held audio goes to the new connection, so nothing is lost there either.
+ *
+ * Should the session fail all the same, partial() tells what its finals cover, so only the rest of
+ * the recording needs the file model.
+ *
  * Vertex AI speaks the same protocol at another address, with the model named by its full path.
  *
  * No language codes are sent: without them the language is detected per utterance, mixed Russian and
@@ -86,6 +94,8 @@ export function vocabulary(keywords: string[]): string[] {
 export class GeminiLiveSession implements LiveSession {
   static ROLL_AFTER_MS = 150_000;
   static ROLL_BY_MS = 200_000;
+  static RECONNECT_AFTER_MS = 6 * 60_000;
+  static RECONNECT_BY_MS = 8 * 60_000;
   /** Quiet this long (below QUIET_LEVEL) counts as a pause to cut at. */
   private static readonly PAUSE_MS = 300;
   private static readonly QUIET_LEVEL = 400;
@@ -96,6 +106,13 @@ export class GeminiLiveSession implements LiveSession {
   handlers: RealtimeHandlers = {};
 
   private socket: SocketLike | null = null;
+  private url = "";
+  /** When the socket was opened: it lasts about 10 minutes. */
+  private openedAt = 0;
+  /** The setup, sent again on each new connection. */
+  private setup: object | null = null;
+  /** The server sent goAway: the next cut moves to a new connection. */
+  private goingAway = false;
   /** Sent before the socket opened. The setup is filled in with the model then, when the endpoint is known. */
   private readonly queue: object[] = [];
   private endpoint: GeminiEndpoint | null = null;
@@ -117,34 +134,79 @@ export class GeminiLiveSession implements LiveSession {
   private held: Uint8Array[] = [];
   /** Whether any of the held audio is more than quiet. */
   private heldVoice = false;
+  /** Audio appended so far, in bytes. */
+  private bytesIn = 0;
+  /** Where the activity being rolled over ended: the held audio begins there. */
+  private cutAt = 0;
+  /** The finals of the activities that ended so far, and the audio they cover from the start. */
+  private covered = { bytes: 0, finals: 0 };
+  /** The server once ended an activity on its own and ignored some audio: the finals since cover it no longer. */
+  private gap = false;
 
   /**
    * Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer".
    * The socket opens once the endpoint is known; until then everything waits in the queue.
    */
-  constructor(factory: SocketFactory, endpoint: Promise<GeminiEndpoint>) {
+  constructor(
+    private readonly factory: SocketFactory,
+    endpoint: Promise<GeminiEndpoint>,
+  ) {
     endpoint.then(
       (ep) => {
         if (this.closedByUs) return;
         this.endpoint = ep;
-        this.open(factory(ep.vertexProject ? VERTEX_LIVE_URL : GEMINI_LIVE_URL));
+        this.url = ep.vertexProject ? VERTEX_LIVE_URL : GEMINI_LIVE_URL;
+        this.open();
       },
       () => this.fail(t().errors.cannotReach("Gemini")),
     );
   }
 
-  private open(socket: SocketLike): void {
+  /** A connection replaced by a new one may still report: only the current one counts. */
+  private open(): void {
+    const socket = this.factory(this.url);
     this.socket = socket;
+    this.openedAt = Date.now();
+    this.connected = false;
     socket.onopen = () => {
+      if (this.socket !== socket) return;
       this.connected = true;
       for (const msg of this.queue.splice(0)) socket.send(this.wire(msg));
       this.handlers.onConnected?.();
     };
-    socket.onmessage = (ev) => this.handle(ev.data);
-    socket.onerror = () => this.fail(t().errors.cannotReach("Gemini"));
-    socket.onclose = (ev) => {
-      if (!this.closedByUs && !this.completed) this.fail(t().errors.connectionClosed(ev.reason ?? ""));
+    socket.onmessage = (ev) => {
+      if (this.socket === socket) this.handle(ev.data);
     };
+    socket.onerror = () => {
+      if (this.socket === socket) this.fail(t().errors.cannotReach("Gemini"));
+    };
+    socket.onclose = (ev) => {
+      if (this.socket === socket && !this.closedByUs && !this.completed) this.fail(t().errors.connectionClosed(ev.reason ?? ""));
+    };
+  }
+
+  /** Between activities: the old connection is done with, the next activity starts on a new one. */
+  private reconnect(): void {
+    const old = this.socket;
+    this.goingAway = false;
+    this.open();
+    try {
+      old?.close();
+    } catch {
+      // Already closed.
+    }
+    if (this.setup) this.send(this.setup);
+  }
+
+  /** How long the connection has been open; 0 before there is one. */
+  private connectionAge(): number {
+    return this.socket ? Date.now() - this.openedAt : 0;
+  }
+
+  /** The finals so far that the audio up to `bytes` (from the start) is known to give. */
+  partial(): { text: string; bytes: number } {
+    const text = this.finals.slice(0, this.covered.finals).map((x) => x.trim()).filter(Boolean).join(" ");
+    return { text, bytes: this.covered.bytes };
   }
 
   /** The JSON for a message; the setup gets the model's name for the endpoint. */
@@ -163,27 +225,32 @@ export class GeminiLiveSession implements LiveSession {
     const transcription: Record<string, unknown> = { mode: "VERBATIM" };
     const terms = vocabulary(s.keywords);
     if (terms.length) transcription.customVocabulary = terms;
-    this.send({
+    this.setup = {
       setup: {
         generationConfig: { responseModalities: ["TEXT"] },
         inputAudioTranscription: transcription,
         realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
       },
-    });
+    };
+    this.send(this.setup);
     this.startActivity();
   }
 
   append(pcm: Uint8Array): void {
+    this.bytesIn += pcm.byteLength;
     const quiet = level(pcm) < GeminiLiveSession.QUIET_LEVEL;
     this.quietMs = quiet ? this.quietMs + pcm.byteLength / BYTES_PER_MS : 0;
     if (this.rolling) {
       this.heldVoice ||= !quiet;
       return void this.held.push(pcm);
     }
-    const { ROLL_AFTER_MS, ROLL_BY_MS, PAUSE_MS } = GeminiLiveSession;
+    const { ROLL_AFTER_MS, ROLL_BY_MS, RECONNECT_AFTER_MS, RECONNECT_BY_MS, PAUSE_MS } = GeminiLiveSession;
     const age = Date.now() - this.activityAt;
-    if ((age >= ROLL_AFTER_MS && this.quietMs >= PAUSE_MS) || age >= ROLL_BY_MS) {
+    const connection = this.connectionAge();
+    const pause = this.quietMs >= PAUSE_MS;
+    if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || this.goingAway) {
       this.rolling = true;
+      this.cutAt = this.bytesIn - pcm.byteLength;
       this.held = [pcm];
       this.heldVoice = !quiet;
       return this.send({ realtimeInput: { activityEnd: {} } });
@@ -264,19 +331,26 @@ export class GeminiLiveSession implements LiveSession {
       return;
     }
     if (msg.error) return this.fail(msg.error.message ?? t().errors.providerError("Gemini"));
-    if (msg.goAway && !this.committed) return this.fail(t().errors.connectionClosed("goAway"));
+    // The connection closes soon: the next audio cuts the activity and moves on to a new one. After
+    // release the final is due before then.
+    if (msg.goAway && !this.committed) this.goingAway = true;
     // Each activity ends with this, after its final.
     if (msg.voiceActivity?.type === "ACTIVITY_END") {
       if (this.rolling) {
         this.rolling = false;
+        if (!this.gap) this.covered = { bytes: this.cutAt, finals: this.finals.length };
         // Released in the pause the cut was made at: the final for what was said is in, and the
         // quiet tail isn't worth another round trip.
         if (this.committed && !this.heldVoice) return this.complete();
+        if (this.goingAway || this.connectionAge() >= GeminiLiveSession.RECONNECT_AFTER_MS) this.reconnect();
         this.startActivity();
         for (const pcm of this.held.splice(0)) this.sendAudio(pcm);
         if (this.committed) this.send({ realtimeInput: { activityEnd: {} } });
       } else if (!this.committed) {
-        // The server cut the activity short: start another, or it ignores the rest.
+        // The server cut the activity short: start another, or it ignores the rest. What it ignored
+        // meanwhile has no final, so a fallback starts at the last cut of ours.
+        this.gap = true;
+        if (this.goingAway || this.connectionAge() >= GeminiLiveSession.RECONNECT_AFTER_MS) this.reconnect();
         this.startActivity();
       } else if (!this.interim) {
         // The turn is over and no guess awaits its final. Nothing was said in this activity, so no

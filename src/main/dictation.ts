@@ -1,5 +1,5 @@
 import { clipboard } from "electron";
-import { level } from "../core/audio";
+import { BYTES_PER_MS, level } from "../core/audio";
 import { costUsd, pricePerMinute } from "../core/cost";
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
@@ -50,6 +50,8 @@ const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shor
 /** How long stop() waits for the overlay to report the capture stopped (it flushes the last 40 ms). */
 const CAPTURE_STOP_TIMEOUT_MS = 3_000;
 const COMPLETION_TIMEOUT_MS = 6000;
+/** Audio left after the live finals (not a whole recording) shorter than this isn't worth a file request. */
+const MIN_TAIL_MS = 500;
 const VOICE_LEVEL = 600;
 
 /**
@@ -617,8 +619,8 @@ export class DictationController {
     a.session.close();
 
     const now = new Date().toISOString();
-    const add = (source: TranscriptSource, model: string, text: string) => {
-      const t: Transcript = { id: `t${entry.transcripts.length + 1}`, source, model, text, createdAt: now, costUsd: costUsd(model, entry.durationMs) };
+    const add = (source: TranscriptSource, model: string, text: string, ms = entry.durationMs) => {
+      const t: Transcript = { id: `t${entry.transcripts.length + 1}`, source, model, text, createdAt: now, costUsd: costUsd(model, ms) };
       if (source === "live" && settings.provider === "openai") t.delay = settings.delay;
       entry.transcripts.push(t);
     };
@@ -631,12 +633,18 @@ export class DictationController {
 
     let text: string | null = a.final !== undefined ? live : null;
     if (text === null) {
-      // The live transcript never completed: transcribe the saved file instead.
+      // The live transcript never completed: the file model transcribes the saved audio its finals
+      // don't cover, often only the last minute or two of a long dictation.
+      const done = a.session.partial?.() ?? { text: "", bytes: 0 };
       try {
-        text = (await transcribeFile(a.apiKey, WavWriter.readPcm(this.deps.store.audioPath(entry.id)), settings)).trim();
+        const rest = WavWriter.readPcm(this.deps.store.audioPath(entry.id)).subarray(done.bytes);
+        const restMs = rest.byteLength / BYTES_PER_MS;
+        const tail = done.bytes && restMs < MIN_TAIL_MS ? "" : (await transcribeFile(a.apiKey, rest, settings)).trim();
+        text = [done.text, tail].filter(Boolean).join(" ");
+        if (done.bytes) console.log("dictation", entry.id, "file model for the last", `${Math.round(restMs)}ms`);
         if (a.stoppedByPhrase) text = stripStopPhrase(text);
         if (a.wakeStarted) text = stripWakeWord(text);
-        add("retry-file", model.file, text);
+        add("retry-file", model.file, text, restMs);
       } catch (e) {
         entry.error = t().errors.fileFailed(a.offline ?? t().errors.noFinalText, (e as Error).message);
         text = live || null;

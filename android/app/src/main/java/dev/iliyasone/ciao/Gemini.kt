@@ -94,6 +94,12 @@ object GeminiEndpoint {
  * reports the end (ACTIVITY_END), so the audio in between is held and sent after it. Should the
  * server end one first, the next starts right away. Mirrors src/core/gemini.ts.
  *
+ * A connection lasts about 10 minutes (the server sends goAway, then closes it), so a long dictation
+ * moves to a new one at a cut: at a pause once the connection is [RECONNECT_AFTER_MS] old, at
+ * [RECONNECT_BY_MS] without one, or right after a goAway. The held audio goes to the new connection.
+ * Should the session fail all the same, [partial] tells what its finals cover, so only the rest of the
+ * recording needs the file model.
+ *
  * Vertex AI speaks the same protocol at another address, with the model named by its full path; the
  * socket opens once [GeminiEndpoint] knows which, and what is sent before waits in [pending].
  *
@@ -129,6 +135,20 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     private val held = mutableListOf<ByteArray>()
     /** Whether any of the held audio is more than quiet. */
     private var heldVoice = false
+    /** Audio appended so far, in bytes; where the activity being rolled over ended. Under [lock]. */
+    private var bytesIn = 0L
+    private var cutAt = 0L
+    /** The finals of the activities that ended so far and the audio they cover. Under [lock]. */
+    private var coveredBytes = 0L
+    private var coveredFinals = 0
+    /** The server once ended an activity on its own and ignored some audio: the finals since cover it no longer. Under [lock]. */
+    private var gap = false
+    /** When [socket] was opened: it lasts about 10 minutes. Under [lock]. */
+    private var openedAt = 0L
+    /** The server sent goAway: the next cut moves to a new connection. Under [lock]. */
+    private var goingAway = false
+    /** The setup, sent again on each new connection. */
+    private var setup: JSONObject? = null
     private val settle = Runnable { complete() }
     private var settling = false
 
@@ -156,37 +176,63 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
 
     private fun open(project: String?) {
         vertexProject = project
-        // The key goes in a header, not ?key=: query strings end up in logs.
-        val ws = ApiProxy.client(context).newWebSocket(
-            Request.Builder().url(if (project != null) GeminiEndpoint.VERTEX_LIVE_URL else URL).header("x-goog-api-key", apiKey).build(),
-            object : WebSocketListener() {
-                override fun onMessage(webSocket: WebSocket, text: String) {
-                    main.post { handle(text) }
-                }
-
-                // Gemini sends its JSON as binary frames.
-                override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                    val text = bytes.utf8()
-                    main.post { handle(text) }
-                }
-
-                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                    val message = socketError(context, NAME, response)
-                    main.post { fail(message) }
-                }
-
-                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    webSocket.close(1000, null)
-                    main.post { if (!completed) fail(context.getString(R.string.error_closed, reason)) }
-                }
-            },
-        )
         synchronized(lock) {
-            socket = ws
-            for (msg in pending) ws.send(wire(msg))
+            connect()
+            for (msg in pending) socket!!.send(wire(msg))
             pending.clear()
             pendingBytes = 0
         }
+    }
+
+    /** Under [lock]. A connection replaced by a new one may still report: only the current one counts. */
+    private fun connect() {
+        // The key goes in a header, not ?key=: query strings end up in logs.
+        socket = ApiProxy.client(context).newWebSocket(
+            Request.Builder().url(if (vertexProject != null) GeminiEndpoint.VERTEX_LIVE_URL else URL).header("x-goog-api-key", apiKey).build(),
+            events,
+        )
+        openedAt = SystemClock.elapsedRealtime()
+    }
+
+    private fun current(webSocket: WebSocket) = synchronized(lock) { socket === webSocket }
+
+    private val events = object : WebSocketListener() {
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            main.post { if (current(webSocket)) handle(text) }
+        }
+
+        // Gemini sends its JSON as binary frames.
+        override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            val text = bytes.utf8()
+            main.post { if (current(webSocket)) handle(text) }
+        }
+
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            val message = socketError(context, NAME, response)
+            main.post { if (current(webSocket)) fail(message) }
+        }
+
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            webSocket.close(1000, null)
+            main.post { if (current(webSocket) && !completed) fail(context.getString(R.string.error_closed, reason)) }
+        }
+    }
+
+    /** Under [lock], between activities: the old connection is done with, the next activity starts on a new one. */
+    private fun reconnect() {
+        val old = socket
+        goingAway = false
+        connect()
+        old?.close(1000, null)
+        setup?.let { send(it) }
+    }
+
+    /** Under [lock]. How long the connection has been open; 0 before there is one. */
+    private fun connectionAge() = if (socket == null) 0L else SystemClock.elapsedRealtime() - openedAt
+
+    /** On the main thread, like [finals]. */
+    override fun partial(): LiveSession.Partial = synchronized(lock) {
+        LiveSession.Partial(finals.take(coveredFinals).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" "), coveredBytes)
     }
 
     override val usable: Boolean get() = failure == null && !closedByUs
@@ -201,7 +247,9 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
             .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("TEXT")))
             .put("inputAudioTranscription", transcription)
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject().put("disabled", true)))
-        send(JSONObject().put("setup", setup))
+        val msg = JSONObject().put("setup", setup)
+        this.setup = msg
+        send(msg)
         synchronized(lock) { startActivity() }
     }
 
@@ -211,6 +259,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
 
     private fun appendLocked(pcm: ByteArray, length: Int) {
         val ms = length / 2 * 1000.0 / Recorder.SAMPLE_RATE
+        bytesIn += length
         val quiet = Recorder.level(pcm, 0, length) < QUIET_LEVEL
         quietMs = if (quiet) quietMs + ms else 0.0
         if (rolling) {
@@ -219,8 +268,11 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
             return
         }
         val age = SystemClock.elapsedRealtime() - activityAt
-        if ((age >= ROLL_AFTER_MS && quietMs >= PAUSE_MS) || age >= ROLL_BY_MS) {
+        val connection = connectionAge()
+        val pause = quietMs >= PAUSE_MS
+        if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || goingAway) {
             rolling = true
+            cutAt = bytesIn - length
             held.add(pcm.copyOf(length))
             heldVoice = !quiet
             send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
@@ -313,13 +365,19 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         msg.optJSONObject("error")?.let { e ->
             return fail(e.optString("message").takeIf { it.isNotEmpty() } ?: context.getString(R.string.error_provider, NAME))
         }
-        if (msg.has("goAway") && !committed) return fail(context.getString(R.string.error_closed, "goAway"))
+        // The connection closes soon: the next audio cuts the activity and moves on to a new one. After
+        // release the final is due before then.
+        if (msg.has("goAway") && !committed) synchronized(lock) { goingAway = true }
         // Each activity ends with this, after its final.
         if (msg.optJSONObject("voiceActivity")?.optString("type") == "ACTIVITY_END") {
             var done = false
             val settleNow = synchronized(lock) {
                 if (rolling) {
                     rolling = false
+                    if (!gap) {
+                        coveredBytes = cutAt
+                        coveredFinals = finals.size
+                    }
                     if (committed && !heldVoice) {
                         // Released in the pause the cut was made at: the final for what was said is
                         // in, and the quiet tail isn't worth another round trip.
@@ -327,13 +385,17 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
                         done = true
                         return@synchronized false
                     }
+                    if (goingAway || connectionAge() >= RECONNECT_AFTER_MS) reconnect()
                     startActivity()
                     for (pcm in held) sendAudio(pcm, pcm.size)
                     held.clear()
                     if (committed) send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
                     false
                 } else if (!committed) {
-                    // The server cut the activity short: start another, or it ignores the rest.
+                    // The server cut the activity short: start another, or it ignores the rest. What it
+                    // ignored meanwhile has no final, so a fallback starts at the last cut of ours.
+                    gap = true
+                    if (goingAway || connectionAge() >= RECONNECT_AFTER_MS) reconnect()
                     startActivity()
                     false
                 } else true
@@ -373,6 +435,8 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         const val NAME = "Gemini"
         const val ROLL_AFTER_MS = 150_000
         const val ROLL_BY_MS = 200_000
+        const val RECONNECT_AFTER_MS = 6 * 60_000
+        const val RECONNECT_BY_MS = 8 * 60_000
         /** Quiet this long (below QUIET_LEVEL) counts as a pause to cut at. */
         private const val PAUSE_MS = 300
         private const val QUIET_LEVEL = 400

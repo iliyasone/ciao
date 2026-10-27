@@ -43,6 +43,11 @@ export interface LiveSession {
   /** The speaker is done: the final transcript follows (onCompleted). */
   commit(): void;
   close(): void;
+  /**
+   * Should the turn never complete: the text of the finals so far and how much of the audio, in bytes
+   * from the start, they are known to cover. Without it the whole recording goes to the file model.
+   */
+  partial?(): { text: string; bytes: number };
 }
 
 /**
