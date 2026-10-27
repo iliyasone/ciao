@@ -37,19 +37,20 @@ object FileTranscriber {
     /**
      * Blocking; call off the main thread. [provider] is the dictation's own, as when it
      * started; [key] is that provider's current key (a retry after fixing a bad key must use the new one).
+     * [from]: where in the recording to start, in bytes (what the live finals didn't cover).
      */
-    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String): String =
+    fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, from: Long = 0): String =
         // Opened once, before any request: a file trimmed from the history meanwhile stays readable,
         // and a missing one fails as such rather than as a network error.
         RandomAccessFile(audio, "r").use { file ->
-            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key) else transcribeOpenAI(context, prefs, file, key)
+            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key, from) else transcribeOpenAI(context, prefs, file, key, from)
         }
 
-    private fun transcribeOpenAI(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String): String {
+    private fun transcribeOpenAI(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, from: Long): String {
         val texts = mutableListOf<String>()
         val hints = listOf(prefs.prompt.trim(), if (prefs.keywords.isNotEmpty()) "Термины: ${prefs.keywords.joinToString(", ")}." else "")
             .filter { it.isNotEmpty() }.joinToString(" ")
-        for ((start, end) in split(audio, MAX_PART_MS)) {
+        for ((start, end) in split(audio, MAX_PART_MS, from)) {
             // Continuity across parts.
             val prompt = if (texts.isEmpty()) hints else "$hints ${texts.last().takeLast(400)}".trim()
             val wav = object : RequestBody() {
@@ -91,18 +92,18 @@ object FileTranscriber {
      * model: [transcribeVertex]). Verbatim, as live: no language codes, see Gemini.kt. Mirrors
      * transcribeFileGemini.
      */
-    private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String): String {
+    private fun transcribeGemini(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, from: Long): String {
         val project = try {
             GeminiEndpoint.vertexProject(context, key)
         } catch (e: IOException) {
             throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
         }
-        if (project != null) return transcribeVertex(context, prefs, audio, key, project)
+        if (project != null) return transcribeVertex(context, prefs, audio, key, project, from)
         val config = JSONObject()
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("custom_vocabulary", JSONArray(terms))
         val texts = mutableListOf<String>()
-        for ((start, end) in split(audio, GEMINI_MAX_PART_MS)) {
+        for ((start, end) in split(audio, GEMINI_MAX_PART_MS, from)) {
             val part = JSONObject().put("type", "audio").put("mime_type", "audio/wav").put("data", DATA)
             val json = JSONObject()
                 .put("model", Provider.GEMINI.fileModel)
@@ -173,13 +174,13 @@ object FileTranscriber {
     }
 
     /** The same on Vertex AI: :generateContent, where the settings go in audioTranscriptionConfig. Mirrors transcribeFileVertex. */
-    private fun transcribeVertex(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, project: String): String {
+    private fun transcribeVertex(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, project: String, from: Long): String {
         val config = JSONObject().put("mode", "VERBATIM")
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("customVocabulary", JSONArray(terms))
         val url = "https://aiplatform.googleapis.com/v1/${GeminiEndpoint.vertexModel(project, Provider.GEMINI.fileModel)}:generateContent"
         val texts = mutableListOf<String>()
-        for ((start, end) in split(audio, GEMINI_MAX_PART_MS)) {
+        for ((start, end) in split(audio, GEMINI_MAX_PART_MS, from)) {
             val inline = JSONObject().put("mimeType", "audio/wav").put("data", DATA)
             val content = JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("inlineData", inline)))
             val text = JSONObject()
@@ -235,10 +236,10 @@ object FileTranscriber {
     }
 
     /** Parts of at most [maxPartMs], as byte ranges of [audio], each cut at the quietest 100 ms before its end. */
-    private fun split(audio: RandomAccessFile, maxPartMs: Int): List<Pair<Long, Long>> {
+    private fun split(audio: RandomAccessFile, maxPartMs: Int, from: Long): List<Pair<Long, Long>> {
         val parts = mutableListOf<Pair<Long, Long>>()
         val size = audio.length()
-        var start = 0L
+        var start = from.coerceIn(0, size)
         val maxBytes = maxPartMs.toLong() * BYTES_PER_MS
         val step = 100 * BYTES_PER_MS
         val window = ByteArray(SEARCH_MS * BYTES_PER_MS)

@@ -43,6 +43,14 @@ interface LiveSession {
     fun append(pcm: ByteArray, length: Int = pcm.size)
     fun commit()
     fun close()
+
+    /**
+     * Should the turn never complete: the finals so far and how much of the audio, from the start,
+     * they are known to cover. Null: the whole recording goes to the file model.
+     */
+    fun partial(): Partial? = null
+
+    class Partial(val text: String, val bytes: Long)
 }
 
 /** "Cannot reach OpenAI", "Gemini rejected the API key"…: why a socket to [name] failed. */

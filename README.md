@@ -225,8 +225,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **Paste the last transcript again** with **Alt+Shift+Z** (**Option+Shift+Z** on a Mac).
 - **Nothing is lost.**
   - Audio is written to disk while you speak.
-  - If the live connection drops, recording continues and the saved file is
-    transcribed when you stop.
+  - If the live connection drops, recording continues, and when you stop, the
+    file model transcribes the saved audio from where the live text left off. With
+    Gemini that is usually only the last minute or two, so even a long dictation
+    is ready in seconds. (With OpenAI the whole recording goes to the file model.)
   - If that fails too (for example, you are still offline), nothing is pasted. The
     dictation is marked "not transcribed" in the history, where you can transcribe
     it later.
@@ -285,9 +287,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Gemini detects the language on its own and takes no free-form context, only
     the terms (*Settings → Recognition*), so the Languages and Context fields
     (under OpenAI in *Who transcribes*) are hidden with it, and so is the delay level.
-  - A Gemini live connection lasts about 10 minutes from when it opens, and Ciao
-    opens it up to 2 minutes ahead, so a dictation longer than about 8 minutes
-    may be transcribed from the saved audio when you stop instead.
+  - A Gemini live connection lasts about 10 minutes, so a longer dictation moves
+    to a new connection at a pause once the connection is 6 minutes old (at 8
+    minutes without a pause, or right away when Google says it will close it).
+    Nothing said in between is lost, and the text keeps coming.
   - Google's first paid tier takes about 6.5 minutes of audio a minute. *Live*
     in the history therefore sends a recording at 4× its speed with Gemini, one
     at a time, and *More accurate* waits and tries again when a long recording
@@ -550,8 +553,11 @@ yours.
   offers to add it to the terms, as on the desktop. For two minutes after the
   insert the accessibility service is told about text changes and reads that
   field (never a password field); the text is compared on the phone and dropped.
-- If the live connection drops, recording continues and the audio is sent to
-  the file model (`gpt-transcribe`, or `gemini-3.5-transcribe`) when you finish.
+- If the live connection drops, recording continues, and when you finish, the
+  file model (`gpt-transcribe`, or `gemini-3.5-transcribe`) transcribes the audio
+  from where the live text left off (with Gemini; with OpenAI, all of it). A long
+  Gemini dictation moves to a new connection before the old one runs out, as on
+  the desktop.
   If that fails too (still offline), the card keeps the recording with a
   *Transcribe again* button until you dismiss it.
 - **Gemini or OpenAI**: pick the service at the top of the Ciao screen, where
