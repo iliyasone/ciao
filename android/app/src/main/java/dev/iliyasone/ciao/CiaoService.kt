@@ -600,7 +600,7 @@ class CiaoService : AccessibilityService() {
         Thread {
             val result = runCatching {
                 val from = done?.bytes ?: 0L
-                val tail = if (d.audioFile.length() - from < MIN_TAIL_BYTES) "" else FileTranscriber.transcribe(this, prefs, d.audioFile, d.provider, prefs.keyOf(d.provider), from)
+                val tail = if (from > 0 && d.audioFile.length() - from < MIN_TAIL_BYTES) "" else FileTranscriber.transcribe(this, prefs, d.audioFile, d.provider, prefs.keyOf(d.provider), from)
                 listOfNotNull(done?.text, tail.trim()).filter { it.isNotEmpty() }.joinToString(" ")
             }
             main.post {
@@ -950,7 +950,7 @@ class CiaoService : AccessibilityService() {
         private const val FLING_PROJECTION_S = 0.12f
         private const val MAX_FLING_DP_S = 1500f
         private const val COMPLETION_TIMEOUT_MS = 6000L
-        /** Audio left after the live finals shorter than this (0.5 s) isn't worth a file request. */
+        /** Audio left after the live finals (not a whole recording) shorter than this (0.5 s) isn't worth a file request. */
         private const val MIN_TAIL_BYTES = Recorder.SAMPLE_RATE * 2 / 2
         private const val DEFAULT_LIFT_DP = 72
         /** How long after an insert the field is watched for corrections, as on the desktop. */

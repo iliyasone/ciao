@@ -141,6 +141,8 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     /** The finals of the activities that ended so far and the audio they cover. Under [lock]. */
     private var coveredBytes = 0L
     private var coveredFinals = 0
+    /** The server once ended an activity on its own and ignored some audio: the finals since cover it no longer. Under [lock]. */
+    private var gap = false
     /** When [socket] was opened: it lasts about 10 minutes. Under [lock]. */
     private var openedAt = 0L
     /** The server sent goAway: the next cut moves to a new connection. Under [lock]. */
@@ -372,8 +374,10 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
             val settleNow = synchronized(lock) {
                 if (rolling) {
                     rolling = false
-                    coveredBytes = cutAt
-                    coveredFinals = finals.size
+                    if (!gap) {
+                        coveredBytes = cutAt
+                        coveredFinals = finals.size
+                    }
                     if (committed && !heldVoice) {
                         // Released in the pause the cut was made at: the final for what was said is
                         // in, and the quiet tail isn't worth another round trip.
@@ -388,9 +392,9 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
                     if (committed) send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
                     false
                 } else if (!committed) {
-                    // The server cut the activity short: start another, or it ignores the rest.
-                    coveredBytes = bytesIn
-                    coveredFinals = finals.size
+                    // The server cut the activity short: start another, or it ignores the rest. What it
+                    // ignored meanwhile has no final, so a fallback starts at the last cut of ours.
+                    gap = true
                     if (goingAway || connectionAge() >= RECONNECT_AFTER_MS) reconnect()
                     startActivity()
                     false

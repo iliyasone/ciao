@@ -50,7 +50,7 @@ const SHORTCUT_WINDOW_MS = 1000; // another key within this time = it was a shor
 /** How long stop() waits for the overlay to report the capture stopped (it flushes the last 40 ms). */
 const CAPTURE_STOP_TIMEOUT_MS = 3_000;
 const COMPLETION_TIMEOUT_MS = 6000;
-/** Audio left after the live finals shorter than this isn't worth a file request. */
+/** Audio left after the live finals (not a whole recording) shorter than this isn't worth a file request. */
 const MIN_TAIL_MS = 500;
 const VOICE_LEVEL = 600;
 
@@ -639,7 +639,7 @@ export class DictationController {
       try {
         const rest = WavWriter.readPcm(this.deps.store.audioPath(entry.id)).subarray(done.bytes);
         const restMs = rest.byteLength / BYTES_PER_MS;
-        const tail = restMs < MIN_TAIL_MS ? "" : (await transcribeFile(a.apiKey, rest, settings)).trim();
+        const tail = done.bytes && restMs < MIN_TAIL_MS ? "" : (await transcribeFile(a.apiKey, rest, settings)).trim();
         text = [done.text, tail].filter(Boolean).join(" ");
         if (done.bytes) console.log("dictation", entry.id, "file model for the last", `${Math.round(restMs)}ms`);
         if (a.stoppedByPhrase) text = stripStopPhrase(text);

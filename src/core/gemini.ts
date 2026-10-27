@@ -140,6 +140,8 @@ export class GeminiLiveSession implements LiveSession {
   private cutAt = 0;
   /** The finals of the activities that ended so far, and the audio they cover from the start. */
   private covered = { bytes: 0, finals: 0 };
+  /** The server once ended an activity on its own and ignored some audio: the finals since cover it no longer. */
+  private gap = false;
 
   /**
    * Gemini sends JSON as binary frames: a browser-style socket needs binaryType = "arraybuffer".
@@ -336,7 +338,7 @@ export class GeminiLiveSession implements LiveSession {
     if (msg.voiceActivity?.type === "ACTIVITY_END") {
       if (this.rolling) {
         this.rolling = false;
-        this.covered = { bytes: this.cutAt, finals: this.finals.length };
+        if (!this.gap) this.covered = { bytes: this.cutAt, finals: this.finals.length };
         // Released in the pause the cut was made at: the final for what was said is in, and the
         // quiet tail isn't worth another round trip.
         if (this.committed && !this.heldVoice) return this.complete();
@@ -345,8 +347,9 @@ export class GeminiLiveSession implements LiveSession {
         for (const pcm of this.held.splice(0)) this.sendAudio(pcm);
         if (this.committed) this.send({ realtimeInput: { activityEnd: {} } });
       } else if (!this.committed) {
-        // The server cut the activity short: start another, or it ignores the rest.
-        this.covered = { bytes: this.bytesIn, finals: this.finals.length };
+        // The server cut the activity short: start another, or it ignores the rest. What it ignored
+        // meanwhile has no final, so a fallback starts at the last cut of ours.
+        this.gap = true;
         if (this.goingAway || this.connectionAge() >= GeminiLiveSession.RECONNECT_AFTER_MS) this.reconnect();
         this.startActivity();
       } else if (!this.interim) {
