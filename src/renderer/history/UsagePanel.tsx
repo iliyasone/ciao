@@ -10,7 +10,7 @@ import { useStrings } from "../lang";
 
 type Metric = "cost" | "minutes";
 
-const COLORS: Record<UsageProvider, string> = { openai: "#10a37f", gemini: "#4c8df6", other: "#a1a1aa" };
+const COLORS: Record<UsageProvider, string> = { openai: "#10a37f", gemini: "#4c8df6", nemotron: "#76b900", other: "#a1a1aa" };
 
 const providerName = (p: UsageProvider, tr: Strings) => (p === "other" ? tr.usage.other : PROVIDERS[p].name);
 const minutesOf = (ms: number) => Math.round(ms / 60_000);

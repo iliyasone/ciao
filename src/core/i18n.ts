@@ -187,6 +187,7 @@ const ru = {
       terms: "Термины",
       termsHint: "Слова, которые надо писать точно так. По одному в строке.",
       geminiNote: "Gemini сам определяет язык и не берёт контекст — только термины.",
+      nemotronNote: "Nemotron сам определяет язык и не берёт ни контекст, ни термины.",
     },
     appearance: {
       title: "Оформление",
@@ -541,6 +542,7 @@ const en: Strings = {
       terms: "Terms",
       termsHint: "Words to spell exactly as written. One per line.",
       geminiNote: "Gemini detects the language itself and takes no context, only the terms.",
+      nemotronNote: "Nemotron detects the language itself and takes neither context nor terms.",
     },
     appearance: {
       title: "Appearance",

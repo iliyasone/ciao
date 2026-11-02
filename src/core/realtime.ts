@@ -67,15 +67,21 @@ export class RealtimeSession implements LiveSession {
   private readonly queue: string[] = [];
   private closedByUs = false;
 
-  constructor(factory: SocketFactory) {
-    this.socket = factory(REALTIME_TRANSCRIPTION_URL);
+  /** url and service: another service that speaks the same events (nemotron.ts). */
+  constructor(
+    factory: SocketFactory,
+    url = REALTIME_TRANSCRIPTION_URL,
+    private readonly service = "OpenAI",
+  ) {
+    this.socket = factory(url);
     this.socket.onopen = () => {
       this.connected = true;
       for (const msg of this.queue.splice(0)) this.socket.send(msg);
+      this.opened();
       this.handlers.onConnected?.();
     };
     this.socket.onmessage = (ev) => this.handle(String(ev.data));
-    this.socket.onerror = () => this.fail(t().errors.cannotReach("OpenAI"));
+    this.socket.onerror = () => this.fail(t().errors.cannotReach(this.service));
     this.socket.onclose = (ev) => {
       if (!this.closedByUs) this.fail(t().errors.connectionClosed(ev.reason ?? ""));
     };
@@ -119,7 +125,10 @@ export class RealtimeSession implements LiveSession {
     }
   }
 
-  private send(msg: object): void {
+  /** The socket is open and the queue sent. */
+  protected opened(): void {}
+
+  protected send(msg: object): void {
     const json = JSON.stringify(msg);
     if (this.socket.readyState === OPEN) this.socket.send(json);
     else this.queue.push(json);
@@ -146,7 +155,7 @@ export class RealtimeSession implements LiveSession {
         this.handlers.onCompleted?.(msg.transcript ?? "");
         break;
       case "error":
-        this.fail(msg.error?.message ?? t().errors.providerError("OpenAI"));
+        this.fail(msg.error?.message ?? t().errors.providerError(this.service));
         break;
     }
   }

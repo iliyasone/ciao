@@ -7,7 +7,7 @@ export type Theme = "system" | "light" | "dark";
 /** Interface language (src/core/i18n.ts). */
 export type Lang = "ru" | "en";
 /** Who transcribes (src/core/providers.ts). */
-export type Provider = "openai" | "gemini";
+export type Provider = "openai" | "gemini" | "nemotron";
 export const DELAYS: Delay[] = ["minimal", "low", "medium", "high", "xhigh"];
 
 export interface Settings {

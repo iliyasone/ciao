@@ -228,7 +228,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - If the live connection drops, recording continues, and when you stop, the
     file model transcribes the saved audio from where the live text left off. With
     Gemini that is usually only the last minute or two, so even a long dictation
-    is ready in seconds. (With OpenAI the whole recording goes to the file model.)
+    is ready in seconds. (With OpenAI the whole recording goes to the file model;
+    with Nemotron the live model hears all of it again, at its own speed.)
   - If that fails too (for example, you are still offline), nothing is pasted. The
     dictation is marked "not transcribed" in the history, where you can transcribe
     it later.
@@ -237,7 +238,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **History.** Click the tray icon to see every dictation. You can play it, copy
   it, delete it, or transcribe it again:
   - **More accurate** re-runs the whole file through the file model
-    (`gpt-transcribe` or `gemini-3.5-transcribe`).
+    (`gpt-transcribe` or `gemini-3.5-transcribe`; Nemotron has none, so there it
+    is the live model again, as long as the recording lasts).
   - **Live** re-runs it through the streaming model.
   - With keys for both services, *Via OpenAI / Gemini* next to these buttons
     picks the service for this recording (the one in Settings by default), and
@@ -269,7 +271,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen): what dictation cost and how much you said over the last 24 hours, 7,
   30 or 90 days or all time, after T3 Code's Usage page. Totals (cost since the
   period's first day, minutes, dictations, the average per day with dictation), a
-  column per day (per hour for 24 hours) split into OpenAI and Gemini, switchable
+  column per day (per hour for 24 hours) split into OpenAI, Gemini and Nemotron, switchable
   between cost and minutes, and each model's share. It is Ciao's estimate at list
   prices (minutes recorded × the model's price, `src/core/cost.ts`), not the
   providers' bill, and counts the dictations of this device's history only.
@@ -299,8 +301,20 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     an AI Studio key by itself and sends the audio to Vertex AI in the key's
     project. Vertex has no AI Studio tiers (Tier 1 allows the file model only 100
     requests a day) and bills the project's Cloud billing account.
+- **NVIDIA Nemotron** (desktop only, a third choice in *Who transcribes*): NVIDIA's
+  Nemotron 3.5 ASR Streaming, run by [.wave](https://dotwave.ai) (a `wk_…` key;
+  new accounts get $10 of credit). It costs about $0.03 per hour of speech, a
+  twentieth of Gemini, and the text is in 0.1–0.2 s after you stop, but it
+  recognizes Russian noticeably worse than Gemini and writes English inside
+  Russian speech in Cyrillic. It detects the language on its own and takes no
+  context and no terms.
+  - .wave hears audio only at the speed of speech: a backlog (the wake word's
+    pre-roll, audio from before the connection opened) goes out at that speed, so
+    the text comes that much later. *Live* and *More accurate* in the history take
+    as long as the recording.
+  - There is no Nemotron on Android yet.
 - **Proxy** (*Settings → Who transcribes → Proxy*, on every platform and on
-  Android). Requests to OpenAI and Gemini, live and file, go through an HTTP proxy
+  Android). Requests to OpenAI, Gemini and Nemotron, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
   country. Paste it, press *Save*, and *Check* (run on its own after a save) says
   whether Gemini answers through it, or that the proxy refused the login or can't be
@@ -324,7 +338,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   limited to the Vertex AI API (`gcloud services api-keys create
   --api-target=service=aiplatform.googleapis.com --service-account=…`). Vertex
   refuses a key not bound to a service account, and a key that may also call the
-  Gemini API is taken for an AI Studio key.
+  Gemini API is taken for an AI Studio key. Or a [.wave](https://dotwave.ai) key
+  for Nemotron (desktop).
 
 Pricing is per minute of audio:
 
@@ -332,6 +347,7 @@ Pricing is per minute of audio:
 | --- | --- | --- |
 | OpenAI (`gpt-live-transcribe`, `gpt-transcribe`) | $0.017/min, about $1 per hour of talking | $0.0045/min |
 | Gemini (`gemini-3.5-transcribe-live`, `gemini-3.5-transcribe`) | about $0.009/min | about $0.005/min |
+| Nemotron on .wave (`nemotron-asr-streaming`) | $0.00045/min | the same, the live model again |
 
 Gemini bills per token; the per-minute figures are Google's own estimate for
 speech. Idle time costs nothing.
@@ -495,9 +511,10 @@ How it differs from Windows:
 
 ### API key
 
-Ciao takes the OpenAI key from the `OPENAI_API_KEY` environment variable and the
-Gemini key from `GEMINI_API_KEY`. If that is not set, it reads `openai-key.txt` or
-`gemini-key.txt` in the [data folder](#where-things-are-stored). Saving a key in
+Ciao takes the OpenAI key from the `OPENAI_API_KEY` environment variable, the
+Gemini key from `GEMINI_API_KEY` and the .wave key from `DOTWAVE_API_KEY`. If that
+is not set, it reads `openai-key.txt`, `gemini-key.txt` or `dotwave-key.txt` in the
+[data folder](#where-things-are-stored). Saving a key in
 Settings writes that file; the key field is under the service in use in
 *Settings → Who transcribes*.
 
@@ -838,6 +855,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
+  `nemotron.ts` for Nemotron on .wave (desktop only, not ported to Android),
   `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
   PCM/WAV helpers, prices, `usage.ts` (the Usage tab's sums), shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is

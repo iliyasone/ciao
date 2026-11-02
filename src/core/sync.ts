@@ -29,7 +29,7 @@ export interface SyncState {
   /** In display order; removed terms stay as tombstones. */
   terms: TermChange[];
   prompt: Stamped<string>;
-  /** API keys by provider ("openai", "gemini"); "" for one removed. */
+  /** API keys by provider ("openai", "gemini", "nemotron"); "" for one removed. */
   keys: Record<string, Stamped<string>>;
   /** Whether keys go into the synced file. On by default. */
   syncKeys: Stamped<boolean>;
