@@ -15,7 +15,7 @@ export interface ProviderInfo {
   keyPlaceholder: string;
 }
 
-/** In the order Settings lists them: the cheaper first. */
+/** In the order Settings lists them. */
 export const PROVIDERS: Record<Provider, ProviderInfo> = {
   gemini: {
     name: "Gemini",
@@ -34,6 +34,16 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     keyEnv: "OPENAI_API_KEY",
     keyFile: "openai-key.txt",
     keyPlaceholder: "sk-…",
+  },
+  // .wave runs it; there is no file model, so "More accurate" replays the recording at its own speed.
+  nemotron: {
+    name: "Nemotron",
+    company: "NVIDIA",
+    liveModel: "nemotron-asr-streaming",
+    fileModel: "nemotron-asr-streaming",
+    keyEnv: "DOTWAVE_API_KEY",
+    keyFile: "dotwave-key.txt",
+    keyPlaceholder: "wk_…",
   },
 };
 

@@ -3,6 +3,7 @@ import { BYTES_PER_MS, level, wavHeader } from "../core/audio";
 import { type GeminiEndpoint, GeminiLiveSession, parseGeminiEndpoint, vertexFileUrl, vocabulary } from "../core/gemini";
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
+import { NemotronSession } from "../core/nemotron";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
 import type { Provider, Settings } from "../core/types";
 import { apiFetch, wsAgent } from "./proxy";
@@ -11,7 +12,8 @@ export function openLive(provider: Provider, apiKey: string): LiveSession {
   if (provider === "gemini")
     // The key goes in a header, not ?key=: query strings end up in logs.
     return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey }, agent: wsAgent() }) as unknown as SocketLike, geminiEndpoint(apiKey));
-  return new RealtimeSession((url) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent() }) as unknown as SocketLike);
+  const socket = (url: string) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent() }) as unknown as SocketLike;
+  return provider === "nemotron" ? new NemotronSession(socket) : new RealtimeSession(socket);
 }
 
 const endpoints = new Map<string, Promise<GeminiEndpoint>>();
@@ -52,8 +54,8 @@ async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
 export class SessionPool {
   private spare: { provider: Provider; session: LiveSession } | null = null;
   // Gemini drops a socket that has waited ~5 min without a setup (measured: fine after 4 min, gone
-  // after 5.5), and a live session lasts at most 10 min.
-  private static readonly MAX_AGE_MS: Record<Provider, number> = { openai: 10 * 60_000, gemini: 2 * 60_000 };
+  // after 5.5), and a live session lasts at most 10 min. .wave closes one that got no audio for 30 s.
+  private static readonly MAX_AGE_MS: Record<Provider, number> = { openai: 10 * 60_000, gemini: 2 * 60_000, nemotron: 20_000 };
 
   constructor(
     private readonly provider: () => Provider,
@@ -102,7 +104,7 @@ const GEMINI_LIVE_SPEEDUP = 4;
 /** Gemini replays one at a time: two at 4× would be over the limit together. */
 let geminiReplays: Promise<unknown> = Promise.resolve();
 
-/** Re-runs the live model over a saved recording, sending it faster than real time. */
+/** Re-runs the live model over a saved recording, sending it faster than real time (Nemotron: at its own speed). */
 export function transcribeLive(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
   if (settings.provider !== "gemini") return replay(apiKey, pcm, settings);
   const run = geminiReplays.then(() => replay(apiKey, pcm, settings));
@@ -118,7 +120,7 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       stopped = true;
       s.close();
       reject(new Error(t().errors.timeout(PROVIDERS[settings.provider].name)));
-    }, 60_000 + pcm.byteLength / BYTES_PER_MS / 2);
+    }, 60_000 + pcm.byteLength / BYTES_PER_MS / (settings.provider === "nemotron" ? 1 : 2));
     s.handlers = {
       onCompleted: (text) => {
         stopped = true;
@@ -134,6 +136,7 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       },
     };
     s.configure({ ...settings, delay: "high" });
+    // NemotronSession itself sends the audio no faster than it was spoken.
     if (settings.provider !== "gemini") {
       const chunk = 24_000 * 2; // 1 s per message
       for (let i = 0; i < pcm.byteLength; i += chunk) s.append(pcm.subarray(i, i + chunk));
@@ -194,6 +197,8 @@ function wav(pcm: Buffer): Uint8Array<ArrayBuffer> {
 /** Transcribes a whole recording with the (more accurate, cheaper) file model. */
 export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Settings): Promise<string> {
   if (settings.provider === "gemini") return transcribeFileGemini(apiKey, pcm, settings);
+  // .wave has no file model: the live one hears the recording again, as long as it lasts.
+  if (settings.provider === "nemotron") return transcribeLive(apiKey, pcm, settings);
   const texts: string[] = [];
   for (const part of splitPcm(pcm)) {
     const form = new FormData();

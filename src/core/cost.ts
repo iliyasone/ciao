@@ -1,11 +1,12 @@
 // List prices per minute of audio (OpenAI: September 2026; Gemini: October 2026, Google's own
-// per-minute estimate for audio in and text out).
+// per-minute estimate for audio in and text out; Nemotron on .wave: November 2026, per minute of session).
 const PER_MINUTE_USD: Record<string, number> = {
   "gpt-live-transcribe": 0.017,
   "gpt-realtime-whisper": 0.017,
   "gpt-transcribe": 0.0045,
   "gemini-3.5-transcribe-live": 0.009,
   "gemini-3.5-transcribe": 0.005,
+  "nemotron-asr-streaming": 0.00045,
 };
 
 export function pricePerMinute(model: string): number {

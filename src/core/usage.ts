@@ -23,7 +23,7 @@ export interface UsageTotals {
 
 /** Who a model belongs to; "other" for the rest (none so far costs anything). */
 export type UsageProvider = Provider | "other";
-export const USAGE_PROVIDERS: readonly UsageProvider[] = ["openai", "gemini", "other"];
+export const USAGE_PROVIDERS: readonly UsageProvider[] = ["openai", "gemini", "nemotron", "other"];
 
 export interface UsageColumn {
   /** Local midnight of the day, or the start of the hour. */
@@ -52,6 +52,7 @@ export interface UsageSummary {
 export function providerOf(model: string): UsageProvider {
   if (model.startsWith("gpt-")) return "openai";
   if (model.startsWith("gemini-")) return "gemini";
+  if (model.startsWith("nemotron-")) return "nemotron";
   return "other";
 }
 
@@ -92,7 +93,7 @@ export function summarizeUsage(entries: readonly UsageEntry[], window: UsageWind
   const columns: UsageColumn[] = starts.map((start) => ({
     start,
     total: zero(),
-    byProvider: { openai: zero(), gemini: zero(), other: zero() },
+    byProvider: { openai: zero(), gemini: zero(), nemotron: zero(), other: zero() },
   }));
 
   const total = zero();

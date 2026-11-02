@@ -65,7 +65,7 @@ export interface DictationReport {
   trigger: string;
   ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
   hands_free: boolean;
-  /** Who transcribed it: "openai" or "gemini". */
+  /** Who transcribed it: "openai", "gemini" or "nemotron". */
   provider: string;
   /** "live" = the streaming transcript, "file" = the saved audio re-sent after the live one failed, "none" = no transcript (Esc, mic error). */
   transcribed_by: "live" | "file" | "none";

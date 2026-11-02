@@ -92,7 +92,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         <MicCard value={s.microphone} onChange={(microphone) => update({ microphone })} />
 
         <Card title={tr.recognition.title}>
-          <Field label={tr.recognition.terms} hint={s.provider === "gemini" ? `${tr.recognition.termsHint} ${tr.recognition.geminiNote}` : tr.recognition.termsHint}>
+          <Field label={tr.recognition.terms} hint={s.provider === "gemini" ? `${tr.recognition.termsHint} ${tr.recognition.geminiNote}` : s.provider === "nemotron" ? `${tr.recognition.termsHint} ${tr.recognition.nemotronNote}` : tr.recognition.termsHint}>
             <textarea
               value={s.keywords.join("\n")}
               onChange={(e) => update({ keywords: e.target.value.split("\n") }, true)}
