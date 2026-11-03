@@ -25,6 +25,14 @@ class GeminiEndpointTest {
 
     @Test fun rateLimitIsNoAnswer() = assertNull(GeminiEndpoint.parse(429, """{"error":{"code":429}}"""))
 
+    @Test fun googleKeyGoesToGoogle() = assertEquals(GeminiEndpoint.API to "AQ.abc", GeminiEndpoint.access("AQ.abc"))
+
+    @Test fun serverLinkGoesToTheServer() =
+        assertEquals("https://gemini.example.com" to "sk-hub-1", GeminiEndpoint.access("https://gemini.example.com/?key=sk-hub-1"))
+
+    @Test fun serverLinkKeepsAnOddPort() =
+        assertEquals("http://10.0.0.2:8319" to "k", GeminiEndpoint.access("http://10.0.0.2:8319/?key=k"))
+
     @Test fun vertexModelPath() = assertEquals(
         "projects/1/locations/global/publishers/google/models/gemini-3.5-transcribe-live-preview",
         GeminiEndpoint.vertexModel("1", "gemini-3.5-transcribe-live"),

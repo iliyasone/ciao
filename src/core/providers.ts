@@ -24,7 +24,7 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     fileModel: "gemini-3.5-transcribe",
     keyEnv: "GEMINI_API_KEY",
     keyFile: "gemini-key.txt",
-    keyPlaceholder: "AQ.…",
+    keyPlaceholder: "AQ.… / https://…?key=…",
   },
   openai: {
     name: "OpenAI",

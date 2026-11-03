@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import { BYTES_PER_MS, level, wavHeader } from "../core/audio";
-import { type GeminiEndpoint, GeminiLiveSession, parseGeminiEndpoint, vertexFileUrl, vocabulary } from "../core/gemini";
+import { type GeminiEndpoint, GeminiLiveSession, geminiAccess, geminiLiveUrl, parseGeminiEndpoint, vertexFileUrl, vocabulary } from "../core/gemini";
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
 import { NemotronSession } from "../core/nemotron";
@@ -9,9 +9,12 @@ import type { Provider, Settings } from "../core/types";
 import { apiFetch, wsAgent } from "./proxy";
 
 export function openLive(provider: Provider, apiKey: string): LiveSession {
-  if (provider === "gemini")
+  if (provider === "gemini") {
+    const { base, key } = geminiAccess(apiKey);
     // The key goes in a header, not ?key=: query strings end up in logs.
-    return new GeminiLiveSession((url) => new WebSocket(url, { headers: { "x-goog-api-key": apiKey }, agent: wsAgent() }) as unknown as SocketLike, geminiEndpoint(apiKey));
+    const socket = (url: string) => new WebSocket(url, { headers: { "x-goog-api-key": key }, agent: wsAgent() }) as unknown as SocketLike;
+    return new GeminiLiveSession(socket, geminiEndpoint(apiKey), geminiLiveUrl(base));
+  }
   const socket = (url: string) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent() }) as unknown as SocketLike;
   return provider === "nemotron" ? new NemotronSession(socket) : new RealtimeSession(socket);
 }
@@ -43,8 +46,9 @@ export function geminiEndpoint(apiKey: string): Promise<GeminiEndpoint> {
 
 async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
   // Every live session and file transcription waits for this: a stalled request must not hold them.
-  const res = await apiFetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", {
-    headers: { "x-goog-api-key": apiKey },
+  const { base, key } = geminiAccess(apiKey);
+  const res = await apiFetch(`${base}/v1beta/models?pageSize=1`, {
+    headers: { "x-goog-api-key": key },
     signal: AbortSignal.timeout(10_000),
   });
   return parseGeminiEndpoint(res.status, await res.json().catch(() => null));
@@ -231,6 +235,7 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
     throw new Error(t().errors.cannotReach("Gemini"));
   });
   if (vertexProject) return transcribeFileVertex(apiKey, vertexProject, pcm, settings);
+  const { base, key } = geminiAccess(apiKey);
   const config: Record<string, unknown> = {};
   const terms = vocabulary(settings.keywords);
   if (terms.length) config.custom_vocabulary = terms;
@@ -246,9 +251,9 @@ async function transcribeFileGemini(apiKey: string, pcm: Buffer, settings: Setti
     let res: Response;
     let first: GeminiInteraction | undefined;
     for (let attempt = 0; ; attempt++) {
-      res = await apiFetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      res = await apiFetch(`${base}/v1beta/interactions`, {
         method: "POST",
-        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
         body: request,
       });
       const body = (await res.json().catch(() => ({}))) as GeminiInteraction | GeminiInteraction[];

@@ -340,6 +340,13 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   refuses a key not bound to a service account, and a key that may also call the
   Gemini API is taken for an AI Studio key. Or a [.wave](https://dotwave.ai) key
   for Nemotron (desktop).
+  - Instead of a Gemini key, the Gemini key field takes a link to a server in
+    front of the Gemini API with a key of that server in it:
+    `https://<host>/?key=<key>`. Live and file transcription then go to that
+    host, with that key in place of a Google one (on every platform and on
+    Android). Such a server serves the same paths as
+    `generativelanguage.googleapis.com` (`/v1beta/models`, `/v1beta/interactions`
+    and the Live API WebSocket) and checks the key itself.
 
 Pricing is per minute of audio:
 
