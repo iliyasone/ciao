@@ -14,9 +14,9 @@
     <string name="provider_gemini" translatable="false">Google Gemini</string>
     <string name="key_title">%1$s API key</string>
     <string name="key_text_openai">Needs access to gpt-live-transcribe. Idle time is free.</string>
-    <string name="key_text_gemini">Get one at aistudio.google.com/apikey. Live: gemini-3.5-transcribe-live. Idle time is free.</string>
+    <string name="key_text_gemini">Get one at aistudio.google.com/apikey, or paste a link to a server with a key (https://…?key=…). Live: gemini-3.5-transcribe-live. Idle time is free.</string>
     <string name="key_hint_openai" translatable="false">sk-…</string>
-    <string name="key_hint_gemini" translatable="false">AQ.…</string>
+    <string name="key_hint_gemini" translatable="false">AQ.… / https://…?key=…</string>
     <string name="proxy_title">Proxy</string>
     <string name="proxy_text">Requests to the service go through it, for when Gemini isn\'t available in your country. HTTP only. Synced along with the keys.</string>
     <string name="proxy_remove">Remove</string>

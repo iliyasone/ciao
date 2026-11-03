@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
@@ -29,6 +30,20 @@ fun geminiVocabulary(keywords: List<String>): List<String> =
  */
 object GeminiEndpoint {
     const val VERTEX_LIVE_URL = "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
+    const val API = "https://generativelanguage.googleapis.com"
+
+    /**
+     * Where Gemini requests go and with which key. The key field takes a Google key, or a link to a
+     * server in front of the Gemini API with a key of that server in it ("https://host/?key=…"): then
+     * the same requests go to that host, with that key in place of a Google one. Mirrors geminiAccess
+     * in src/core/gemini.ts.
+     */
+    fun access(saved: String): Pair<String, String> {
+        if (!saved.startsWith("http://", true) && !saved.startsWith("https://", true)) return API to saved
+        val url = saved.toHttpUrlOrNull() ?: return API to saved
+        val port = if (url.port == (if (url.scheme == "https") 443 else 80)) "" else ":${url.port}"
+        return "${url.scheme}://${url.host}$port" to (url.queryParameter("key") ?: "")
+    }
 
     /** Per key: its Vertex project number, or "" for AI Studio. */
     private val known = ConcurrentHashMap<String, String>()
@@ -46,9 +61,10 @@ object GeminiEndpoint {
         // First: a proxy changed since forgets what was found the old way.
         val client = ApiProxy.client(context)
         known[key]?.let { return it.ifEmpty { null } }
+        val (base, serverKey) = access(key)
         val request = Request.Builder()
-            .url("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
-            .header("x-goog-api-key", key)
+            .url("$base/v1beta/models?pageSize=1")
+            .header("x-goog-api-key", serverKey)
             .build()
         // Every live session and file transcription waits for this: a stalled request must not hold them.
         val call = client.newCall(request).apply { timeout().timeout(10, TimeUnit.SECONDS) }
@@ -187,8 +203,9 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     /** Under [lock]. A connection replaced by a new one may still report: only the current one counts. */
     private fun connect() {
         // The key goes in a header, not ?key=: query strings end up in logs.
+        val (base, key) = GeminiEndpoint.access(apiKey)
         socket = ApiProxy.client(context).newWebSocket(
-            Request.Builder().url(if (vertexProject != null) GeminiEndpoint.VERTEX_LIVE_URL else URL).header("x-goog-api-key", apiKey).build(),
+            Request.Builder().url(if (vertexProject != null) GeminiEndpoint.VERTEX_LIVE_URL else base.replaceFirst("http", "ws") + LIVE_PATH).header("x-goog-api-key", key).build(),
             events,
         )
         openedAt = SystemClock.elapsedRealtime()
@@ -431,7 +448,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     }
 
     companion object {
-        const val URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        const val LIVE_PATH = "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
         const val NAME = "Gemini"
         const val ROLL_AFTER_MS = 150_000
         const val ROLL_BY_MS = 200_000

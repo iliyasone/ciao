@@ -99,6 +99,7 @@ object FileTranscriber {
             throw IOException(context.getString(R.string.error_cannot_reach, GeminiSession.NAME), e)
         }
         if (project != null) return transcribeVertex(context, prefs, audio, key, project, from)
+        val (base, serverKey) = GeminiEndpoint.access(key)
         val config = JSONObject()
         val terms = geminiVocabulary(prefs.keywords)
         if (terms.isNotEmpty()) config.put("custom_vocabulary", JSONArray(terms))
@@ -127,8 +128,8 @@ object FileTranscriber {
                 }
             }
             val request = Request.Builder()
-                .url("https://generativelanguage.googleapis.com/v1beta/interactions")
-                .header("x-goog-api-key", key)
+                .url("$base/v1beta/interactions")
+                .header("x-goog-api-key", serverKey)
                 .post(body)
                 .build()
             // Tier 1 takes 10,000 audio tokens (~6.5 min) a minute, so the parts of a long recording run

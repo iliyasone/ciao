@@ -4,7 +4,8 @@ import { PROVIDERS } from "./providers";
 import type { LiveSession, RealtimeHandlers, SocketFactory, SocketLike } from "./realtime";
 import type { Settings } from "./types";
 
-export const GEMINI_LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+export const GEMINI_API = "https://generativelanguage.googleapis.com";
+const LIVE_PATH = "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 export const VERTEX_LIVE_URL = "wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent";
 
 /**
@@ -21,6 +22,26 @@ export interface GeminiEndpoint {
 /** On Vertex the models carry "-preview" and live in the "global" location only (us and eu: 404). */
 function vertexModel(project: string, model: string): string {
   return `projects/${project}/locations/global/publishers/google/models/${model}-preview`;
+}
+
+/**
+ * Where Gemini requests go and with which key. The key field takes a Google key, or a link to a
+ * server in front of the Gemini API with a key of that server in it ("https://host/?key=…"): then
+ * the same requests go to that host, with that key in place of a Google one.
+ */
+export function geminiAccess(saved: string): { base: string; key: string } {
+  if (!/^https?:\/\//i.test(saved)) return { base: GEMINI_API, key: saved };
+  try {
+    const url = new URL(saved);
+    return { base: url.origin, key: url.searchParams.get("key") ?? "" };
+  } catch {
+    return { base: GEMINI_API, key: saved };
+  }
+}
+
+/** The Live API WebSocket at a Gemini API base. */
+export function geminiLiveUrl(base: string): string {
+  return base.replace(/^http/, "ws") + LIVE_PATH;
 }
 
 /** The live model, as the setup message names it. */
@@ -150,12 +171,13 @@ export class GeminiLiveSession implements LiveSession {
   constructor(
     private readonly factory: SocketFactory,
     endpoint: Promise<GeminiEndpoint>,
+    private readonly liveUrl = geminiLiveUrl(GEMINI_API),
   ) {
     endpoint.then(
       (ep) => {
         if (this.closedByUs) return;
         this.endpoint = ep;
-        this.url = ep.vertexProject ? VERTEX_LIVE_URL : GEMINI_LIVE_URL;
+        this.url = ep.vertexProject ? VERTEX_LIVE_URL : this.liveUrl;
         this.open();
       },
       () => this.fail(t().errors.cannotReach("Gemini")),
