@@ -40,14 +40,19 @@ class TextInserterTest {
     }
 
     @Test
-    fun suspectsAnUnflaggedHintOnlyWithTheCursorAtTheStart() {
-        assertEquals(true, TextInserter.mayBeHint("Message", null, 0, 0))
-        assertEquals(false, TextInserter.mayBeHint("Message", null, -1, -1))
-        assertEquals(true, TextInserter.mayBeHint("Сообщение", "Message", 0, 0))
-        assertEquals(false, TextInserter.mayBeHint("Message", "Message", 0, 0))
-        assertEquals(false, TextInserter.mayBeHint("Hello", null, 5, 5))
-        assertEquals(false, TextInserter.mayBeHint("Hello", null, 0, 5))
-        assertEquals(false, TextInserter.mayBeHint("", null, 0, 0))
+    fun suspectsAnUnflaggedHintWithTheCursorAtTheStartOrNoCursorToMove() {
+        assertEquals(true, TextInserter.mayBeHint("Message", null, 0, 0, false))
+        assertEquals(true, TextInserter.mayBeHint("Message", null, 0, 0, true))
+        // Telegram's empty field: its hint as the text, no cursor, nothing to move.
+        assertEquals(true, TextInserter.mayBeHint("Message", null, -1, -1, false))
+        assertEquals(false, TextInserter.mayBeHint("Message", null, -1, -1, true))
+        // One character with the cursor maybe after it: both probes would be refused as no change.
+        assertEquals(false, TextInserter.mayBeHint("A", null, -1, -1, false))
+        assertEquals(true, TextInserter.mayBeHint("Сообщение", "Message", 0, 0, true))
+        assertEquals(false, TextInserter.mayBeHint("Message", "Message", 0, 0, true))
+        assertEquals(false, TextInserter.mayBeHint("Hello", null, 5, 5, true))
+        assertEquals(false, TextInserter.mayBeHint("Hello", null, 0, 5, true))
+        assertEquals(false, TextInserter.mayBeHint("", null, 0, 0, false))
     }
 
     private var caret = -1
@@ -56,13 +61,13 @@ class TextInserterTest {
     /**
      * What insert() hands the app: the text it sets, or the clipboard at the moment it pastes. The field
      * really holds [holds] characters: like a TextView, it refuses a selection past them, or one it
-     * already has, and lists ACTION_SET_SELECTION only while it holds some. [canSelect] off: a custom
-     * view that doesn't move its cursor.
+     * already has, and lists ACTION_SET_SELECTION only while it holds some ([lists]). [canSelect] off: a
+     * custom view that doesn't move its cursor.
      */
     private fun insert(
         shown: String, hint: String?, start: Int, end: Int, transcript: String,
         holds: Int = shown.length, canSelect: Boolean = true, chrome: Boolean = false,
-        className: String = "android.widget.EditText", prefix: Int = 0,
+        className: String = "android.widget.EditText", prefix: Int = 0, lists: Boolean = canSelect && holds > 0,
     ): String? {
         var real = holds
         var selection = start to end
@@ -77,7 +82,7 @@ class TextInserterTest {
             hintText = hint
             setTextSelection(start, end)
             this.className = className
-            if (canSelect && holds > 0) addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION)
+            if (lists) addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_SELECTION)
             if (chrome) extras.putString("AccessibilityNodeInfo.chromeRole", "textField")
         }
         shadowOf(node).setOnPerformActionListener { action, args ->
@@ -121,6 +126,9 @@ class TextInserterTest {
         // Both probes were refused and the cursor wasn't put back: it only went after the dictation.
         assertEquals(listOf(6 to 6), selections)
         assertEquals("Привет", insert("Сообщение", "Message", 0, 0, "Привет", holds = 0))
+        // Telegram's empty field: its hint as the text, and (as a TextView holding nothing) no cursor.
+        assertEquals("Привет", insert("Сообщение", null, -1, -1, "Привет", holds = 0))
+        assertEquals(listOf(6 to 6), selections)
     }
 
     @Test
@@ -131,6 +139,10 @@ class TextInserterTest {
         // Shown text longer than what the field holds (a chip, say) is still real text.
         assertEquals("Well, Hello @Ann", insert("Hello @Ann", null, 0, 0, "Well, ", holds = 7))
         assertEquals("Hello world", insert("Hello", null, -1, -1, "world"))
+        // No cursor and nothing listed, yet the field moves its cursor: real text. The cursor goes to
+        // the end, where the dictation goes.
+        assertEquals("Hello world", insert("Hello", null, -1, -1, "world", lists = false))
+        assertEquals(listOf(1 to 1, 5 to 5, 11 to 11), selections)
         // A field with a prefix refuses the first cursor, not the one at the end.
         assertEquals("Well, +7 900", insert("+7 900", null, 0, 0, "Well, ", prefix = 3))
         assertEquals(listOf(6 to 6, 0 to 0, 6 to 6), selections)
@@ -144,6 +156,9 @@ class TextInserterTest {
         // With the cursor unknown there's no probe.
         assertEquals("paste: world", insert("Hello", null, -1, -1, "world"))
         assertEquals(listOf<Pair<Int, Int>>(), selections)
+        // Probed without a cursor, it's left at the end, where the paste goes.
+        assertEquals("paste: world", insert("Hello", null, -1, -1, "world", lists = false))
+        assertEquals(listOf(1 to 1, 5 to 5), selections)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
         clipboard.clearPrimaryClip()
         // Nor is Chrome's text probed: it flags its hints.
