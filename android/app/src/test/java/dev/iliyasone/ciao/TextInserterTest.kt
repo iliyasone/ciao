@@ -46,6 +46,8 @@ class TextInserterTest {
         // Telegram's empty field: its hint as the text, no cursor, nothing to move.
         assertEquals(true, TextInserter.mayBeHint("Message", null, -1, -1, false))
         assertEquals(false, TextInserter.mayBeHint("Message", null, -1, -1, true))
+        // One character with the cursor maybe after it: both probes would be refused as no change.
+        assertEquals(false, TextInserter.mayBeHint("A", null, -1, -1, false))
         assertEquals(true, TextInserter.mayBeHint("Сообщение", "Message", 0, 0, true))
         assertEquals(false, TextInserter.mayBeHint("Message", "Message", 0, 0, true))
         assertEquals(false, TextInserter.mayBeHint("Hello", null, 5, 5, true))

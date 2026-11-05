@@ -82,10 +82,12 @@ object TextInserter {
      * doesn't flag it, and either its cursor is at the very start, or it reports no cursor and doesn't
      * offer to move one ([selectable] off). A TextView reports a cursor and lists ACTION_SET_SELECTION
      * whenever it holds text, so an empty one showing its hint as text (Telegram's) has neither.
-     * Placed as text, the hint would end up next to the dictation.
+     * Placed as text, the hint would end up next to the dictation. With no cursor, a single character
+     * isn't suspected: both probes would ask for the cursor after it, where it may already be.
      */
     fun mayBeHint(shown: String, hint: String?, selStart: Int, selEnd: Int, selectable: Boolean): Boolean =
-        shown.isNotEmpty() && shown != hint && (selStart == 0 && selEnd == 0 || selStart < 0 && selEnd < 0 && !selectable)
+        shown.isNotEmpty() && shown != hint &&
+            (selStart == 0 && selEnd == 0 || selStart < 0 && selEnd < 0 && !selectable && shown.length > 1)
 
     /**
      * Asks the field to put its cursor after its first character, then at the end of [shown]. A hint
