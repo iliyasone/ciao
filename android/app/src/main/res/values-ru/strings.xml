@@ -171,7 +171,7 @@
     <string name="theme_system">Как в системе</string>
     <string name="theme_light">Светлая</string>
     <string name="theme_dark">Тёмная</string>
-    <string name="section_developer">Для разработчика</string>
+    <string name="section_developer">Устаревшее</string>
     <string name="show_delay">Показывать задержку</string>
     <string name="show_delay_hint">Уровень задержки распознавания OpenAI: меньше — слова появляются раньше, больше — точнее. На цену не влияет.</string>
     <string name="usage_title">Аналитика</string>

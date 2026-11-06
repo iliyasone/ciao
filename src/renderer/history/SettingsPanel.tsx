@@ -112,12 +112,6 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         </Card>
 
         <Card title={tr.behaviour.title}>
-          <Toggle
-            label={tr.behaviour.formatText}
-            hint={tr.behaviour.formatTextHint}
-            value={s.formatText}
-            onChange={(v) => update({ formatText: v })}
-          />
           <Toggle label={tr.behaviour.autoPaste} hint={tr.behaviour.autoPasteHint} value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
           <Toggle label={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
           <Toggle label={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
@@ -192,20 +186,18 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         {updateState && <UpdateCard state={updateState} />}
 
-        {/* The delay level is all it holds, and only OpenAI has one. */}
-        {s.provider === "openai" && <Card title={tr.developer.title}>
-          <Toggle
-            label={tr.developer.showDelay}
-            hint={tr.developer.showDelayHint}
-            value={s.showDelay}
-            onChange={(v) => update({ showDelay: v })}
-          />
-          {s.showDelay && (
+        <Card title={tr.developer.title}>
+          <Toggle label={tr.developer.formatText} hint={tr.developer.formatTextHint} value={s.paragraphs} onChange={(v) => update({ paragraphs: v })} />
+          {/* Only OpenAI has a delay level. */}
+          {s.provider === "openai" && (
+            <Toggle label={tr.developer.showDelay} hint={tr.developer.showDelayHint} value={s.showDelay} onChange={(v) => update({ showDelay: v })} />
+          )}
+          {s.provider === "openai" && s.showDelay && (
             <Row label={tr.developer.delay} hint={tr.developer.delayHint}>
               <Segmented value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />
             </Row>
           )}
-        </Card>}
+        </Card>
       </div>
     </div>
   );
@@ -304,10 +296,20 @@ function useHasKeys(): Partial<Record<Provider, boolean>> {
 
 function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }) {
   const [value, setValue] = useState("");
+  /** The last check's line; null before one. */
+  const [check, setCheck] = useState<string | null>(null);
   const tr = useStrings().settings.apiKey;
-  useEffect(() => setValue(""), [provider]);
+  useEffect(() => {
+    setValue("");
+    setCheck(null);
+  }, [provider]);
+  const runCheck = async (key?: string) => {
+    setCheck(tr.checking);
+    const r = await ciao.settings.checkKey(provider, key);
+    setCheck(r.ok ? tr.works(r.ms) : tr.failed(r.reason));
+  };
   return (
-    <Row label={tr.label} hint={hasKey ? tr.saved : tr.missing}>
+    <Row label={tr.label} hint={check ?? (hasKey ? tr.saved : tr.missing)}>
       <div className="flex items-center gap-2">
         <KeyRound className={`size-4 ${hasKey ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
         <input
@@ -320,13 +322,20 @@ function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }
         <button
           disabled={!value.trim()}
           onClick={async () => {
-            await ciao.settings.setApiKey(provider, value);
+            const key = value;
+            await ciao.settings.setApiKey(provider, key);
             setValue("");
+            void runCheck(key);
           }}
           className={BUTTON}
         >
           {tr.save}
         </button>
+        {hasKey && !value.trim() && (
+          <button onClick={() => void runCheck()} className={BUTTON}>
+            {tr.check}
+          </button>
+        )}
       </div>
     </Row>
   );
@@ -745,44 +754,70 @@ function Caps({ parts }: { parts: string[] }) {
 /** Dictation triggers; new ones are recorded by the native helper, so lone modifiers and mouse buttons work. */
 function TriggerList({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [capturing, setCapturing] = useState(false);
+  /** The last capture ended because the helper didn't hear a key this window did. */
+  const [notHeard, setNotHeard] = useState(false);
   const tr = useStrings();
+  // The helper swallows what it captures, so a key reaching this window means its hooks hear nothing
+  // (they would have reported it at once): cancel and restart it. Esc here cancels whatever the helper does.
+  useEffect(() => {
+    if (!capturing) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      if (e.key === "Escape") return void ciao.settings.cancelCapture(false);
+      if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return; // a lone modifier is captured on release
+      timer ??= setTimeout(() => {
+        setNotHeard(true);
+        void ciao.settings.cancelCapture(true);
+      }, 1000);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [capturing]);
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {value.map((spec) => (
-        <span key={spec} className="inline-flex items-center gap-1.5 rounded-xl bg-tint/5 py-1 pr-1 pl-2 ring-1 ring-tint/[0.07]">
-          {isMouseTrigger(spec) && <MousePointerClick className="size-3.5 text-faint" />}
-          <Caps parts={triggerParts(spec, tr.keyNames)} />
-          <button
-            title={tr.settings.keys.remove}
-            disabled={value.length === 1}
-            onClick={() => onChange(value.filter((v) => v !== spec))}
-            className="rounded-md p-0.5 text-faint transition-colors hover:bg-tint/10 hover:text-fg disabled:opacity-30"
-          >
-            <X className="size-3.5" />
-          </button>
-        </span>
-      ))}
-      <button
-        disabled={capturing}
-        onClick={async () => {
-          setCapturing(true);
-          const spec = await ciao.settings.captureTrigger();
-          setCapturing(false);
-          if (spec && !value.includes(spec)) onChange([...value, spec]);
-        }}
-        className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12.5px] transition-colors ${
-          capturing ? "bg-accent/15 text-accent ring-1 ring-accent/40" : "text-muted ring-1 ring-tint/10 hover:bg-tint/5 hover:text-fg"
-        }`}
-      >
-        {capturing ? (
-          <span className="animate-pulse">{tr.settings.keys.capturing}</span>
-        ) : (
-          <>
-            <Plus className="size-3.5" />
-            {tr.settings.keys.add}
-          </>
-        )}
-      </button>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {value.map((spec) => (
+          <span key={spec} className="inline-flex items-center gap-1.5 rounded-xl bg-tint/5 py-1 pr-1 pl-2 ring-1 ring-tint/[0.07]">
+            {isMouseTrigger(spec) && <MousePointerClick className="size-3.5 text-faint" />}
+            <Caps parts={triggerParts(spec, tr.keyNames)} />
+            <button
+              title={tr.settings.keys.remove}
+              disabled={value.length === 1}
+              onClick={() => onChange(value.filter((v) => v !== spec))}
+              className="rounded-md p-0.5 text-faint transition-colors hover:bg-tint/10 hover:text-fg disabled:opacity-30"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        ))}
+        <button
+          onClick={async () => {
+            if (capturing) return void ciao.settings.cancelCapture(false);
+            setNotHeard(false);
+            setCapturing(true);
+            const spec = await ciao.settings.captureTrigger();
+            setCapturing(false);
+            if (spec && !value.includes(spec)) onChange([...value, spec]);
+          }}
+          className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12.5px] transition-colors ${
+            capturing ? "bg-accent/15 text-accent ring-1 ring-accent/40" : "text-muted ring-1 ring-tint/10 hover:bg-tint/5 hover:text-fg"
+          }`}
+        >
+          {capturing ? (
+            <span className="animate-pulse">{tr.settings.keys.capturing}</span>
+          ) : (
+            <>
+              <Plus className="size-3.5" />
+              {tr.settings.keys.add}
+            </>
+          )}
+        </button>
+      </div>
+      {notHeard && <div className="text-[12px] text-amber-700 dark:text-amber-300">{tr.settings.keys.notHeard}</div>}
     </div>
   );
 }

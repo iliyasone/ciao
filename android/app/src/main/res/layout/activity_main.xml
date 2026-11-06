@@ -365,11 +365,6 @@
         <LinearLayout style="@style/Card">
 
             <Switch
-                android:id="@+id/formatText"
-                style="@style/Toggle"
-                android:text="@string/format_text" />
-
-            <Switch
                 android:id="@+id/stopPhrase"
                 style="@style/Toggle"
                 android:text="@string/stop_phrase" />
@@ -493,6 +488,11 @@
             android:text="@string/section_developer" />
 
         <LinearLayout style="@style/Card">
+
+            <Switch
+                android:id="@+id/formatText"
+                style="@style/Toggle"
+                android:text="@string/format_text" />
 
             <Switch
                 android:id="@+id/showDelay"

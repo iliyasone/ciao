@@ -177,7 +177,7 @@
     <string name="theme_system">As the system</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
-    <string name="section_developer">For developers</string>
+    <string name="section_developer">Legacy</string>
     <string name="show_delay">Show delay</string>
     <string name="show_delay_hint">The OpenAI recognizer’s delay level: lower shows words sooner, higher is more accurate. The price is the same.</string>
     <string name="usage_title">Usage</string>
