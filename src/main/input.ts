@@ -170,6 +170,19 @@ export class InputHelper extends EventEmitter<InputEvents> {
     });
   }
 
+  /** Ends a capture with nothing captured (the user cancelled it in the window). */
+  cancelCapture(): void {
+    if (!this.captureResolve) return;
+    this.send({ cmd: "capture", on: false });
+    this.captureResolve(null);
+  }
+
+  /** Starts the helper anew: its hooks stopped hearing keys (see cancelCapture's callers). */
+  restart(): void {
+    console.warn("input helper hears no keys: restarting it");
+    this.child?.kill(); // the exit handler starts a new one
+  }
+
   async foreground(): Promise<ForegroundWindow | null> {
     const r = await this.request({ cmd: "foreground" });
     if (typeof r.hwnd !== "number") return null;

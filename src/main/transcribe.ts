@@ -3,9 +3,9 @@ import { BYTES_PER_MS, level, wavHeader } from "../core/audio";
 import { type GeminiEndpoint, GeminiLiveSession, geminiAccess, geminiLiveUrl, parseGeminiEndpoint, vertexFileUrl, vocabulary } from "../core/gemini";
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
-import { NemotronSession } from "../core/nemotron";
+import { NEMOTRON_LIVE_URL, NemotronSession } from "../core/nemotron";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
-import type { Provider, Settings } from "../core/types";
+import type { KeyCheck, Provider, Settings } from "../core/types";
 import { apiFetch, wsAgent } from "./proxy";
 
 export function openLive(provider: Provider, apiKey: string): LiveSession {
@@ -52,6 +52,48 @@ async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
     signal: AbortSignal.timeout(10_000),
   });
   return parseGeminiEndpoint(res.status, await res.json().catch(() => null));
+}
+
+/**
+ * Asks the service whether it takes the key, the cheapest way it has: Gemini and OpenAI list their
+ * models; .wave has no such request, so its live socket is opened and closed (no audio, no charge).
+ * A Vertex key is refused by the Gemini API in a way that names its project: that counts as working.
+ */
+export async function checkKey(provider: Provider, apiKey: string): Promise<KeyCheck> {
+  const started = Date.now();
+  const name = PROVIDERS[provider].name;
+  try {
+    if (provider === "nemotron") {
+      const status = await new Promise<number>((resolve, reject) => {
+        const ws = new WebSocket(NEMOTRON_LIVE_URL, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent(), handshakeTimeout: 10_000 });
+        ws.on("open", () => {
+          ws.close();
+          resolve(200);
+        });
+        ws.on("unexpected-response", (_req, res) => {
+          resolve(res.statusCode ?? 0);
+          ws.terminate();
+        });
+        ws.on("error", reject);
+      });
+      return status === 200 ? { ok: true, ms: Date.now() - started } : { ok: false, reason: t().errors.status(name, status) };
+    }
+    let res: Response;
+    if (provider === "gemini") {
+      const { base, key } = geminiAccess(apiKey);
+      res = await apiFetch(`${base}/v1beta/models?pageSize=1`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(10_000) });
+    } else {
+      res = await apiFetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) });
+    }
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    const vertex = provider === "gemini" && !res.ok && parseGeminiEndpoint(res.status, body)?.vertexProject;
+    if (res.ok || vertex) return { ok: true, ms: Date.now() - started };
+    return { ok: false, reason: body?.error?.message ?? t().errors.status(name, res.status) };
+  } catch (e) {
+    const chain: string[] = [];
+    for (let x = e as (Error & { cause?: unknown }) | undefined; x instanceof Error; x = x.cause as typeof x) chain.push(x.message);
+    return { ok: false, reason: chain.at(-1) ?? String(e) };
+  }
 }
 
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */

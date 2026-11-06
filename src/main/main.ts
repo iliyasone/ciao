@@ -21,7 +21,7 @@ import { checkProxy, setProxy } from "./proxy";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
-import { forgetEndpoints, SessionPool, transcribeFile, transcribeLive } from "./transcribe";
+import { checkKey, forgetEndpoints, SessionPool, transcribeFile, transcribeLive } from "./transcribe";
 import { Telemetry } from "./telemetry";
 import { REPO, Updater } from "./updater";
 import { WakeWord } from "./wakeWord";
@@ -438,6 +438,15 @@ function registerIpc(): void {
   // A Wayland desktop lets no app bring another one forward, or tell which window a key would go to.
   ipcMain.handle("settings:can-bring-forward", () => process.platform !== "linux" || (process.env.XDG_SESSION_TYPE !== "wayland" && !(process.env.WAYLAND_DISPLAY && process.env.XDG_SESSION_TYPE !== "x11")));
   ipcMain.handle("settings:capture-trigger", () => input.capture());
+  ipcMain.handle("settings:cancel-capture", (_e, deaf: boolean) => {
+    input.cancelCapture();
+    if (deaf) input.restart();
+  });
+  ipcMain.handle("settings:check-key", (_e, provider: Settings["provider"], key?: string) => {
+    if (!Object.hasOwn(PROVIDERS, provider)) return { ok: false, reason: String(provider) };
+    const k = key ?? loadApiKey(provider);
+    return k ? checkKey(provider, k) : { ok: false, reason: t().settings.apiKey.missing };
+  });
   ipcMain.handle("settings:accessibility", () => (MAC ? accessibility : null));
   ipcMain.handle("settings:open-accessibility", () => {
     // Asking (again) puts Ciao back on the list if the user removed it there.
@@ -664,7 +673,7 @@ void app.whenReady().then(() => {
   });
 
   console.log(`Ciao ${app.getVersion()} started; history: ${store.list().length} entries`);
-  telemetry.capture("app_started", { has_api_key: currentKey() !== null, provider: settings.provider, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.formatText });
+  telemetry.capture("app_started", { has_api_key: currentKey() !== null, provider: settings.provider, wake_word_enabled: settings.wakeWord, format_text_enabled: settings.paragraphs });
   updater.start();
   void showRecovered(recovered);
   if (!currentKey()) openHistory("settings");

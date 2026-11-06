@@ -657,7 +657,7 @@ export class DictationController {
       finalAfterReleaseMs: a.completedAt && a.releasedAt && a.completedAt - a.releasedAt,
     };
 
-    if (text && settings.formatText) {
+    if (text && settings.paragraphs) {
       // Same rules as the live card. Pause offsets refer to the live text; they carry over when the
       // final text contains the same words (possibly without a leading "чао" or trailing "чао-чао").
       const lead = a.liveText.length - a.liveText.trimStart().length;
@@ -925,7 +925,7 @@ export class DictationController {
       costPerMinuteUsd: pricePerMinute(models(a.settings).live),
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
-      layout: a.settings.formatText,
+      layout: a.settings.paragraphs,
       // No logo until it is known which one: never T3 Code's for a moment over a chat.
       t3: t3 && a.chatId === null,
       chat: t3 && a.chatId ? a.chatId : undefined,

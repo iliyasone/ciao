@@ -49,7 +49,7 @@ export interface Settings {
   /** Developer mode: show and change the recognizer delay level. */
   showDelay: boolean;
   /** Paragraphs after long pauses and numbered lists for "первое… второе…", live and in the pasted text. */
-  formatText: boolean;
+  paragraphs: boolean;
   /** Music and videos that play when a dictation starts are paused, and those of them still paused play on after it. */
   pauseMedia: boolean;
   /** A short rising sound when Ciao starts listening, a falling one when it stops. */
@@ -147,7 +147,7 @@ export interface OverlayState {
   endedAt?: number;
   showCost: boolean;
   costPerMinuteUsd: number;
-  /** Lay the live text out in paragraphs and lists (Settings.formatText). */
+  /** Lay the live text out in paragraphs and lists (Settings.paragraphs). */
   layout?: boolean;
   /** Set only in developer mode (Settings.showDelay). */
   delay?: Delay;
@@ -178,6 +178,9 @@ export type UpdateState =
   | { phase: "error"; current: string; message: string; version?: string };
 
 /** What checking the proxy found (src/main/proxy.ts checkProxy). */
+/** Whether a service took a key: `reason` is its answer (or why it couldn't be asked). */
+export type KeyCheck = { ok: true; ms: number } | { ok: false; reason: string };
+
 export type ProxyCheck = { ok: true; ms: number } | { ok: false; badLogin: boolean; reason: string };
 
 /** Syncing terms and the prompt through Google Drive (src/main/sync.ts). */

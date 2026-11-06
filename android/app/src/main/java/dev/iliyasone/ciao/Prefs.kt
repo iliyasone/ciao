@@ -152,9 +152,10 @@ class Prefs(context: Context) {
         get() = sp.getString("syncState", "")!!
         set(v) = sp.edit().putString("syncState", v).apply()
 
+    /** Paragraphs and lists; off by default since they moved to the legacy settings ("formatText", on, before). */
     var formatText: Boolean
-        get() = sp.getBoolean("formatText", true)
-        set(v) = sp.edit().putBoolean("formatText", v).apply()
+        get() = sp.getBoolean("paragraphs", false)
+        set(v) = sp.edit().putBoolean("paragraphs", v).apply()
 
     /** Music and videos playing when a dictation starts pause, and play on after it. */
     var pauseMedia: Boolean

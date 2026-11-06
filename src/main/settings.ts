@@ -44,7 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wakeWord: false,
   pauseMedia: false,
   sounds: true,
-  formatText: true,
+  paragraphs: false,
   telemetry: true,
   syncKeys: true,
   proxy: "",
@@ -101,6 +101,8 @@ function parseSettings(text: string): Settings | null {
   // Gemini's smart mode ("smart", later "geminiSmart") is gone: it dropped whole sentences now and then.
   delete (raw as { smart?: boolean }).smart;
   delete (raw as { geminiSmart?: boolean }).geminiSmart;
+  // Paragraphs and lists ("formatText", on by default) moved to the legacy settings, off for everyone.
+  delete (raw as { formatText?: boolean }).formatText;
   return { ...DEFAULT_SETTINGS, ...raw };
 }
 

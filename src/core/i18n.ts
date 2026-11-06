@@ -156,6 +156,10 @@ const ru = {
       missing: "Без ключа ничего не распознается.",
       replace: "заменить ключ…",
       save: "Сохранить",
+      check: "Проверить",
+      checking: "Проверяю ключ…",
+      works: (ms: number) => `✓ Ключ работает: сервис ответил за ${ms} мс.`,
+      failed: (reason: string) => `✗ Ключ не работает: ${reason}`,
     },
     providers: {
       title: "Кто распознаёт",
@@ -199,8 +203,6 @@ const ru = {
     },
     behaviour: {
       title: "Поведение",
-      formatText: "Абзацы и списки",
-      formatTextHint: "Пауза перед новым предложением — новый абзац, «первое… второе…» — нумерованный список. Видно сразу, пока говоришь.",
       autoPaste: "Вставлять текст сразу",
       autoPasteHint: "Иначе он просто окажется в буфере обмена.",
       restoreClipboard: "Возвращать буфер обмена",
@@ -255,7 +257,8 @@ const ru = {
       pasteLastHint: "Нажми, чтобы задать другое сочетание.",
       remove: "Убрать",
       add: "Добавить",
-      capturing: "Нажми клавишу, сочетание или кнопку мыши… Esc — отмена",
+      capturing: "Нажми клавишу, сочетание или кнопку мыши… Esc или клик сюда — отмена",
+      notHeard: "Ciao не услышал нажатие и перезапустил перехват клавиш. Попробуй ещё раз.",
       recording: "Нажми сочетание… Esc — отмена",
     },
     t3: {
@@ -290,7 +293,9 @@ const ru = {
       check: "Проверить",
     },
     developer: {
-      title: "Для разработчика",
+      title: "Устаревшее",
+      formatText: "Абзацы и списки",
+      formatTextHint: "Пауза перед новым предложением — новый абзац, «первое… второе…» — нумерованный список. Видно сразу, пока говоришь.",
       showDelay: "Показывать задержку",
       showDelayHint: "Уровень задержки распознавания — в окошке записи, здесь и в меню трея.",
       delay: "Задержка",
@@ -511,6 +516,10 @@ const en: Strings = {
       missing: "Nothing gets transcribed without a key.",
       replace: "replace key…",
       save: "Save",
+      check: "Check",
+      checking: "Checking the key…",
+      works: (ms) => `✓ The key works: the service answered in ${ms} ms.`,
+      failed: (reason) => `✗ The key doesn't work: ${reason}`,
     },
     providers: {
       title: "Who transcribes",
@@ -554,8 +563,6 @@ const en: Strings = {
     },
     behaviour: {
       title: "Behavior",
-      formatText: "Paragraphs and lists",
-      formatTextHint: "A pause before a new sentence starts a paragraph; “first… second…” becomes a numbered list. You see it as you speak.",
       autoPaste: "Paste text right away",
       autoPasteHint: "Otherwise it just lands on the clipboard.",
       restoreClipboard: "Restore the clipboard",
@@ -610,7 +617,8 @@ const en: Strings = {
       pasteLastHint: "Click to set a different shortcut.",
       remove: "Remove",
       add: "Add",
-      capturing: "Press a key, a combination or a mouse button… Esc to cancel",
+      capturing: "Press a key, a combination or a mouse button… Esc or click here to cancel",
+      notHeard: "Ciao didn't hear that key and restarted its keyboard listener. Try again.",
       recording: "Press a shortcut… Esc to cancel",
     },
     t3: {
@@ -645,7 +653,9 @@ const en: Strings = {
       check: "Check",
     },
     developer: {
-      title: "For developers",
+      title: "Legacy",
+      formatText: "Paragraphs and lists",
+      formatTextHint: "A pause before a new sentence starts a paragraph; “first… second…” becomes a numbered list. You see it as you speak.",
       showDelay: "Show delay",
       showDelayHint: "The recognition delay level — in the recording card, here and in the tray menu.",
       delay: "Delay",

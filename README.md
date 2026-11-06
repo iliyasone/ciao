@@ -26,7 +26,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - This is at the default recognizer delay of `low`. The level ranges from
     `minimal` to `xhigh`: lower shows words sooner, higher is more accurate, and the
     price is the same. It is hidden by default. To see and change it, go to
-    *Settings → For developers → Show delay*.
+    *Settings → Legacy → Show delay*.
 - **Push to talk.** Hold **Right Ctrl** (**Right Option** on a Mac), speak, release, and the text is pasted.
   - The **middle mouse button** works the same way by default: click to start
     hands-free, click again to finish, or hold it to talk.
@@ -251,8 +251,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     numbered item (the word itself is dropped); inside a list "и ещё", "дальше",
     "также" do too (in English: "first"… "third", "next", "also"), and only a
     longer pause (2 s) ends the list.
-  - These are fixed rules, no model, so it costs no time. Toggle in
-    *Settings → Behavior → Paragraphs and lists*.
+  - These are fixed rules, no model, so it costs no time. Off by default; turn
+    it on in *Settings → Legacy → Paragraphs and lists* (on Android too).
 - **Context** (Settings tab). Describe what you usually talk about and list the
   terms that must be spelled exactly (`T3 Code`, `WebSocket`, …). This noticeably
   improves product names and identifiers.
@@ -523,7 +523,10 @@ Gemini key from `GEMINI_API_KEY` and the .wave key from `DOTWAVE_API_KEY`. If th
 is not set, it reads `openai-key.txt`, `gemini-key.txt` or `dotwave-key.txt` in the
 [data folder](#where-things-are-stored). Saving a key in
 Settings writes that file; the key field is under the service in use in
-*Settings → Who transcribes*.
+*Settings → Who transcribes*. Saving a key checks it right away (the service lists
+its models; for .wave the live connection opens and closes): the line under the
+field says whether it works or what the service answered. *Check* repeats that for
+the saved key.
 
 ### Hotkeys
 
@@ -532,6 +535,9 @@ Set them in *Settings → Keys*.
 - **Dictation triggers.** Click *Add* and press what you want: a key (Right
   Ctrl on its own works), a combo such as Ctrl+Alt+Space, or a mouse button
   (middle, side buttons, optionally with modifiers). You can have several.
+  Esc, or a click on the button, cancels. If the window gets the key you press
+  (Ciao's keyboard hooks did not hear it), Ciao cancels, restarts its input helper
+  and says so: press *Add* again.
 - **What other apps see.**
   - Keys and mouse buttons bound this way are hidden from other apps.
   - A lone modifier such as Right Ctrl is the exception, so Ctrl+C keeps working.
@@ -641,7 +647,7 @@ The settings match the desktop's: *Languages* (OpenAI), *Insert the text right
 away* (off: the clipboard only), *Restore the clipboard*, *Pause music while you
 dictate* (Ciao takes the audio focus while recording: players pause and play on by
 themselves afterwards), *Anonymous usage counts*, the interface language and the theme (*As the system*, light, dark), and
-under *For developers* the delay level. *Paste last* is a quick-settings tile:
+under *Legacy* *Paragraphs and lists* (off by default) and the delay level. *Paste last* is a quick-settings tile:
 add it once (pull the shade down twice, then the pencil); tapping it closes the
 shade and puts the last dictation into the field you were typing in, or onto the
 clipboard. What the desktop has and Android doesn't: the wake word, and what a

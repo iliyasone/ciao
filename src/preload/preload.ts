@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, TermSuggestion, UpdateState, ProxyCheck } from "../core/types";
+import type { HistoryEntry, OverlayState, Provider, RetryMode, Settings, SyncStatus, TermSuggestion, UpdateState, ProxyCheck, KeyCheck } from "../core/types";
 
 function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
   const listener = (_e: IpcRendererEvent, ...args: unknown[]) => cb(...(args as A));
@@ -91,6 +91,13 @@ const api = {
     setApiKey: (provider: Provider, key: string): Promise<void> => ipcRenderer.invoke("settings:set-key", provider, key),
     /** Waits for the next key, combo or mouse button (null if cancelled with Esc). */
     captureTrigger: (): Promise<string | null> => ipcRenderer.invoke("settings:capture-trigger"),
+    /**
+     * Ends a capture with nothing. `deaf`: the window heard a key the input helper didn't (its hooks
+     * went dead), so the helper is started anew.
+     */
+    cancelCapture: (deaf: boolean): Promise<void> => ipcRenderer.invoke("settings:cancel-capture", deaf),
+    /** Asks the service whether the key works: the typed one, or the saved one when none is given. */
+    checkKey: (provider: Provider, key?: string): Promise<KeyCheck> => ipcRenderer.invoke("settings:check-key", provider, key),
     /** macOS: whether Ciao has the Accessibility permission; null elsewhere (not needed). */
     accessibility: (): Promise<boolean | null> => ipcRenderer.invoke("settings:accessibility"),
     onAccessibility: (cb: (granted: boolean) => void) => on("settings:accessibility", cb),
