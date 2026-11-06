@@ -296,22 +296,22 @@ function useHasKeys(): Partial<Record<Provider, boolean>> {
 
 function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }) {
   const [value, setValue] = useState("");
-  /** The last check's line; null before one. */
-  const [check, setCheck] = useState<string | null>(null);
+  /** The last check's line and whether the key worked (null while checking); null before one. */
+  const [check, setCheck] = useState<{ text: string; ok: boolean | null } | null>(null);
   const tr = useStrings().settings.apiKey;
   useEffect(() => {
     setValue("");
     setCheck(null);
   }, [provider]);
   const runCheck = async (key?: string) => {
-    setCheck(tr.checking);
+    setCheck({ text: tr.checking, ok: null });
     const r = await ciao.settings.checkKey(provider, key);
-    setCheck(r.ok ? tr.works(r.ms) : tr.failed(r.reason));
+    setCheck(r.ok ? { text: tr.works(r.ms), ok: true } : { text: tr.failed(r.reason), ok: false });
   };
   return (
-    <Row label={tr.label} hint={check ?? (hasKey ? tr.saved : tr.missing)}>
+    <Row label={tr.label} hint={check?.text ?? (hasKey ? tr.saved : tr.missing)}>
       <div className="flex items-center gap-2">
-        <KeyRound className={`size-4 ${hasKey ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
+        <KeyRound className={`size-4 ${hasKey && check?.ok !== false ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
         <input
           type="password"
           value={value}
