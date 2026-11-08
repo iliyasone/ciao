@@ -383,26 +383,35 @@ static class Native
         // A thread of its own: the window needs one that pumps its messages while it has the focus.
         var thread = new Thread(() =>
         {
-            using var away = new System.Windows.Forms.Form
-            {
-                FormBorderStyle = System.Windows.Forms.FormBorderStyle.None,
-                ShowInTaskbar = false,
-                StartPosition = System.Windows.Forms.FormStartPosition.Manual,
-                Location = new System.Drawing.Point(-32000, -32000),
-                Size = new System.Drawing.Size(1, 1),
-                Opacity = 0,
-            };
+            using var away = new AwayWindow();
             away.Show();
             IntPtr me = away.Handle;
+            // Each leg only from where it left the focus: if the user went elsewhere meanwhile, that stands.
             // Once away, it never stays there: back again, a second time if need be.
-            if (Switch(hwnd, me)) ok = Switch(me, hwnd) || Switch(me, hwnd);
-            else if (GetForegroundWindow() == me) Switch(me, hwnd);
+            if (GetForegroundWindow() == hwnd && Switch(hwnd, me))
+                ok = Switch(me, hwnd) || (GetForegroundWindow() == me && Switch(me, hwnd));
             away.Close();
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        thread.Join(2000);
+        thread.Join(); // whole, so the caller's lock covers every switch it makes
         return ok;
+    }
+
+    /// <summary>Holds the focus for a moment during <see cref="Refocus"/>: off-screen, see-through, not on the taskbar, and not activated by showing it.</summary>
+    sealed class AwayWindow : System.Windows.Forms.Form
+    {
+        public AwayWindow()
+        {
+            FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            ShowInTaskbar = false;
+            StartPosition = System.Windows.Forms.FormStartPosition.Manual;
+            Location = new System.Drawing.Point(-32000, -32000);
+            Size = new System.Drawing.Size(1, 1);
+            Opacity = 0;
+        }
+
+        protected override bool ShowWithoutActivation => true;
     }
 
     /// <summary>From window `from` (in front) to `to`; whether `to` is in front within about 300 ms.</summary>

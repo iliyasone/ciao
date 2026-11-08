@@ -475,6 +475,11 @@ func refocusApp(id: Int?, wanted: pid_t) {
     let config = NSWorkspace.OpenConfiguration()
     config.activates = true
     NSWorkspace.shared.openApplication(at: finder, configuration: config) { away, _ in
+        // The user went to another app meanwhile: that stands.
+        if let front = frontmost(), front.processIdentifier != wanted, front.bundleIdentifier != "com.apple.finder" {
+            emit(["id": id, "ok": false])
+            return
+        }
         NSWorkspace.shared.openApplication(at: url, configuration: config) { back, _ in
             emit(["id": id, "ok": away != nil && back != nil])
         }
