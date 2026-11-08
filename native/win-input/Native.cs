@@ -394,8 +394,9 @@ static class Native
             };
             away.Show();
             IntPtr me = away.Handle;
-            if (Switch(hwnd, me)) ok = Switch(me, hwnd);
-            else if (GetForegroundWindow() != hwnd) Switch(GetForegroundWindow(), hwnd); // never leave it elsewhere
+            // Once away, it never stays there: back again, a second time if need be.
+            if (Switch(hwnd, me)) ok = Switch(me, hwnd) || Switch(me, hwnd);
+            else if (GetForegroundWindow() == me) Switch(me, hwnd);
             away.Close();
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
