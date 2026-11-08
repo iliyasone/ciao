@@ -36,8 +36,9 @@ const RESTORE_AFTER_MS = 1500;
 /** Checking: how long the pasted text may take to show up in the field, and how often it is read. */
 const LAND_MS = 1500;
 const LAND_EVERY_MS = 150;
-/** After T3 Code's window was activated again: it moves focus into its chat box two frames later. */
-const REFOCUS_MS = 150;
+/** After T3 Code's window was activated again: how long it may take to move focus into its chat box (a couple of frames, and the accessibility tree catching up), and how often it is read. */
+const REFOCUS_MS = 600;
+const REFOCUS_EVERY_MS = 60;
 
 /** The clipboard as it was before a paste, waiting to be put back (`running` once it is being put back). */
 let pending: { before: ClipboardItem[]; text: string; timer: ReturnType<typeof setTimeout>; running?: Promise<void> } | null = null;
@@ -132,8 +133,11 @@ export async function pasteIntoT3(
   // paste from a button to its chat box, but puts focus back into the box when its window is activated, as a
   // click into another window and back would. So the window is: then the box is read again.
   if (pre.text === null && pre.reason === "no-field" && input.fieldsReadable(hwnd) && (await input.refocus(hwnd))) {
-    await new Promise((resolve) => setTimeout(resolve, REFOCUS_MS));
-    pre = await input.field(hwnd);
+    for (const until = Date.now() + REFOCUS_MS; ; ) {
+      await new Promise((resolve) => setTimeout(resolve, REFOCUS_EVERY_MS));
+      pre = await input.field(hwnd);
+      if (pre.text !== null || pre.reason !== "no-field" || Date.now() >= until) break;
+    }
   }
   // Nothing focused where boxes read fine: watch for the box T3 Code moves the paste into.
   const unfocused = pre.text === null && pre.reason === "no-field" && input.fieldsReadable(hwnd);
