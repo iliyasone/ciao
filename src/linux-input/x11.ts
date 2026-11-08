@@ -52,6 +52,7 @@ export class X11 {
       XFree: x.func("int XFree(void *)"),
       XKeysymToKeycode: x.func("uint8_t XKeysymToKeycode(void *, unsigned long)"),
       XSync: x.func("int XSync(void *, int)"),
+      XSetInputFocus: x.func("int XSetInputFocus(void *, unsigned long, int, unsigned long)"),
       XSetErrorHandler: x.func("void *XSetErrorHandler(void *)"),
       XTestFakeKeyEvent: xtst.func("int XTestFakeKeyEvent(void *, unsigned int, int, unsigned long)"),
     };
@@ -164,6 +165,21 @@ export class X11 {
     this.f.XSendEvent!(this.display, this.root, 0, (1 << 20) | (1 << 19), event); // SubstructureRedirect | SubstructureNotify
     this.f.XSync!(this.display, 0);
     return window;
+  }
+
+  /**
+   * The window (in front) loses the X focus for a moment and gets it back, so its app sees it activated
+   * again. Set directly, not through the window manager, which may ignore a request for the window it
+   * already counts as active. Whether it has the focus again.
+   */
+  async refocus(window: number): Promise<boolean> {
+    const PointerRoot = 1, RevertToParent = 2, CurrentTime = 0;
+    this.f.XSetInputFocus!(this.display, PointerRoot, PointerRoot, CurrentTime);
+    this.f.XSync!(this.display, 0);
+    await new Promise((resolve) => setTimeout(resolve, 80)); // the app takes in the loss before the return
+    this.f.XSetInputFocus!(this.display, window, RevertToParent, CurrentTime);
+    this.f.XSync!(this.display, 0);
+    return this.activeWindow() === window;
   }
 
   enter(): void {

@@ -244,6 +244,15 @@ export class InputHelper extends EventEmitter<InputEvents> {
     return typeof r.hwnd === "number" ? r.hwnd : 0;
   }
 
+  /**
+   * `hwnd`, which must be in front, loses the focus for a moment and gets it back, so its app sees its window
+   * activated again. False if it wasn't in front, or the system wouldn't switch (Wayland never does).
+   */
+  async refocus(hwnd: number): Promise<boolean> {
+    const r = await this.request({ cmd: "refocus", hwnd }, 3000);
+    return r.ok === true;
+  }
+
   /** Presses Enter if `hwnd` is still in front (0 = whatever is). */
   async enter(hwnd: number): Promise<boolean> {
     const r = await this.request({ cmd: "key", key: "enter", hwnd });
@@ -275,7 +284,7 @@ export class InputHelper extends EventEmitter<InputEvents> {
         resolve({ ok: false, reason: "timeout" });
         // A quick command unanswered twice in a row: the helper hangs, and hears no keys either. Restart it
         // (the exit handler does). Not for the slow ones: a field read or a window switch may take long.
-        if (msg.cmd === "field" || msg.cmd === "page" || msg.cmd === "activate" || ++this.unanswered < 2 || this.child !== child) return;
+        if (msg.cmd === "field" || msg.cmd === "page" || msg.cmd === "activate" || msg.cmd === "refocus" || ++this.unanswered < 2 || this.child !== child) return;
         console.warn("input helper not answering: restarting it");
         this.unanswered = 0;
         child.kill();

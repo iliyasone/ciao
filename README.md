@@ -131,7 +131,12 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
       *Send right away* sends it), and your clipboard comes back at once
       (any focused field counts: with the command palette open, the text lands there).
       That includes a paste made after a click into the chat's timeline: T3 Code
-      moves it into the box itself;
+      moves it into the box itself. When nothing editable has focus at all (say, an
+      image in the chat stays focused after its preview closes, and T3 Code doesn't
+      move a paste from there), Ciao first takes the focus from T3 Code's window for
+      a moment and gives it back, as a click into another window and back would, so
+      T3 Code puts focus back into its chat box (macOS: the Finder has it for that
+      moment, so a Finder window may flash up; Linux: X11 only);
     - no box turns up at all (say, a dialog had focus): the card says to click into
       the box and paste, and the text stays on the clipboard;
     - the box had text and stays just as it was: the card says so, and the text
@@ -191,7 +196,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   it with the mouse (a double click selects all of it) and drag the selection into
   another app's field; *Copy* puts it on the clipboard. The box is read-only: the
   card never takes the keyboard, which stays with the app you dictate into. It
-  stays until you close it, use it, or start the next dictation
+  stays until you close it, use it (*Copy*, or drop dragged text into a field:
+  the card goes as soon as an app takes the drop), or start the next dictation
   (a click on its icon starts one, as the pill would; a dictation that comes to
   nothing, like a brushed trigger or a silent hold, gives the card back, while Esc
   lets it go). It doesn't turn see-through under the pointer. Not when *Paste text

@@ -22,6 +22,8 @@
 // - AT-SPI calls are synchronous: a read holds up the helper's other work for up to about a second.
 // - "activate" works on X11 only (Wayland lets no app bring another forward): it answers hwnd 0 there.
 //   On X11 it answers the window it asked the window manager to activate, which may still refuse.
+// - "refocus" works on X11 only: the X focus goes to the root window for a moment and back (Wayland
+//   lets no app move it). It answers ok:false there.
 // - "key" presses Enter with XTest on X11 and the uinput keyboard on Wayland (no window check there). It
 //   answers ok:false while any modifier is held: neither can lift the user's own keys (Windows lifts
 //   them, macOS sends the key without them).
@@ -298,6 +300,12 @@ function handle(msg: Record<string, unknown>): void {
         return emit({ id, hwnd: 0 });
       }
       return emit({ id, hwnd: x11.activate(re) });
+    }
+    case "refocus": {
+      const wanted = typeof msg.hwnd === "number" ? msg.hwnd : 0;
+      if (wayland || !x11 || !wanted || x11.activeWindow() !== wanted) return emit({ id, ok: false });
+      void x11.refocus(wanted).then((ok) => emit({ id, ok }));
+      return;
     }
     case "key": {
       const wanted = typeof msg.hwnd === "number" ? msg.hwnd : 0;

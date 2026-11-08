@@ -19,6 +19,8 @@
 //   Accessibility only, turning a Chromium browser's accessibility on like "field".
 // - "activate" matches the app bundle's file name ("T3 Code (Nightly)") and answers with its pid.
 // - "key" needs Accessibility too, like "paste"; without it it answers ok:false.
+// - "refocus" hands the focus for a moment to the Finder (macOS lets one app take it only from another,
+//   and the helper has no window of its own), so a Finder window may flash up.
 // - "media" pauses only Music and Spotify, through AppleScript (macOS asks the user once per app).
 //   Extra command {"cmd":"media-ask"}: ask that permission now for the players that are running.
 // - "key" events: "paste" is ⌘V or ⌘⇧V, by the key where QWERTY has V (so it holds in the Russian
@@ -462,6 +464,23 @@ func activateApp(id: Int?, pattern: String) {
     }
 }
 
+/// "refocus": the frontmost app (pid `wanted`) loses the focus for a moment and gets it back, so it sees its window
+/// activated again (T3 Code then puts focus back into its chat box). Through Launch Services, like "activate".
+func refocusApp(id: Int?, wanted: pid_t) {
+    guard let app = frontmost(), app.processIdentifier == wanted, let url = app.bundleURL,
+          let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.bundleURL else {
+        emit(["id": id, "ok": false])
+        return
+    }
+    let config = NSWorkspace.OpenConfiguration()
+    config.activates = true
+    NSWorkspace.shared.openApplication(at: finder, configuration: config) { away, _ in
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { back, _ in
+            emit(["id": id, "ok": away != nil && back != nil])
+        }
+    }
+}
+
 // MARK: - Field text ("field", and Enter while watching)
 
 /// Longer than this it is a log or a document rather than a message, and copying it costs too much.
@@ -652,6 +671,8 @@ func handle(_ line: String) {
         answerPage(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0, retry: true)
     case "activate":
         activateApp(id: id, pattern: msg["process"] as? String ?? "$^")
+    case "refocus":
+        refocusApp(id: id, wanted: (msg["hwnd"] as? NSNumber)?.int32Value ?? 0)
     case "key":
         let wanted = (msg["hwnd"] as? NSNumber)?.int32Value ?? 0
         let ok = msg["key"] as? String == "enter" && AXIsProcessTrusted() && (wanted == 0 || frontmost()?.processIdentifier == wanted)

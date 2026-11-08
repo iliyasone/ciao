@@ -370,6 +370,56 @@ static class Native
         return GetForegroundWindow() == hwnd ? hwnd : IntPtr.Zero;
     }
 
+    /// <summary>
+    /// Takes the focus from hwnd, which must be in front, and gives it back at once, so its app sees its window
+    /// activated again (T3 Code then puts focus back into its chat box). The focus goes for a moment to a window
+    /// of this helper's own that nobody sees: Windows lets a thread attached to the one in front hand it there,
+    /// and the window in front hand it back. False if hwnd isn't in front or Windows refused either switch.
+    /// </summary>
+    public static bool Refocus(IntPtr hwnd)
+    {
+        if (GetForegroundWindow() != hwnd || IsHungAppWindow(hwnd)) return false;
+        bool ok = false;
+        // A thread of its own: the window needs one that pumps its messages while it has the focus.
+        var thread = new Thread(() =>
+        {
+            using var away = new System.Windows.Forms.Form
+            {
+                FormBorderStyle = System.Windows.Forms.FormBorderStyle.None,
+                ShowInTaskbar = false,
+                StartPosition = System.Windows.Forms.FormStartPosition.Manual,
+                Location = new System.Drawing.Point(-32000, -32000),
+                Size = new System.Drawing.Size(1, 1),
+                Opacity = 0,
+            };
+            away.Show();
+            IntPtr me = away.Handle;
+            if (Switch(hwnd, me)) ok = Switch(me, hwnd);
+            else if (GetForegroundWindow() != hwnd) Switch(GetForegroundWindow(), hwnd); // never leave it elsewhere
+            away.Close();
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join(2000);
+        return ok;
+    }
+
+    /// <summary>From window `from` (in front) to `to`; whether `to` is in front within about 300 ms.</summary>
+    static bool Switch(IntPtr from, IntPtr to)
+    {
+        IsGUIThread(true);
+        uint me = GetCurrentThreadId(), theirs = GetWindowThreadProcessId(from, out _);
+        bool attached = theirs != 0 && theirs != me && AttachThreadInput(me, theirs, true);
+        try { SetForegroundWindow(to); }
+        finally { if (attached) AttachThreadInput(me, theirs, false); }
+        for (int i = 0; i < 30 && GetForegroundWindow() != to; i++)
+        {
+            System.Windows.Forms.Application.DoEvents();
+            Thread.Sleep(10);
+        }
+        return GetForegroundWindow() == to;
+    }
+
     /// <summary>Starts exe (no arguments, from its own folder, no handles inherited) and waits up to 3 s for hwnd to be in front.</summary>
     static IntPtr Launch(string exe, IntPtr hwnd)
     {

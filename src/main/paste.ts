@@ -36,6 +36,8 @@ const RESTORE_AFTER_MS = 1500;
 /** Checking: how long the pasted text may take to show up in the field, and how often it is read. */
 const LAND_MS = 1500;
 const LAND_EVERY_MS = 150;
+/** After T3 Code's window was activated again: it moves focus into its chat box two frames later. */
+const REFOCUS_MS = 150;
 
 /** The clipboard as it was before a paste, waiting to be put back (`running` once it is being put back). */
 let pending: { before: ClipboardItem[]; text: string; timer: ReturnType<typeof setTimeout>; running?: Promise<void> } | null = null;
@@ -109,8 +111,9 @@ export type T3Check = "landed" | "unreadable" | "unclear";
  * - the prefix and suffix go around the text when the box is empty or can't be read (a prompt said in several holds gets them once);
  * - the text shows up in the box: pasted, and the old clipboard comes back at once;
  * - nothing editable was focused (a click into the timeline blurs the box) in a window whose box has
- *   been read before: T3 Code itself sends such a paste to the chat box, so it is pasted and checked
- *   the same way; if no box turns up at all, it is a miss and the text stays on the clipboard;
+ *   been read before: the window is activated again, so T3 Code puts focus back into the box. Still
+ *   nothing (a dialog): T3 Code itself sends a paste from the timeline to the chat box, so it is pasted
+ *   and checked the same way; if no box turns up at all, it is a miss and the text stays on the clipboard;
  * - the box had text and is just as it was: a miss, and the text stays on the clipboard;
  * - anything else (it can't be read, the window went, the box was sent and cleared): pasted, but the
  *   text stays on the clipboard so it can't be lost.
@@ -124,7 +127,14 @@ export async function pasteIntoT3(
   restoreClipboard: boolean,
 ): Promise<{ text: string; before: string | null; pastedAt: number } & ({ delivery: "pasted"; check: T3Check } | { delivery: "clipboard"; miss: PasteMiss })> {
   const before = restoreClipboard ? await takeSnapshot() : (await cancelRestore(), null);
-  const pre = await input.field(hwnd);
+  let pre = await input.field(hwnd);
+  // Nothing editable focused, say an image in the chat left focused when its preview closed: T3 Code sends no
+  // paste from a button to its chat box, but puts focus back into the box when its window is activated, as a
+  // click into another window and back would. So the window is: then the box is read again.
+  if (pre.text === null && pre.reason === "no-field" && input.fieldsReadable(hwnd) && (await input.refocus(hwnd))) {
+    await new Promise((resolve) => setTimeout(resolve, REFOCUS_MS));
+    pre = await input.field(hwnd);
+  }
   // Nothing focused where boxes read fine: watch for the box T3 Code moves the paste into.
   const unfocused = pre.text === null && pre.reason === "no-field" && input.fieldsReadable(hwnd);
   // A box with text gets a space first: a prompt said in several holds doesn't run together. With
