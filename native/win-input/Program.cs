@@ -46,6 +46,10 @@ namespace Ciao.Input;
 ///                                           such app, or the system kept another window in front. "launch":true (Windows
 ///                                           only): if refused, start the app's exe again with no arguments, so a single-
 ///                                           instance app (T3 Code) shows its own window
+///   {"id":7,"cmd":"refocus","hwnd":123} → takes the focus from that window, if it is in front, and gives it back at
+///                                           once, so its app sees the window activated again (T3 Code then puts focus
+///                                           back into its chat box): {"id":7,"ok":true|false}, false if it wasn't in
+///                                           front or the system refused a switch
 ///   {"id":5,"cmd":"key","key":"enter","hwnd":123} → presses Enter if that window is still in front (hwnd 0 = whatever
 ///                                           is): {"id":5,"ok":true|false}. "enter" is the only key
 ///   {"cmd":"media","pause":true}          pause the media players that are playing (music, a video in a browser);
@@ -398,6 +402,19 @@ static class Program
                     catch (ArgumentException) { } // a bad pattern matches nothing
                     catch (Exception e) { Emit(new JsonObject { ["type"] = "log", ["message"] = "activate: " + e.Message }); }
                     Emit(new JsonObject { ["id"] = id, ["hwnd"] = hwnd });
+                }) { IsBackground = true }.Start();
+                break;
+            }
+            case "refocus":
+            {
+                var hwnd = new IntPtr(msg["hwnd"]?.GetValue<long>() ?? 0);
+                // Off the command thread, like "activate"; and not during a window switch of its own.
+                new Thread(() =>
+                {
+                    bool ok = false;
+                    try { lock (ActivateLock) ok = hwnd != IntPtr.Zero && Native.Refocus(hwnd); }
+                    catch (Exception e) { Emit(new JsonObject { ["type"] = "log", ["message"] = "refocus: " + e.Message }); }
+                    Emit(new JsonObject { ["id"] = id, ["ok"] = ok });
                 }) { IsBackground = true }.Start();
                 break;
             }

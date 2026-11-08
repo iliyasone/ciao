@@ -771,6 +771,11 @@ export function Overlay() {
               e.preventDefault();
               e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
             }}
+            // Dropped into another app's field: the text is where it was meant to go, so the card goes.
+            // A drag let go of where nothing takes it (or cancelled with Esc) ends with "none": it stays.
+            onDragEnd={(e) => {
+              if (e.dataTransfer.dropEffect !== "none") dismiss();
+            }}
             rows={Math.min(maxLines - 1, Math.max(2, Math.ceil(keptText.length / 70) + (keptText.match(/\n/g)?.length ?? 0)))}
             spellCheck={false}
             className="selectable block w-full cursor-text resize-none rounded-xl bg-tint/5 px-3 py-2 text-[15px] leading-[25px] text-fg outline-none ring-1 ring-tint/20 focus:ring-tint/40"
