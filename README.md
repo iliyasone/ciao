@@ -183,6 +183,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Drag it anywhere, also while you speak, and drag its top-right corner to
     change its width and how many lines it shows before it scrolls.
     Double-click the grip at its bottom edge to put it back at the bottom centre.
+  - Windows: an app that moves a picture of the screen while you switch desktops
+    (sending it the `Lanes.ScreenPicture` message) can keep the pill over that
+    picture, live: the pill leaves itself out of that one copy of the screen.
+    Screenshots and screen sharing still show it.
 - **Pastes where you finish.** The text goes into the window that is active when
   you stop the dictation, so you can start talking, go to the window the text is
   for, and stop there. If that window loses focus while the text is being

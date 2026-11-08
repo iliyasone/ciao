@@ -37,6 +37,36 @@ jobs:
           $info = (Get-Item release/win-unpacked/Ciao.exe).VersionInfo
           if ($info.ProductName -ne "Ciao") { throw "Ciao.exe still says $($info.ProductName)" }
         shell: pwsh
+      # The pill leaves itself out of screen capture while it is asked to ("Lanes.ScreenPicture",
+      # src/main/overlayWindow.ts): WDA_EXCLUDEFROMCAPTURE (0x11) on wParam 1, nothing on wParam 0.
+      - run: |
+          Add-Type @"
+          using System; using System.Collections.Generic; using System.Runtime.InteropServices;
+          public static class W {
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern uint RegisterWindowMessageW(string name);
+            [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeoutW(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint ms, out IntPtr result);
+            [DllImport("user32.dll")] public static extern bool GetWindowDisplayAffinity(IntPtr h, out uint affinity);
+            public delegate bool Each(IntPtr h, IntPtr l);
+            [DllImport("user32.dll")] static extern bool EnumWindows(Each cb, IntPtr l);
+            [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+            public static List<IntPtr> Of(uint[] pids) {
+              var list = new List<IntPtr>();
+              EnumWindows((h, _) => { uint pid; GetWindowThreadProcessId(h, out pid); if (Array.IndexOf(pids, pid) >= 0) list.Add(h); return true; }, IntPtr.Zero);
+              return list; } }
+          "@
+          $env:CIAO_TELEMETRY = "0"
+          $app = Start-Process release/win-unpacked/Ciao.exe -PassThru
+          $msg = [W]::RegisterWindowMessageW("Lanes.ScreenPicture")
+          $send = { param($w) foreach ($h in [W]::Of([uint32[]]@((Get-Process Ciao).Id))) {
+            $r = [IntPtr]::Zero; [void][W]::SendMessageTimeoutW($h, $msg, [IntPtr]$w, [IntPtr]::Zero, 2, 50, [ref]$r)
+            $a = 0; [void][W]::GetWindowDisplayAffinity($h, [ref]$a); $a } }
+          for ($i = 0; $i -lt 60 -and -not ((& $send 1) -contains 0x11); $i++) { Start-Sleep -Milliseconds 500 }
+          $on = & $send 1; $off = & $send 0
+          Stop-Process -Name Ciao -Force -ErrorAction SilentlyContinue
+          "wParam 1: $($on -join ' '); wParam 0: $($off -join ' ')"
+          if (-not ($on -contains 0x11)) { throw "no window left itself out of capture" }
+          if ($off | ? { $_ -ne 0 }) { throw "a window stayed out of capture" }
+        shell: pwsh
       - uses: actions/upload-artifact@v4
         with:
           name: Ciao-Setup
