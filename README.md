@@ -185,8 +185,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     Double-click the grip at its bottom edge to put it back at the bottom centre.
   - Windows: an app that moves a picture of the screen while you switch desktops
     (sending it the `Lanes.ScreenPicture` message) can keep the pill over that
-    picture, live: the pill leaves itself out of that one copy of the screen.
-    Screenshots and screen sharing still show it.
+    picture, live: the pill leaves itself out of screen capture until that app
+    says it is done. Screenshots and screen sharing show it as usual, except
+    while you switch desktops.
 - **Pastes where you finish.** The text goes into the window that is active when
   you stop the dictation, so you can start talking, go to the window the text is
   for, and stop there. If that window loses focus while the text is being
