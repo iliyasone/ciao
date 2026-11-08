@@ -3,6 +3,7 @@ import { BrowserWindow, screen, type Rectangle } from "electron";
 import type { OverlayState, TermSuggestion } from "../core/types";
 import type { OverlayPort } from "./dictation";
 import { logRenderer } from "./rendererLog";
+import { WakeWord } from "./wakeWord";
 
 // Transparent window a bit larger than the card (room for its shadow); the card grows
 // smoothly inside and the empty area lets clicks through. Never focusable, so the app you
@@ -26,6 +27,11 @@ import { logRenderer } from "./rendererLog";
 // comes (a few pixels on from the press after a flick). If a later Electron stops eating it, every
 // press arrives twice: check this on an upgrade. The page's press doesn't capture the mouse, so a
 // release outside the window (a resize stopped by its limits) isn't seen until the pointer is back.
+//
+// Windows: an app that moves a picture of the screen (a desktop switch that follows the fingers) sends
+// the "Lanes.ScreenPicture" message to topmost windows just before it copies the screen: wParam 1, and
+// 0 once it has. The pill leaves itself out of screen capture in between (WDA_EXCLUDEFROMCAPTURE, read
+// by that app to keep it over the picture, live), and is in screenshots again right after.
 //
 // The page records the mic too, so a crashed or stuck page means no pill and every dictation empty
 // until it is loaded again: it is, after a crash, a hang, or a stop it didn't answer (restart).
@@ -127,6 +133,9 @@ export class OverlayWindow implements OverlayPort {
     else this.win.setIgnoreMouseEvents(true, { forward: true });
     if (process.platform === "win32") {
       this.win.hookWindowMessage(WM_MOUSEACTIVATE, (_wParam, lParam) => this.pressEaten(lParam.readUInt32LE(0) >>> 16));
+      // Handled inside the window procedure, so it is set before the sender's SendMessage returns.
+      const picture = screenPictureMessage();
+      if (picture) this.win.hookWindowMessage(picture, (wParam) => this.win.setContentProtection(wParam.readUInt32LE(0) === 1));
     }
     // A monitor went away or changed: bring the pill back onto a screen (not under a running card).
     const replace = () => {
@@ -441,4 +450,15 @@ export class OverlayWindow implements OverlayPort {
 
 function contains(a: Rectangle, p: { x: number; y: number }): boolean {
   return p.x >= a.x && p.x <= a.x + a.width && p.y >= a.y && p.y <= a.y + a.height;
+}
+
+/** Windows: the number of the "Lanes.ScreenPicture" message (the same in every process), through koffi from the wake word's folder; null without it. */
+function screenPictureMessage(): number | null {
+  try {
+    const koffi = require(path.join(WakeWord.dir(), "koffi")) as { load(file: string): { func(signature: string): (name: string) => number } };
+    return koffi.load("user32.dll").func("unsigned int __stdcall RegisterWindowMessageW(const char16_t *name)")("Lanes.ScreenPicture") || null;
+  } catch (e) {
+    console.warn("overlay: no screen-picture message:", e);
+    return null;
+  }
 }
