@@ -39,7 +39,7 @@ export interface Settings {
   theme: Theme;
   /** Interface language; until one is saved (a new install, or a config from before the setting existed), the OS locale picks it. */
   language: Lang;
-  /** Where the card and the idle pill sit: the middle of the card's bottom edge, in screen pixels; null = bottom-centre. Set by dragging. */
+  /** Where the idle pill sits (the card opens from it): its centre, in screen pixels; null = bottom-centre. Set by dragging. */
   overlayAnchor: { x: number; y: number } | null;
   overlayWidth: number;
   /** Lines of text the live card shows before it scrolls. Set by dragging its corner. */

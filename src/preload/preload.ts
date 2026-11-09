@@ -28,6 +28,8 @@ const api = {
     openHistory: () => ipcRenderer.send("overlay:open-history"),
     /** Whether the pill stays on screen between dictations. */
     onPill: (cb: (on: boolean) => void) => on("overlay:pill", cb),
+    /** Where the pill is in the window (its centre, px), and whether the card opens downwards from it. */
+    onAnchor: (cb: (at: { x: number; y: number; down: boolean }) => void) => on("overlay:anchor", cb),
     /** The pill was clicked: start a hands-free dictation, or finish the one running. */
     pillClick: () => ipcRenderer.send("overlay:pill-click"),
     /** The card's Stop button: finish the dictation running (never starts one). */
