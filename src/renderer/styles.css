@@ -112,13 +112,16 @@ body.app {
   /* The pill's horizontal edges inside a card centred in the window (its width is 100%). */
   --pill-left: calc(50% + var(--px) - 50vw - 28px);
   --pill-right: calc(50% - var(--px) + 50vw - 28px);
-  --pill-top: calc(100% - 30px);
-  --pill-bottom: 0px;
+  /* Its vertical edges inside the card: the card sits on the window's bottom padding (16 px), or hangs
+     from its top padding when it opens downwards. The pill is on the card's edge unless the screen is too
+     short for the card on either side of it. */
+  --pill-bottom: calc(100vh - var(--py) - 31px);
+  --pill-top: calc(100% - 30px - var(--pill-bottom));
 }
 
 :root.down {
-  --pill-top: 0px;
-  --pill-bottom: calc(100% - 30px);
+  --pill-top: calc(var(--py) - 31px);
+  --pill-bottom: calc(100% - 30px - var(--pill-top));
 }
 
 /* Opening downwards: the card hangs from the pill, its grip and corner on the far side. */

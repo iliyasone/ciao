@@ -426,8 +426,10 @@ export class OverlayWindow implements OverlayPort {
     const height = CHROME_HEIGHT + lines * LINE;
     const area = screen.getDisplayNearestPoint({ x: Math.round(d.anchor.x), y: Math.round(d.anchor.y) }).workArea;
     const rect = fitRect(area, o.x + (o.width - width) / 2, this.down ? o.y : o.y + o.height - height, width, height);
+    // Kept on the card's edge, between its corners: a narrower card may no longer reach it.
+    const edge = SIDE_PADDING / 2 + PILL_W / 2;
     const anchor = {
-      x: d.anchor.x + rect.x + width / 2 - (o.x + o.width / 2),
+      x: clamp(d.anchor.x + rect.x + width / 2 - (o.x + o.width / 2), rect.x + edge, rect.x + width - edge),
       y: d.anchor.y + (this.down ? rect.y - o.y : rect.y + height - (o.y + o.height)),
     };
     this.apply({ rect, anchor, down: this.down });
@@ -509,7 +511,10 @@ export class OverlayWindow implements OverlayPort {
       this.down = false;
       this.anchor = { x: b.x + glue.x, y: b.y + glue.y };
     }
+    // From where it is now (mid-glide too, at the speed it has).
     if (!this.motion) this.spring.reset(this.anchor.x, this.anchor.y);
+    this.spring.x = this.anchor.x;
+    this.spring.y = this.anchor.y;
     this.apply(this.layout(this.anchor, this.size(), this.busy ? this.glued() : null));
     this.glideTo = null;
     this.glide(this.busy ? this.layout(this.home(), this.size(), this.glued()).anchor : this.home());
@@ -610,8 +615,8 @@ export class OverlayWindow implements OverlayPort {
       y: clamp(a.y, area.y + PILL_H / 2, area.y + area.height - PILL_H / 2),
     };
     const upTop = anchor.y + PILL_H / 2 + CARD_BOTTOM - height;
-    // A card on screen keeps its side; the pill alone takes the one with room.
-    const down = this.busy ? this.down : upTop < area.y - CARD_BOTTOM;
+    // A card on screen keeps its side; the pill alone takes the one with room (the roomier one if neither has).
+    const down = this.busy ? this.down : upTop < area.y - CARD_BOTTOM && area.y + area.height - anchor.y > anchor.y - area.y;
     return { rect: fit(anchor.x - width / 2, down ? anchor.y - PILL_H / 2 - CARD_BOTTOM : upTop), anchor, down };
   }
 
