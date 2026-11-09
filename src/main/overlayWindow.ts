@@ -107,6 +107,8 @@ interface Layout {
 export class OverlayWindow implements OverlayPort {
   readonly win: BrowserWindow;
   private visibleSeq = -1;
+  /** Cards showing the check (done), and when it showed. */
+  private readonly doneAt = new Map<number, { at: number; t3: boolean }>();
   private drag0: {
     mode: "move" | "resize";
     anchor: Point;
@@ -342,8 +344,11 @@ export class OverlayWindow implements OverlayPort {
     });
   }
 
-  /** The renderer finished folding away the card for `seq`. */
-  hidden(seq: number): void {
+  /** The renderer finished folding away the card for `seq`; its fold waited `waitedMs` for the pointer to leave it, or went with the pointer on it (`over`). */
+  hidden(seq: number, waitedMs: number, over: boolean): void {
+    const done = this.doneAt.get(seq);
+    this.doneAt.delete(seq);
+    if (done) console.log("overlay: card", seq, done.t3 ? "(T3)" : "", "gone", `${Date.now() - done.at}ms`, "after its check", waitedMs ? `(waited ${waitedMs}ms for the pointer to leave it)` : over ? "(the pointer was on it)" : "");
     if (seq === this.visibleSeq) this.visibleSeq = -1;
   }
 
@@ -554,6 +559,14 @@ export class OverlayWindow implements OverlayPort {
   // ── OverlayPort ─────────────────────────────────────────────────────────
 
   state(s: OverlayState): void {
+    // When the check showed, so ciao.log can say how long the card stayed after it.
+    // A card still up when the next one comes (the pointer kept it) is never reported hidden: it ends here.
+    for (const [seq, done] of this.doneAt) {
+      if (seq === s.seq) continue;
+      console.log("overlay: card", seq, done.t3 ? "(T3)" : "", "still up", `${Date.now() - done.at}ms`, "after its check when card", s.seq, "took its place");
+      this.doneAt.delete(seq);
+    }
+    if (s.phase === "done" && !s.keep && !this.doneAt.has(s.seq)) this.doneAt.set(s.seq, { at: Date.now(), t3: !!s.t3 });
     if (this.visibleSeq !== s.seq) {
       // Without a saved spot the card comes up on the display you're working on; while the pill is
       // shown it unfolds where the pill is.

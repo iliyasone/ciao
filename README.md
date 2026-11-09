@@ -128,9 +128,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     is in front at the end;
   - Ciao reads T3 Code's focused field before and after pasting, also with *Suggest
     new words* off:
-    - the text shows up in the box: done, the card folds away at once (before
-      *Send right away* sends it), and your clipboard comes back at once
-      (any focused field counts: with the command palette open, the text lands there).
+    - the text shows up in the box: done, the card folds away at once, even with
+      the pointer on it (before *Send right away* sends it), and your clipboard comes
+      back at once (any focused field counts: with the command palette open, the text
+      lands there). `ciao.log` says how long each card stayed after its check.
       That includes a paste made after a click into the chat's timeline: T3 Code
       moves it into the box itself. When nothing editable has focus at all (say, an
       image in the chat stays focused after its preview closes, and T3 Code doesn't

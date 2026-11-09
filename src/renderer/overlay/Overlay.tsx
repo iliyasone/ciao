@@ -577,17 +577,18 @@ export function Overlay() {
     return () => clearInterval(t);
   }, [live]);
 
-  const fold = useCallback((seq: number) => {
+  /** waitedMs: how long the fold waited for the pointer to leave the card; over: it went with the pointer on it (for ciao.log). */
+  const fold = useCallback((seq: number, waitedMs = 0, over = false) => {
     // Another card took its place meanwhile (a Copy's delayed close): just say this one is gone.
-    if (shownSeq.current !== seq) return ciao.overlay.hidden(seq);
+    if (shownSeq.current !== seq) return ciao.overlay.hidden(seq, waitedMs, over);
     // A fold of another card cut short still reports that card gone.
-    if (foldingSeq.current !== -1 && foldingSeq.current !== seq) ciao.overlay.hidden(foldingSeq.current);
+    if (foldingSeq.current !== -1 && foldingSeq.current !== seq) ciao.overlay.hidden(foldingSeq.current, 0, false);
     setLeaving(true);
     clearTimeout(folding.current);
     foldingSeq.current = seq;
     folding.current = setTimeout(() => {
       foldingSeq.current = -1;
-      ciao.overlay.hidden(seq);
+      ciao.overlay.hidden(seq, waitedMs, over);
       setState((s) => (s?.seq === seq ? null : s));
     }, LEAVE_MS);
   }, []);
@@ -595,15 +596,19 @@ export function Overlay() {
   // Fold away after a terminal phase (not while the pointer is over the card).
   useEffect(() => {
     if (!state) return;
-    // A done T3 card has nothing more to show (the text is in T3 Code's box): it folds at once.
-    const delay = state.keep ? undefined : state.t3 && state.phase === "done" ? 0 : HIDE_AFTER[state.phase];
+    // A done T3 card has nothing more to show (the text is in T3 Code's box): it folds at once, even
+    // under the pointer, which often rests on it (it was just dragged there).
+    const t3Done = state.t3 && state.phase === "done";
+    const delay = state.keep ? undefined : t3Done ? 0 : HIDE_AFTER[state.phase];
     if (delay === undefined) return;
+    let dueAt = 0;
     let timer = setTimeout(function leave() {
-      if (hovered.current) {
+      dueAt ||= performance.now();
+      if (hovered.current && !t3Done) {
         timer = setTimeout(leave, 400);
         return;
       }
-      fold(state.seq);
+      fold(state.seq, Math.round(performance.now() - dueAt), hovered.current);
     }, state.message && state.phase === "empty" ? 1400 : delay);
     return () => clearTimeout(timer);
   }, [state, fold]);

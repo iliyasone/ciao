@@ -378,8 +378,8 @@ function registerIpc(): void {
   ipcMain.on("capture:stopped", (_e, seq: number) => dictation.onCaptureStopped(seq));
   ipcMain.on("capture:error", (_e, seq: number, message: string) => dictation.onCaptureError(seq, message));
   ipcMain.on("overlay:interactive", (_e, on: boolean) => overlay.setInteractive(on));
-  ipcMain.on("overlay:hidden", (_e, seq: number) => {
-    overlay.hidden(seq);
+  ipcMain.on("overlay:hidden", (_e, seq: number, waitedMs: number, over: boolean) => {
+    overlay.hidden(seq, waitedMs, over);
     dictation.cardHidden(seq);
   });
   ipcMain.on("overlay:closed", (_e, seq: number) => dictation.cardHidden(seq));

@@ -17,7 +17,8 @@ const api = {
     onRevise: (cb: (seq: number, text: string, gapMs: number) => void) => on("overlay:revise", cb),
     onFinal: (cb: (seq: number, text: string) => void) => on("overlay:final", cb),
     setInteractive: (on: boolean) => ipcRenderer.send("overlay:interactive", on),
-    hidden: (seq: number) => ipcRenderer.send("overlay:hidden", seq),
+    /** waitedMs: how long its fold waited for the pointer to leave the card; over: it went with the pointer on it. */
+    hidden: (seq: number, waitedMs: number, over: boolean) => ipcRenderer.send("overlay:hidden", seq, waitedMs, over),
     /** The user closed or used the card (it is folding now): a kept one is done with. */
     closed: (seq: number) => ipcRenderer.send("overlay:closed", seq),
     /** x/y: where the press was on screen; the window then follows the cursor until dragEnd. */
