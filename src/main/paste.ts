@@ -35,7 +35,7 @@ async function restore(items: ClipboardItem[]): Promise<void> {
 const RESTORE_AFTER_MS = 1500;
 /** Checking: how long the pasted text may take to show up in the field, and how often it is read. */
 const LAND_MS = 1500;
-const LAND_EVERY_MS = 150;
+const LAND_EVERY_MS = 40;
 /** After T3 Code's window was activated again: how long it may take to move focus into its chat box (a couple of frames, and the accessibility tree catching up), and how often it is read. */
 const REFOCUS_MS = 600;
 const REFOCUS_EVERY_MS = 60;
@@ -161,6 +161,7 @@ export async function pasteIntoT3(
     await new Promise((resolve) => setTimeout(resolve, LAND_EVERY_MS));
     last = await input.field(hwnd);
     if (last.text !== null && occurrences(last.text, text) > baseline) {
+      console.log("t3: seen in the box", `${Date.now() - pastedAt}ms`, "after the paste");
       if (before) restoreLater(before, text, 0);
       return { text, before: pre.text, pastedAt, delivery: "pasted", check: "landed" };
     }
