@@ -144,7 +144,7 @@ function LiveText({ text, withLayout }: { text: TextState; withLayout: boolean }
 const LINE = 25; // px, matches leading below
 /** Window height minus the text lines (CHROME_HEIGHT in src/main/overlayWindow.ts). */
 const CHROME_HEIGHT = 170;
-const DRAG_THRESHOLD = 4; // px: less is a click
+const DRAG_THRESHOLD = 8; // px: less is a click
 
 /** Lines the card shows before it scrolls: the window is sized for them (Settings.overlayLines). */
 function useMaxLines(): number {
@@ -164,6 +164,14 @@ const drawn = new Set<HTMLElement>();
 let reportQueued = false;
 // Resizing the window moves what sits on its bottom edge without resizing it.
 window.addEventListener("resize", () => reportRegion());
+// Where the pill is in the window, and the side the card opens to (styles.css: --px, --py, .down).
+ciao.overlay.onAnchor(({ x, y, down }) => {
+  const root = document.documentElement;
+  root.style.setProperty("--px", `${x}px`);
+  root.style.setProperty("--py", `${y}px`);
+  root.classList.toggle("down", down);
+  reportRegion();
+});
 function reportRegion(): void {
   if (reportQueued) return;
   reportQueued = true;
@@ -242,6 +250,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
     if (!p) return;
     if (p.moved) {
       dragging.current = false;
+      document.body.classList.remove("lifted");
       ciao.overlay.dragEnd();
       if (!hovered.current) ciao.overlay.setInteractive(false);
     } else if (click) {
@@ -251,6 +260,7 @@ function useDrag(mode: "move" | "resize", dragging: React.RefObject<boolean>, ho
   const startDrag = (x: number, y: number) => {
     unwatch.current?.();
     dragging.current = true;
+    document.body.classList.toggle("lifted", mode === "move");
     ciao.overlay.dragStart(mode, x, y);
     const over = () => end(false);
     for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, over);
@@ -379,7 +389,7 @@ function Pill({ dragging }: { dragging: React.RefObject<boolean> }) {
       {...hoverHandlers(hovered, dragging)}
       {...useDrag("move", dragging, hovered, () => ciao.overlay.pillClick())}
       title={tr.pillTitle}
-      className="pill-in absolute bottom-4 left-1/2 flex h-[30px] w-14 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full bg-overlay/95 shadow-[0_6px_20px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-[scale] duration-150 ease-out hover:scale-[1.08] dark:shadow-[0_6px_20px_rgb(0_0_0/0.45)]"
+      className="pill pill-in absolute top-(--py) left-(--px) flex h-[30px] w-14 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-overlay/95 shadow-[0_6px_20px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-[scale] duration-150 ease-out hover:scale-[1.08] dark:shadow-[0_6px_20px_rgb(0_0_0/0.45)]"
     >
       <img src="./icon.png" alt="" draggable={false} className="size-[18px] rounded-[5px]" />
     </div>
@@ -429,12 +439,12 @@ function Suggestion({ s, pill, dragging, onDone }: { s: TermSuggestion; pill: bo
   }, [close]);
 
   return (
-    <div className="absolute inset-x-10 bottom-4 flex justify-center">
+    <div className="card-host absolute inset-0 flex items-end justify-center px-10 pb-4">
       <div
         ref={ref}
         {...hoverHandlers(hovered, dragging)}
         {...useDrag("move", dragging, hovered)}
-        className={`${leaving ? (pill ? "card-fold" : "card-leave") : pill ? "card-unfold" : "card-enter"} max-w-[460px] min-w-[300px] rounded-[20px] bg-overlay/95 px-4 pt-2.5 pb-3 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)]`}
+        className={`${leaving ? (pill ? "card-fold" : "card-leave") : pill ? "card-unfold" : "card-enter"} lift-shadow max-w-[460px] min-w-[300px] rounded-[20px] bg-overlay/95 px-4 pt-2.5 pb-3 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)]`}
       >
         <header className="flex items-center gap-2 text-[12px] text-faint">
           <img src="./icon.png" alt="" draggable={false} className="size-4 rounded-[4px]" />
@@ -676,7 +686,7 @@ export function Overlay() {
   };
 
   return (
-    <div className="flex h-full w-full items-end justify-center px-10 pb-4">
+    <div className="card-host flex h-full w-full items-end justify-center px-10 pb-4">
       <div
         ref={card}
         key={state.seq}
@@ -705,12 +715,10 @@ export function Overlay() {
           if (!dragging.current) ciao.overlay.setInteractive(false);
         }}
         onWheel={solid}
+        // Before the press reaches the corner, which keeps it to itself: a resize is solid too.
+        onPointerDownCapture={solid}
         {...cardDrag}
-        onPointerDown={(e) => {
-          solid();
-          cardDrag.onPointerDown(e);
-        }}
-        className={`${leaving ? (pill ? "card-fold" : "card-leave") : pill ? "card-unfold" : "card-enter"} group relative w-full cursor-grab rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-opacity duration-300 ease-out active:cursor-grabbing dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ${peek ? "opacity-[0.18]" : "opacity-100"}`}
+        className={`${leaving ? (pill ? "card-fold" : "card-leave") : pill ? "card-unfold" : "card-enter"} lift-shadow group relative w-full cursor-grab rounded-[22px] bg-overlay/95 px-5 pt-3 pb-3.5 shadow-[0_14px_44px_rgb(0_0_0/0.16)] ring-1 ring-tint/10 transition-opacity duration-300 ease-out active:cursor-grabbing dark:shadow-[0_14px_44px_rgb(0_0_0/0.5)] ${peek ? "opacity-[0.18]" : "opacity-100"}`}
       >
         <header className="mb-1.5 grid h-6 grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex items-center gap-2">
@@ -820,17 +828,17 @@ export function Overlay() {
             if (Date.now() - gripPressedAt.current < 600) ciao.overlay.resetPlacement();
           }}
           title={tr.gripTitle}
-          className="absolute -bottom-2.5 left-1/2 flex h-5 w-16 -translate-x-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+          className="grip absolute -bottom-2.5 left-1/2 flex h-5 w-16 -translate-x-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
         >
           <span className="h-1.5 w-10 rounded-full bg-tint/25 ring-1 ring-overlay" />
         </div>
         <div
           {...resizeDrag}
           title={tr.resizeTitle}
-          className="absolute top-1 right-1 size-4 cursor-nesw-resize opacity-0 transition-opacity group-hover:opacity-100"
+          className="corner absolute top-1 right-1 size-4 cursor-nesw-resize opacity-0 transition-opacity group-hover:opacity-100"
         >
           <svg viewBox="0 0 16 16" className="size-4 text-ghost">
-            <path d="M6 2h8v8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M14 9 7 2M14 5 11 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
           </svg>
         </div>
       </div>

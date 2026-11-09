@@ -1,5 +1,6 @@
 import path from "node:path";
 import { BrowserWindow, screen, type Rectangle } from "electron";
+import { Spring } from "../core/spring";
 import type { OverlayState, TermSuggestion } from "../core/types";
 import type { OverlayPort } from "./dictation";
 import { logRenderer } from "./rendererLog";
@@ -38,6 +39,13 @@ import { WakeWord } from "./wakeWord";
 //
 // Dragging follows the cursor from here, not the pointer positions the renderer sees: those are
 // measured against a window that is itself moving, and stall or jump while it does.
+//
+// Moving: what is placed is the pill (its centre, the anchor), anywhere on the screen; the window is the
+// card's size around it, kept on the screen, and the renderer is told where in it the pill is. The card
+// opens upwards from the pill, or downwards where there is no room above. Dragged, the pill or the card
+// trails the cursor on a stiff spring, so it has some weight; let go, it glides on a softer one: thrown,
+// it goes on a little; near a screen edge it settles against it, near bottom-centre it goes home. A card
+// on screen stops at the screen edges as at a wall and keeps the side it opens to.
 const LINE = 25; // px, one line of the card's text
 /** Window height minus the text lines: the card's header, padding and shadow room. */
 const CHROME_HEIGHT = 170;
@@ -56,8 +64,22 @@ const POLL_MIN_MS = 25;
 const POLL_MAX_MS = 250;
 /** A fast flick of the pointer, px per ms: the next check comes before it could reach what is drawn. */
 const POINTER_SPEED = 4;
-/** How often a drag moves the window after the cursor (about a frame). */
-const DRAG_MS = 16;
+/** How often a drag or a glide moves the window (about a frame). */
+const FRAME_MS = 16;
+/** The pill, px (the renderer's Pill). */
+const PILL_W = 56;
+const PILL_H = 30;
+/** Springs (as on Android, src/core/spring.ts): trailing the cursor, and gliding to where it settles. */
+const DRAG_STIFFNESS = 1500;
+const GLIDE_STIFFNESS = 380;
+/** A throw: faster than this goes on for this long at its speed (capped), px/s and s. */
+const THROW_SPEED = 500;
+const THROW_MAX_SPEED = 4000;
+const THROW_S = 0.12;
+/** Settling: the pill keeps this far inside the screen; closer to an edge than SNAP, it goes against it; closer to home than HOME_SNAP, home. */
+const EDGE_INSET = 8;
+const EDGE_SNAP = 32;
+const HOME_SNAP = 48;
 const WM_MOUSEACTIVATE = 0x0021;
 const WM_LBUTTONDOWN = 0x0201;
 const WM_LBUTTONDBLCLK = 0x0203;
@@ -73,12 +95,30 @@ export interface OverlayPlacement {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+type Point = { x: number; y: number };
+interface Layout {
+  rect: Rectangle;
+  /** The pill's centre on screen, moved onto the screen (or with the card, see layout). */
+  anchor: Point;
+  /** The card opens downwards from the pill. */
+  down: boolean;
+}
+
 export class OverlayWindow implements OverlayPort {
   readonly win: BrowserWindow;
   private visibleSeq = -1;
-  private drag0: { mode: "move" | "resize"; bounds: Rectangle; lines: number; cursor: { x: number; y: number } } | null = null;
-  private dragTimer: ReturnType<typeof setInterval> | null = null;
-  private dragAt = { x: NaN, y: NaN };
+  private drag0: { mode: "move" | "resize"; anchor: Point; cardWidth: number; lines: number; cursor: Point; glue: Point | null } | null = null;
+  /** Moves the window each frame while a drag or a glide is on. */
+  private motion: ReturnType<typeof setInterval> | null = null;
+  private motionAt = 0;
+  private readonly spring = new Spring(DRAG_STIFFNESS);
+  /** Where a glide ends: the saved spot then (null: home). */
+  private glideTo: Point | null | undefined;
+  /** Where the pill is now, and the side the card opens to. */
+  private anchor: Point = { x: 0, y: 0 };
+  private down = false;
+  /** What the renderer was last told of where the pill is in the window. */
+  private told = "";
   private wake = false;
   private mic = "";
   private pill: boolean;
@@ -101,8 +141,11 @@ export class OverlayWindow implements OverlayPort {
     pill: boolean,
   ) {
     this.pill = pill;
+    const first = this.layout(this.saved(), this.size());
+    this.anchor = first.anchor;
+    this.down = first.down;
     this.win = new BrowserWindow({
-      ...this.bounds(),
+      ...first.rect,
       show: false,
       frame: false,
       transparent: true,
@@ -154,14 +197,16 @@ export class OverlayWindow implements OverlayPort {
     wc.on("unresponsive", () => this.restart("not responding"));
     this.win.on("closed", () => {
       this.stopPoll();
-      this.stopDragTimer();
+      this.stopMotion();
     });
     this.win.webContents.on("did-finish-load", () => {
       // A reloaded page reports what it draws afresh.
       this.hovered = false;
       this.drag0 = null;
-      this.stopDragTimer();
+      this.stopMotion();
       this.setRegion([]);
+      this.told = "";
+      this.tell();
       // It shows nothing yet: the next card is placed and shown afresh.
       this.busy = false;
       this.visibleSeq = -1;
@@ -306,68 +351,135 @@ export class OverlayWindow implements OverlayPort {
   dragStart(mode: "move" | "resize", x: number, y: number): void {
     // A resize starts at the press itself: from the cursor, or a fractional screenX would size the card by a pixel on a click.
     const cursor = mode === "resize" ? screen.getCursorScreenPoint() : { x, y };
-    this.drag0 = { mode, bounds: this.win.getBounds(), lines: this.placement().lines, cursor };
-    this.dragAt = { x: NaN, y: NaN };
+    const { cardWidth, lines } = this.size();
+    const b = this.win.getBounds();
+    // A card on screen moves with the pill where it is in it now.
+    const glue = this.busy ? { x: this.anchor.x - b.x, y: this.anchor.y - b.y } : null;
+    this.drag0 = { mode, anchor: { ...this.anchor }, cardWidth, lines, cursor, glue };
+    // Caught mid-glide: from where it is, with the speed it has.
+    if (!this.motion) this.spring.reset(this.anchor.x, this.anchor.y);
+    this.spring.stiffness = DRAG_STIFFNESS;
+    this.glideTo = undefined;
     this.updateMouse();
-    this.drag();
-    this.stopDragTimer();
-    this.dragTimer = setInterval(() => this.drag(), DRAG_MS);
+    this.startMotion();
   }
 
-  private stopDragTimer(): void {
-    if (this.dragTimer) clearInterval(this.dragTimer);
-    this.dragTimer = null;
+  private startMotion(): void {
+    if (this.motion) return;
+    this.motionAt = performance.now();
+    this.motion = setInterval(() => this.frame(), FRAME_MS);
   }
 
-  /** Puts the window where the cursor says. "move" shifts it; "resize" widens the card (both ways) and adds lines (upwards). */
-  private drag(): void {
+  private stopMotion(): void {
+    if (this.motion) clearInterval(this.motion);
+    this.motion = null;
+  }
+
+  /** One frame: a drag puts the window where the cursor says, a glide moves it on towards where it settles. */
+  private frame(): void {
+    if (this.win.isDestroyed()) return this.stopMotion();
+    const now = performance.now();
+    const dt = (now - this.motionAt) / 1000;
+    this.motionAt = now;
     const d = this.drag0;
-    if (!d || this.win.isDestroyed()) return;
+    if (d?.mode === "resize") return this.resize(d);
+    if (d) {
+      const c = screen.getCursorScreenPoint();
+      this.spring.toX = d.anchor.x + c.x - d.cursor.x;
+      this.spring.toY = d.anchor.y + c.y - d.cursor.y;
+    }
+    this.spring.step(dt);
+    const glue = d ? d.glue : this.busy ? this.glued() : null;
+    this.apply(this.layout({ x: this.spring.x, y: this.spring.y }, this.size(), glue));
+    if (!d && this.spring.resting) this.settled();
+  }
+
+  /** Where the pill is in the window now, for a card that keeps it there. */
+  private glued(): Point {
+    const b = this.win.getBounds();
+    return { x: this.anchor.x - b.x, y: this.anchor.y - b.y };
+  }
+
+  /** The card's corner: wider both ways, and more lines away from the pill. The pill stays where it is. */
+  private resize(d: NonNullable<typeof this.drag0>): void {
     const c = screen.getCursorScreenPoint();
-    if (c.x === this.dragAt.x && c.y === this.dragAt.y) return;
-    this.dragAt = c;
-    // Whole pixels: the press point may be fractional (screenX at 125% scaling), and setBounds takes integers.
     const dx = Math.round(c.x - d.cursor.x);
     const dy = Math.round(c.y - d.cursor.y);
-    const o = d.bounds;
-    if (d.mode === "move") {
-      this.win.setBounds({ ...o, x: Math.round(o.x + dx), y: Math.round(o.y + dy) });
-      return;
-    }
-    const card = clamp(o.width - SIDE_PADDING + 2 * dx, MIN_CARD_WIDTH, MAX_CARD_WIDTH);
-    const lines = clamp(d.lines + Math.round(-dy / LINE), MIN_LINES, MAX_LINES);
-    const width = card + SIDE_PADDING;
-    const height = CHROME_HEIGHT + lines * LINE;
-    // The card's bottom edge stays where it is and its middle too.
-    this.win.setBounds({ x: Math.round(o.x + (o.width - width) / 2), y: o.y + o.height - height, width, height });
+    const cardWidth = clamp(d.cardWidth + 2 * dx, MIN_CARD_WIDTH, MAX_CARD_WIDTH);
+    const lines = clamp(d.lines + Math.round((this.down ? dy : -dy) / LINE), MIN_LINES, MAX_LINES);
+    this.sizeNow = { cardWidth, lines };
+    this.apply(this.layout(d.anchor, this.sizeNow));
   }
 
+  /** The size the card has while its corner is dragged, before it is saved. */
+  private sizeNow: { cardWidth: number; lines: number } | null = null;
+
   dragEnd(): void {
-    this.stopDragTimer();
-    if (!this.drag0) return;
-    this.drag();
+    const d = this.drag0;
+    if (!d) return;
     this.drag0 = null;
-    const save = () => {
-      const b = this.win.getBounds();
-      this.savePlacement({
-        anchor: { x: b.x + Math.round(b.width / 2), y: b.y + b.height - CARD_BOTTOM },
-        cardWidth: b.width - SIDE_PADDING,
-        lines: Math.round((b.height - CHROME_HEIGHT) / LINE),
-      });
+    if (d.mode === "resize") {
+      this.resize(d);
+      this.stopMotion();
+      const size = this.sizeNow!;
+      this.sizeNow = null;
+      this.savePlacement({ anchor: this.placement().anchor, ...size });
+      this.check();
+      return;
+    }
+    // Let go: on from where it is (not past a wall), at the speed it had.
+    const { x, y } = this.anchor;
+    this.spring.x = x;
+    this.spring.y = y;
+    const speed = Math.hypot(this.spring.vx, this.spring.vy);
+    const k = speed > THROW_SPEED ? (THROW_S * Math.min(speed, THROW_MAX_SPEED)) / speed : 0;
+    const thrown = { x: x + this.spring.vx * k, y: y + this.spring.vy * k };
+    const to = this.busy ? this.layout(thrown, this.size(), d.glue).anchor : this.rest(thrown);
+    this.glide(to ?? this.home());
+    this.glideTo = to;
+  }
+
+  /** Where a pill let go of at `p` comes to rest: on the screen, against an edge it is near; null = home. */
+  private rest(p: Point): Point | null {
+    const area = screen.getDisplayNearestPoint({ x: Math.round(p.x), y: Math.round(p.y) }).workArea;
+    const home = this.homeOn(area);
+    if (Math.hypot(p.x - home.x, p.y - home.y) < HOME_SNAP) return null;
+    const snap = (v: number, lo: number, hi: number) => {
+      const c = clamp(v, lo, hi);
+      return c - lo < EDGE_SNAP ? lo : hi - c < EDGE_SNAP ? hi : c;
     };
-    save();
-    // Dropped (partly) off the screen: back into it, and remember where it ended up.
-    this.place();
-    save();
+    return {
+      x: snap(p.x, area.x + PILL_W / 2 + EDGE_INSET, area.x + area.width - PILL_W / 2 - EDGE_INSET),
+      y: snap(p.y, area.y + PILL_H / 2 + EDGE_INSET, area.y + area.height - PILL_H / 2 - EDGE_INSET),
+    };
+  }
+
+  private glide(to: Point): void {
+    this.spring.stiffness = GLIDE_STIFFNESS;
+    this.spring.toX = to.x;
+    this.spring.toY = to.y;
+    this.startMotion();
+  }
+
+  /** A glide came to rest: the spot is saved (null: home). */
+  private settled(): void {
+    this.stopMotion();
+    const to = this.glideTo;
+    this.glideTo = undefined;
+    const { cardWidth, lines } = this.size();
+    this.savePlacement({ anchor: to === null ? null : { x: Math.round(this.anchor.x), y: Math.round(this.anchor.y) }, cardWidth, lines });
+    this.check();
     console.log("overlay moved to", JSON.stringify(this.win.getBounds()));
   }
 
-  /** Back to bottom-centre at the default size. */
+  /** Back to bottom-centre at the default size: it glides there. */
   resetPlacement(): void {
     this.drag0 = null;
-    this.stopDragTimer();
     this.savePlacement({ anchor: null, cardWidth: DEFAULT_CARD_WIDTH, lines: 6 });
-    this.place();
+    if (!this.motion) this.spring.reset(this.anchor.x, this.anchor.y);
+    this.apply(this.layout(this.anchor, this.size(), this.busy ? this.glued() : null));
+    this.glideTo = null;
+    this.glide(this.busy ? this.layout(this.home(), this.size(), this.glued()).anchor : this.home());
   }
 
   // ── OverlayPort ─────────────────────────────────────────────────────────
@@ -417,33 +529,87 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.send("overlay:suggest", s);
   }
 
-  /** Where the window goes for the saved spot and size, or bottom-centre of the display under the cursor. */
-  private bounds(): Rectangle {
-    const { anchor, cardWidth, lines } = this.placement();
-    const width = clamp(cardWidth, MIN_CARD_WIDTH, MAX_CARD_WIDTH) + SIDE_PADDING;
-    const height = CHROME_HEIGHT + clamp(lines, MIN_LINES, MAX_LINES) * LINE;
-    // The card unfolds up and to both sides of the anchor: keep all of it on the anchor's screen (its
-    // transparent margin may stick out), so a pill dragged to an edge doesn't open a card off screen.
-    const at = (x: number, y: number, a: Rectangle) => ({
-      x: Math.round(clamp(x - width / 2, a.x - SIDE_PADDING / 2, a.x + a.width - width + SIDE_PADDING / 2)),
-      y: Math.round(clamp(y + CARD_BOTTOM - height, a.y, a.y + a.height - height + CARD_BOTTOM)),
+  /** The saved card size, or the one its corner is being dragged to. */
+  private size(): { cardWidth: number; lines: number } {
+    const { cardWidth, lines } = this.sizeNow ?? this.placement();
+    return { cardWidth: clamp(cardWidth, MIN_CARD_WIDTH, MAX_CARD_WIDTH), lines: clamp(lines, MIN_LINES, MAX_LINES) };
+  }
+
+  /** The pill at home: bottom-centre of the work area under the cursor. */
+  private home(): Point {
+    return this.homeOn(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
+  }
+
+  private homeOn(area: Rectangle): Point {
+    return { x: area.x + area.width / 2, y: area.y + area.height - SCREEN_GAP - CARD_BOTTOM - PILL_H / 2 };
+  }
+
+  /**
+   * The saved spot, while it is still on or next to some screen (monitors come and go; a pill dropped on
+   * the taskbar is just past the work area); otherwise home.
+   */
+  private saved(): Point {
+    const { anchor } = this.placement();
+    if (anchor) {
+      const near = screen.getDisplayNearestPoint(anchor).bounds;
+      if (contains({ x: near.x - 200, y: near.y - 200, width: near.width + 400, height: near.height + 400 }, anchor)) return anchor;
+    }
+    return this.home();
+  }
+
+  /**
+   * The window for the pill at `a`: the pill on its screen, the card opening up from it (down where
+   * there is no room above) and all of it on the screen (its transparent margin may stick out). A card
+   * that is up keeps its side; `glue` (where the pill is in the window) moves the pill with the card, which
+   * stops at the screen's edges.
+   */
+  private layout(a: Point, size: { cardWidth: number; lines: number }, glue: Point | null = null): Layout {
+    const width = size.cardWidth + SIDE_PADDING;
+    const height = CHROME_HEIGHT + size.lines * LINE;
+    const area = screen.getDisplayNearestPoint({ x: Math.round(a.x), y: Math.round(a.y) }).workArea;
+    const fit = (x: number, y: number): Rectangle => ({
+      x: Math.round(clamp(x, area.x - SIDE_PADDING / 2, area.x + area.width - width + SIDE_PADDING / 2)),
+      y: Math.round(clamp(y, area.y - CARD_BOTTOM, area.y + area.height - height + CARD_BOTTOM)),
       width,
       height,
     });
-    // A saved spot is used while it is still on or next to some screen (monitors come and go;
-    // a pill dropped on the taskbar is just past the work area).
-    if (anchor) {
-      const near = screen.getDisplayNearestPoint(anchor).bounds;
-      if (contains({ x: near.x - 200, y: near.y - 200, width: near.width + 400, height: near.height + 400 }, anchor)) {
-        return at(anchor.x, anchor.y, screen.getDisplayNearestPoint(anchor).workArea);
-      }
+    if (glue) {
+      const rect = fit(a.x - glue.x, a.y - glue.y);
+      return { rect, anchor: { x: rect.x + glue.x, y: rect.y + glue.y }, down: this.down };
     }
-    const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-    return at(area.x + area.width / 2, area.y + area.height - SCREEN_GAP - CARD_BOTTOM, area);
+    const anchor = {
+      x: clamp(a.x, area.x + PILL_W / 2, area.x + area.width - PILL_W / 2),
+      y: clamp(a.y, area.y + PILL_H / 2, area.y + area.height - PILL_H / 2),
+    };
+    const upTop = anchor.y + PILL_H / 2 + CARD_BOTTOM - height;
+    // A card on screen keeps its side; the pill alone takes the one with room.
+    const down = this.busy ? this.down : upTop < area.y - CARD_BOTTOM;
+    return { rect: fit(anchor.x - width / 2, down ? anchor.y - PILL_H / 2 - CARD_BOTTOM : upTop), anchor, down };
   }
 
+  /** Moves the window there, and tells the renderer where in it the pill is if that changed. */
+  private apply(l: Layout): void {
+    const b = this.win.getBounds();
+    const r = l.rect;
+    if (r.x !== b.x || r.y !== b.y || r.width !== b.width || r.height !== b.height) this.win.setBounds(r);
+    this.anchor = l.anchor;
+    this.down = l.down;
+    this.tell();
+  }
+
+  private tell(): void {
+    const b = this.win.getBounds();
+    const at = { x: Math.round(this.anchor.x - b.x), y: Math.round(this.anchor.y - b.y), down: this.down };
+    const key = JSON.stringify(at);
+    if (key === this.told || this.win.webContents.isLoading()) return;
+    this.told = key;
+    this.win.webContents.send("overlay:anchor", at);
+  }
+
+  /** At the saved spot and size, at once. */
   private place(): void {
-    this.win.setBounds(this.bounds());
+    if (this.drag0 || this.motion) return;
+    this.apply(this.layout(this.saved(), this.size()));
     this.check();
   }
 }

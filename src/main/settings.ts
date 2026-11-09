@@ -91,10 +91,10 @@ function parseSettings(text: string): Settings | null {
   delete raw.hotkey;
   delete raw.middleClick;
   // Older configs kept the card window's top-left corner (the window was 320 px tall, 80 px wider
-  // than the card, its bottom edge 16 px below the card's).
+  // than the card, its bottom edge 16 px below the card's, and the 30 px pill sat on the card's bottom edge).
   if (raw.overlayPosition && raw.overlayAnchor === undefined) {
     const width = (raw.overlayWidth ?? DEFAULT_SETTINGS.overlayWidth) + 80;
-    raw.overlayAnchor = { x: raw.overlayPosition.x + Math.round(width / 2), y: raw.overlayPosition.y + 320 - 16 };
+    raw.overlayAnchor = { x: raw.overlayPosition.x + Math.round(width / 2), y: raw.overlayPosition.y + 320 - 16 - 15 };
   }
   delete raw.overlayPosition;
   if (typeof raw.proxy !== "string") raw.proxy = DEFAULT_SETTINGS.proxy;

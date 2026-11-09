@@ -58,7 +58,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen; the card unfolds out of it when you start and folds back when the text
   is in. Click it to dictate hands-free (click **Stop** or the red dot on the card to
   finish), drag it anywhere. The card then opens where the pill is, on that
-  screen, rather than on the screen under the pointer.
+  screen, rather than on the screen under the pointer: upwards, or downwards
+  when the pill is too close to the top for it.
   Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
   appears and disappears.
 - **Pick the microphone.** *Settings → Microphone* lists the connected ones; the
@@ -180,9 +181,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **The card stays out of your way.**
   - Moving the pointer over it makes it see-through, so you can read what's
     underneath; scroll it or start dragging it and it turns solid again.
-  - Drag it anywhere, also while you speak, and drag its top-right corner to
-    change its width and how many lines it shows before it scrolls.
-    Double-click the grip at its bottom edge to put it back at the bottom centre.
+  - Drag it anywhere, also while you speak, and drag its corner (top-right, or
+    bottom-right when it opens downwards) to change its width and how many lines
+    it shows before it scrolls. Double-click the grip at its edge to send it back
+    to the bottom centre.
+  - Moving it has a little weight: held, the pill or the card lifts and trails
+    the pointer slightly; let go, it glides to rest, and goes on a little if you
+    throw it. Dropped near a screen edge it settles against that edge, near the
+    bottom centre it goes home. A card stops at the screen edges.
   - Windows: an app that moves a picture of the screen while you switch desktops
     (sending it the `Lanes.ScreenPicture` message) can keep the pill over that
     picture, live: the pill leaves itself out of screen capture until that app
