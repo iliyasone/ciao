@@ -560,6 +560,12 @@ export class OverlayWindow implements OverlayPort {
 
   state(s: OverlayState): void {
     // When the check showed, so ciao.log can say how long the card stayed after it.
+    // A card still up when the next one comes (the pointer kept it) is never reported hidden: it ends here.
+    for (const [seq, done] of this.doneAt) {
+      if (seq === s.seq) continue;
+      console.log("overlay: card", seq, done.t3 ? "(T3)" : "", "still up", `${Date.now() - done.at}ms`, "after its check when card", s.seq, "took its place");
+      this.doneAt.delete(seq);
+    }
     if (s.phase === "done" && !s.keep && !this.doneAt.has(s.seq)) this.doneAt.set(s.seq, { at: Date.now(), t3: !!s.t3 });
     if (this.visibleSeq !== s.seq) {
       // Without a saved spot the card comes up on the display you're working on; while the pill is
