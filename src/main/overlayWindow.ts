@@ -665,8 +665,14 @@ export class OverlayWindow implements OverlayPort {
   private apply(l: Layout): void {
     const b = this.win.getBounds();
     const r = l.rect;
-    if (r.x !== b.x || r.y !== b.y || r.width !== b.width || r.height !== b.height) this.win.setBounds(r);
     this.anchor = l.anchor;
+    if (r.x !== b.x || r.y !== b.y || r.width !== b.width || r.height !== b.height) {
+      this.win.setBounds(r);
+      // The system may keep a window from going where it was put (macOS, above the menu bar): the pill
+      // stays where it is in the window.
+      const got = this.win.getBounds();
+      this.anchor = { x: l.anchor.x + got.x - r.x, y: l.anchor.y + got.y - r.y };
+    }
     this.down = l.down;
     this.tell();
   }
