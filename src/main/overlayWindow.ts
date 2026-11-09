@@ -272,6 +272,8 @@ export class OverlayWindow implements OverlayPort {
   /** What the renderer draws (the pill, a card), in window pixels; the rest lets clicks through. */
   setRegion(rects: Rectangle[]): void {
     this.region = rects;
+    // A card that grew (the text did) stays on the screen.
+    if (this.busy && !this.drag0 && !this.motion && rects.length) this.apply(this.layout(this.anchor, this.size(), this.glued()));
     if (LINUX) {
       // Room for the shadows (0 14px 44px): the shape clips drawing too.
       this.win.setShape(rects.map((r) => ({ x: Math.floor(r.x - 30), y: Math.floor(r.y - 20), width: Math.ceil(r.width + 60), height: Math.ceil(r.height + 76) })));
@@ -427,7 +429,13 @@ export class OverlayWindow implements OverlayPort {
     const width = cardWidth + SIDE_PADDING;
     const height = CHROME_HEIGHT + lines * LINE;
     const area = screen.getDisplayNearestPoint({ x: Math.round(d.anchor.x), y: Math.round(d.anchor.y) }).workArea;
-    const rect = fitRect(area, o.x + (o.width - width) / 2, this.down ? o.y : o.y + o.height - height, width, height);
+    const x = o.x + (o.width - width) / 2;
+    const y = this.down ? o.y : o.y + o.height - height;
+    // The card as it will be drawn: as high as now, on the pill's side of the resized window.
+    const now = this.drawn();
+    const was = this.win.getBounds().height; // the window it was drawn in
+    const card = now && { x: SIDE_PADDING / 2, width: cardWidth, height: now.height, y: this.down ? now.y : height - (was - now.y) };
+    const rect = card ? fitDrawn(area, x, y, card, width, height) : fitRect(area, x, y, width, height);
     // Kept on the card's edge, between its corners: a narrower card may no longer reach it.
     const edge = SIDE_PADDING / 2 + PILL_W / 2;
     const anchor = {
@@ -493,12 +501,31 @@ export class OverlayWindow implements OverlayPort {
   /** A glide came to rest: the spot is saved (null: home). */
   private settled(): void {
     this.stopMotion();
+    if (this.busy) this.sideByScreen();
     const to = this.glideTo;
     this.glideTo = undefined;
     const { cardWidth, lines } = this.size();
     this.savePlacement({ anchor: to === null ? null : { x: Math.round(this.anchor.x), y: Math.round(this.anchor.y) }, cardWidth, lines });
     this.check();
     console.log("overlay moved to", JSON.stringify(this.win.getBounds()));
+  }
+
+  /**
+   * A card put down in the upper half of the screen opens downwards from then on, one in the lower half
+   * upwards: the pill goes to that edge of it, so the card folds into it there and opens there again.
+   * The card stays where it is on the screen.
+   */
+  private sideByScreen(): void {
+    if (!this.region.length) return;
+    const b = this.win.getBounds();
+    const d = this.region.reduce(union);
+    const top = b.y + d.y;
+    const bottom = top + d.height;
+    const area = screen.getDisplayNearestPoint({ x: Math.round(this.anchor.x), y: Math.round(this.anchor.y) }).workArea;
+    const down = (top + bottom) / 2 < area.y + area.height / 2;
+    if (down === this.down) return;
+    const y = down ? top - CARD_BOTTOM : bottom + CARD_BOTTOM - b.height;
+    this.apply({ rect: { ...b, y }, anchor: { x: this.anchor.x, y: down ? top + PILL_H / 2 : bottom - PILL_H / 2 }, down });
   }
 
   /** Back to bottom-centre at the default size: it glides there. */
@@ -520,7 +547,8 @@ export class OverlayWindow implements OverlayPort {
     this.spring.y = this.anchor.y;
     this.apply(this.layout(this.anchor, this.size(), this.busy ? this.glued() : null));
     this.glideTo = null;
-    this.glide(this.busy ? this.layout(this.home(), this.size(), this.glued()).anchor : this.home());
+    // Home has room for the default card above the pill (the drawn region may still be the old size's).
+    this.glide(this.home());
   }
 
   // ── OverlayPort ─────────────────────────────────────────────────────────
@@ -570,6 +598,11 @@ export class OverlayWindow implements OverlayPort {
     this.win.webContents.send("overlay:suggest", s);
   }
 
+  /** What the renderer draws, as one box in window pixels; null if nothing. */
+  private drawn(): Rectangle | null {
+    return this.region.length ? this.region.reduce(union) : null;
+  }
+
   /** The saved card size, or the one its corner is being dragged to. */
   private size(): { cardWidth: number; lines: number } {
     const { cardWidth, lines } = this.sizeNow ?? this.placement();
@@ -610,8 +643,13 @@ export class OverlayWindow implements OverlayPort {
     const area = screen.getDisplayNearestPoint({ x: Math.round(a.x), y: Math.round(a.y) }).workArea;
     const fit = (x: number, y: number) => fitRect(area, x, y, width, height);
     if (glue) {
-      const rect = fit(a.x - glue.x, a.y - glue.y);
-      return { rect, anchor: { x: rect.x + glue.x, y: rect.y + glue.y }, down: this.down };
+      // What stops at the screen's edges is the card as drawn: the window is sized for the most lines, and
+      // the empty part of it may go off the screen.
+      const d = this.drawn();
+      const rect = d ? fitDrawn(area, a.x - glue.x, a.y - glue.y, d, width, height) : fit(a.x - glue.x, a.y - glue.y);
+      // The pill stays over what is drawn: a suggestion is narrower than the window.
+      const x = d ? clamp(rect.x + glue.x, rect.x + d.x + PILL_W / 2, rect.x + d.x + d.width - PILL_W / 2) : rect.x + glue.x;
+      return { rect, anchor: { x, y: rect.y + glue.y }, down: this.down };
     }
     const anchor = {
       x: clamp(a.x, area.x + PILL_W / 2, area.x + area.width - PILL_W / 2),
@@ -627,8 +665,14 @@ export class OverlayWindow implements OverlayPort {
   private apply(l: Layout): void {
     const b = this.win.getBounds();
     const r = l.rect;
-    if (r.x !== b.x || r.y !== b.y || r.width !== b.width || r.height !== b.height) this.win.setBounds(r);
     this.anchor = l.anchor;
+    if (r.x !== b.x || r.y !== b.y || r.width !== b.width || r.height !== b.height) {
+      this.win.setBounds(r);
+      // The system may keep a window from going where it was put (macOS, above the menu bar): the pill
+      // stays where it is in the window.
+      const got = this.win.getBounds();
+      this.anchor = { x: l.anchor.x + got.x - r.x, y: l.anchor.y + got.y - r.y };
+    }
     this.down = l.down;
     this.tell();
   }
@@ -637,7 +681,7 @@ export class OverlayWindow implements OverlayPort {
     const b = this.win.getBounds();
     const at = { x: Math.round(this.anchor.x - b.x), y: Math.round(this.anchor.y - b.y), down: this.down };
     const key = JSON.stringify(at);
-    if (key === this.told || this.win.webContents.isLoading()) return;
+    if (key === this.told) return;
     this.told = key;
     this.win.webContents.send("overlay:anchor", at);
   }
@@ -658,6 +702,22 @@ function fitRect(area: Rectangle, x: number, y: number, width: number, height: n
     width,
     height,
   };
+}
+
+/** A window of this size at (x, y), moved so that `d` (what is drawn in it, in window pixels) is on `area`. */
+function fitDrawn(area: Rectangle, x: number, y: number, d: Rectangle, width: number, height: number): Rectangle {
+  return {
+    x: Math.round(clamp(x, area.x - d.x, area.x + area.width - d.x - d.width)),
+    y: Math.round(clamp(y, area.y - d.y, area.y + area.height - d.y - d.height)),
+    width,
+    height,
+  };
+}
+
+function union(a: Rectangle, b: Rectangle): Rectangle {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
 }
 
 function contains(a: Rectangle, p: { x: number; y: number }): boolean {
