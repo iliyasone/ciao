@@ -216,11 +216,12 @@ export class OverlayWindow implements OverlayPort {
       this.sizeNow = null;
       this.stopMotion();
       this.setRegion([]);
-      this.told = "";
-      this.tell();
-      // It shows nothing yet: the next card is placed and shown afresh.
+      // It shows nothing yet: the next card is placed and shown afresh. The pill goes back to the
+      // saved spot and size (a drag or a resize it cut short isn't saved), and is told where it is.
       this.busy = false;
       this.visibleSeq = -1;
+      this.told = "";
+      this.place();
       this.win.webContents.send("capture:mic", this.mic); // before the wake word opens it
       this.win.webContents.send("wake:enable", this.wake);
       this.win.webContents.send("overlay:pill", this.pill);
