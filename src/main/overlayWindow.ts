@@ -547,7 +547,8 @@ export class OverlayWindow implements OverlayPort {
     this.spring.y = this.anchor.y;
     this.apply(this.layout(this.anchor, this.size(), this.busy ? this.glued() : null));
     this.glideTo = null;
-    this.glide(this.busy ? this.layout(this.home(), this.size(), this.glued()).anchor : this.home());
+    // Home has room for the default card above the pill (the drawn region may still be the old size's).
+    this.glide(this.home());
   }
 
   // ── OverlayPort ─────────────────────────────────────────────────────────
