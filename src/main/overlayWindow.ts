@@ -213,6 +213,7 @@ export class OverlayWindow implements OverlayPort {
       // A reloaded page reports what it draws afresh.
       this.hovered = false;
       this.drag0 = null;
+      this.sizeNow = null;
       this.stopMotion();
       this.setRegion([]);
       this.told = "";
@@ -502,6 +503,7 @@ export class OverlayWindow implements OverlayPort {
   /** Back to bottom-centre at the default size: it glides there. */
   resetPlacement(): void {
     this.drag0 = null;
+    this.sizeNow = null;
     this.savePlacement({ anchor: null, cardWidth: DEFAULT_CARD_WIDTH, lines: 6 });
     if (this.busy) {
       // A card turns to open upwards, as it does at home, with the pill in the middle of its bottom edge.
