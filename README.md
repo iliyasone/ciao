@@ -188,7 +188,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - Moving it has a little weight: held, the pill or the card lifts and trails
     the pointer slightly; let go, it glides to rest, and goes on a little if you
     throw it. Dropped near a screen edge it settles against that edge, near the
-    bottom centre it goes home. A card stops at the screen edges.
+    bottom centre it goes home. A card stops at the screen edges; put down in the
+    upper half of the screen, it folds into its top edge and opens downwards from
+    there next time.
   - Windows: an app that moves a picture of the screen while you switch desktops
     (sending it the `Lanes.ScreenPicture` message) can keep the pill over that
     picture, live: the pill leaves itself out of screen capture until that app
