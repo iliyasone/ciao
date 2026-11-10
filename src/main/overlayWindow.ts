@@ -786,8 +786,8 @@ function loadWindowCalls() {
   koffi.struct("CiaoRect", { left: "long", top: "long", right: "long", bottom: "long" });
   return {
     next: user32.func("intptr_t __stdcall GetWindow(intptr_t hwnd, uint32_t cmd)"),
-    visible: user32.func("bool __stdcall IsWindowVisible(intptr_t hwnd)"),
-    rect: user32.func("bool __stdcall GetWindowRect(intptr_t hwnd, _Out_ CiaoRect *rect)"),
+    visible: user32.func("int __stdcall IsWindowVisible(intptr_t hwnd)"),
+    rect: user32.func("int __stdcall GetWindowRect(intptr_t hwnd, _Out_ CiaoRect *rect)"),
     process: user32.func("uint32_t __stdcall GetWindowThreadProcessId(intptr_t hwnd, _Out_ uint32_t *pid)"),
     className: user32.func("int __stdcall GetClassNameW(intptr_t hwnd, _Out_ uint16_t *name, int max)"),
     attribute: koffi.load("dwmapi.dll").func("long __stdcall DwmGetWindowAttribute(intptr_t hwnd, uint32_t attr, _Out_ int *value, uint32_t size)"),
