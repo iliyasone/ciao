@@ -197,6 +197,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     picture, live: the pill leaves itself out of screen capture until that app
     says it is done. Screenshots and screen sharing show it as usual, except
     while you switch desktops.
+  - Windows: each card goes back on top of the other windows as it comes up. If
+    it was not to be seen until then, `ciao.log` says why: the windows that lay
+    over it, or that Windows was hiding it.
 - **Pastes where you finish.** The text goes into the window that is active when
   you stop the dictation, so you can start talking, go to the window the text is
   for, and stop there. If that window loses focus while the text is being
