@@ -34,6 +34,11 @@ import { WakeWord } from "./wakeWord";
 // 0 once it has. The pill leaves itself out of screen capture in between (WDA_EXCLUDEFROMCAPTURE, read
 // by that app to keep it over the picture, live), and is in screenshots again right after.
 //
+// Windows: the window is topmost, yet it has stopped being seen while everything else went on (cards
+// drawn and folded, nothing in ciao.log) until Ciao was started again. So each card goes back on top of
+// the other windows as it comes up, and ciao.log first says what kept it from being seen, if anything:
+// the windows lying over it, or that Windows hides it (cloaked).
+//
 // The page records the mic too, so a crashed or stuck page means no pill and every dictation empty
 // until it is loaded again: it is, after a crash, a hang, or a stop it didn't answer (restart).
 //
@@ -572,9 +577,19 @@ export class OverlayWindow implements OverlayPort {
       // shown it unfolds where the pill is.
       if (!this.pill || !this.win.isVisible()) this.place();
       this.win.showInactive();
+      this.raise(s.seq);
       this.visibleSeq = s.seq;
     }
     this.win.webContents.send("overlay:state", s);
+  }
+
+  /** Windows: the card for `seq` comes up over the other windows; ciao.log says what was in its way. */
+  private raise(seq: number): void {
+    if (process.platform !== "win32") return;
+    const hidden = hiddenBy(this.win);
+    if (hidden) console.warn("overlay: card", seq, "came up", hidden);
+    this.win.setAlwaysOnTop(true, "screen-saver");
+    this.win.moveTop();
   }
 
   delta(seq: number, text: string, gapMs: number): void {
@@ -737,13 +752,74 @@ function contains(a: Rectangle, p: { x: number; y: number }): boolean {
   return p.x >= a.x && p.x <= a.x + a.width && p.y >= a.y && p.y <= a.y + a.height;
 }
 
-/** Windows: the number of the "Lanes.ScreenPicture" message (the same in every process), through koffi from the wake word's folder; null without it. */
+interface Koffi {
+  struct(name: string, fields: Record<string, string>): unknown;
+  load(file: string): { func(signature: string): (...args: any[]) => any };
+}
+
+/** Windows: koffi, from the wake word's folder. */
+function loadKoffi(): Koffi {
+  return require(path.join(WakeWord.dir(), "koffi")) as Koffi;
+}
+
+/** Windows: the number of the "Lanes.ScreenPicture" message (the same in every process); null without koffi. */
 function screenPictureMessage(): number | null {
   try {
-    const koffi = require(path.join(WakeWord.dir(), "koffi")) as { load(file: string): { func(signature: string): (name: string) => number } };
-    return koffi.load("user32.dll").func("unsigned int __stdcall RegisterWindowMessageW(const char16_t *name)")("Lanes.ScreenPicture") || null;
+    return loadKoffi().load("user32.dll").func("unsigned int __stdcall RegisterWindowMessageW(const char16_t *name)")("Lanes.ScreenPicture") || null;
   } catch (e) {
     console.warn("overlay: no screen-picture message:", e);
     return null;
   }
+}
+
+let windowCalls: ReturnType<typeof loadWindowCalls> | null | undefined;
+
+function loadWindowCalls() {
+  const koffi = loadKoffi();
+  const user32 = koffi.load("user32.dll");
+  koffi.struct("CiaoRect", { left: "long", top: "long", right: "long", bottom: "long" });
+  return {
+    next: user32.func("intptr_t __stdcall GetWindow(intptr_t hwnd, uint32_t cmd)"),
+    visible: user32.func("bool __stdcall IsWindowVisible(intptr_t hwnd)"),
+    rect: user32.func("bool __stdcall GetWindowRect(intptr_t hwnd, _Out_ CiaoRect *rect)"),
+    process: user32.func("uint32_t __stdcall GetWindowThreadProcessId(intptr_t hwnd, _Out_ uint32_t *pid)"),
+    className: user32.func("int __stdcall GetClassNameW(intptr_t hwnd, _Out_ uint16_t *name, int max)"),
+    attribute: koffi.load("dwmapi.dll").func("long __stdcall DwmGetWindowAttribute(intptr_t hwnd, uint32_t attr, _Out_ int *value, uint32_t size)"),
+  };
+}
+
+/**
+ * Windows: what keeps `win` from being seen, for ciao.log: "cloaked" (Windows hides it), or the windows
+ * of other programs that lie over it (class, process id, place and size); "" if nothing does.
+ */
+function hiddenBy(win: BrowserWindow): string {
+  try {
+    if (windowCalls === undefined) windowCalls = loadWindowCalls();
+  } catch (e) {
+    console.warn("overlay: can't tell what covers it:", e);
+    windowCalls = null;
+  }
+  const w = windowCalls;
+  if (!w) return "";
+  type Box = { left: number; top: number; right: number; bottom: number };
+  const cloaked = (h: number) => {
+    const v = [0];
+    return w.attribute(h, 14 /* DWMWA_CLOAKED */, v, 4) === 0 && v[0] !== 0;
+  };
+  const me = Number(win.getNativeWindowHandle().readBigInt64LE(0));
+  if (cloaked(me)) return "cloaked";
+  const mine = {} as Box;
+  w.rect(me, mine);
+  const over: string[] = [];
+  // Front to back from this window: GW_HWNDPREV.
+  for (let h = w.next(me, 3), n = 0; h && n < 1000 && over.length < 5; h = w.next(h, 3), n++) {
+    if (!w.visible(h) || cloaked(h)) continue;
+    const r = {} as Box;
+    const pid = [0];
+    w.process(h, pid);
+    if (pid[0] === process.pid || !w.rect(h, r) || r.right <= mine.left || r.left >= mine.right || r.bottom <= mine.top || r.top >= mine.bottom) continue;
+    const name = new Uint16Array(80);
+    over.push(`${String.fromCharCode(...name.subarray(0, w.className(h, name, 80)))} (process ${pid[0]}) ${r.left},${r.top} ${r.right - r.left}x${r.bottom - r.top}`);
+  }
+  return over.length ? `under ${over.join("; ")}` : "";
 }
