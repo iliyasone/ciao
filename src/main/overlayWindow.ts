@@ -576,24 +576,26 @@ export class OverlayWindow implements OverlayPort {
       // Without a saved spot the card comes up on the display you're working on; while the pill is
       // shown it unfolds where the pill is.
       if (!this.pill || !this.win.isVisible()) this.place();
+      this.logHidden(s.seq); // before showing it, which may itself bring it up
       this.win.showInactive();
-      this.raise(s.seq);
+      if (process.platform === "win32") {
+        this.win.setAlwaysOnTop(true, "screen-saver");
+        this.win.moveTop();
+      }
       this.visibleSeq = s.seq;
     }
     this.win.webContents.send("overlay:state", s);
   }
 
-  /** Windows: the card for `seq` comes up over the other windows; ciao.log says what was in its way. */
-  private raise(seq: number): void {
-    if (process.platform !== "win32") return;
+  /** Windows: ciao.log says what keeps the window from being seen as the card for `seq` comes up, if anything. */
+  private logHidden(seq: number): void {
+    if (process.platform !== "win32" || !this.win.isVisible()) return;
     try {
       const hidden = hiddenBy(this.win);
       if (hidden) console.warn("overlay: card", seq, "came up", hidden);
     } catch (e) {
       console.warn("overlay: can't tell what covers it:", e);
     }
-    this.win.setAlwaysOnTop(true, "screen-saver");
-    this.win.moveTop();
   }
 
   delta(seq: number, text: string, gapMs: number): void {
