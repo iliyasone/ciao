@@ -586,8 +586,12 @@ export class OverlayWindow implements OverlayPort {
   /** Windows: the card for `seq` comes up over the other windows; ciao.log says what was in its way. */
   private raise(seq: number): void {
     if (process.platform !== "win32") return;
-    const hidden = hiddenBy(this.win);
-    if (hidden) console.warn("overlay: card", seq, "came up", hidden);
+    try {
+      const hidden = hiddenBy(this.win);
+      if (hidden) console.warn("overlay: card", seq, "came up", hidden);
+    } catch (e) {
+      console.warn("overlay: can't tell what covers it:", e);
+    }
     this.win.setAlwaysOnTop(true, "screen-saver");
     this.win.moveTop();
   }
@@ -793,11 +797,9 @@ function loadWindowCalls() {
  * of other programs that lie over it (class, process id, place and size); "" if nothing does.
  */
 function hiddenBy(win: BrowserWindow): string {
-  try {
-    if (windowCalls === undefined) windowCalls = loadWindowCalls();
-  } catch (e) {
-    console.warn("overlay: can't tell what covers it:", e);
-    windowCalls = null;
+  if (windowCalls === undefined) {
+    windowCalls = null; // tried once
+    windowCalls = loadWindowCalls();
   }
   const w = windowCalls;
   if (!w) return "";
@@ -811,7 +813,7 @@ function hiddenBy(win: BrowserWindow): string {
   const mine = {} as Box;
   w.rect(me, mine);
   const over: string[] = [];
-  // Front to back from this window: GW_HWNDPREV.
+  // The windows over this one, nearest first: GW_HWNDPREV.
   for (let h = w.next(me, 3), n = 0; h && n < 1000 && over.length < 5; h = w.next(h, 3), n++) {
     if (!w.visible(h) || cloaked(h)) continue;
     const r = {} as Box;
