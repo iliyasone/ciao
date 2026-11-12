@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, session, shell, systemPreferences, Tray } from "electron";
 import { DELAYS, type HistoryEntry, type Provider, type RetryMode, type Settings, type TermSuggestion, type UpdateState } from "../core/types";
+import { BYTES_PER_MS } from "../core/audio";
 import { costUsd } from "../core/cost";
 import { models, PROVIDERS } from "../core/providers";
 import { setLang, t } from "../core/i18n";
@@ -11,6 +12,7 @@ import { arrangeTerms, termsOf, type Local } from "../core/sync";
 import { findCorrections, newTerms } from "../core/corrections";
 import { CorrectionWatcher } from "./corrections";
 import { acceleratorParts } from "../core/triggers";
+import { silenceIn } from "../core/silence";
 import { setAutostart } from "./autostart";
 import { DictationController } from "./dictation";
 import { HistoryStore, WavWriter } from "./history";
@@ -328,7 +330,8 @@ async function retry(id: string, mode: RetryMode, provider = settings.provider):
     delay: mode === "live" && provider === "openai" ? "high" : undefined,
     text,
     createdAt: new Date().toISOString(),
-    costUsd: costUsd(model, fresh.durationMs),
+    // The live models aren't sent long silence (Nemotron is).
+    costUsd: costUsd(model, fresh.durationMs - (mode === "live" && provider !== "nemotron" ? silenceIn(pcm) / BYTES_PER_MS : 0)),
   });
   fresh.status = "done";
   fresh.error = undefined;

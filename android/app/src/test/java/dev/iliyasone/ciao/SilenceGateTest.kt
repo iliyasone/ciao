@@ -39,4 +39,23 @@ class SilenceGateTest {
         assertEquals("1".repeat(63), sent)
         assertEquals(0L, skipped)
     }
+
+    /** A second of audio: each part is milliseconds of a square wave at an amplitude. */
+    private fun second(vararg parts: Pair<Int, Int>) = ByteArray(48_000).also {
+        var i = 0
+        for ((ms, amp) in parts) repeat(ms * 24) { _ ->
+            val v = if (i % 2 == 1) amp else -amp
+            it[i * 2] = v.toByte()
+            it[i * 2 + 1] = (v shr 8).toByte()
+            i++
+        }
+    }
+
+    @Test fun `a replay's one-second chunks are judged in 40 ms frames, so speech at the end of a quiet one is sent`() {
+        val gate = SilenceGate()
+        val sizes = listOf(second(1000 to 3000), second(1000 to 20), second(1000 to 20), second(1000 to 20), second(880 to 20, 120 to 1000))
+            .map { chunk -> gate.pass(chunk).joinToString("+") { it.size.toString() } }
+        assertEquals(listOf("48000", "48000", "", "", List(12) { "1920" }.joinToString("+") + "+5760"), sizes)
+        assertEquals(115_200L, gate.skipped)
+    }
 }
