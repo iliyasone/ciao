@@ -860,7 +860,7 @@ export class DictationController {
 
   /** A dictation that came to nothing: its card folds away, or gives the screen back to a kept one. */
   private emptyOrKept(a: Active): void {
-    if (!this.kept) return this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
+    if (!this.kept) return this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: undefined });
     this.deps.overlay.state(this.kept.state);
     this.deps.overlay.final(this.kept.state.seq, this.kept.text);
   }
