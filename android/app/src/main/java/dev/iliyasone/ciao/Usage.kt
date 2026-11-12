@@ -59,12 +59,16 @@ object Usage {
 
     /**
      * An entry of History as the desktop keeps it: each transcript costs its model's price for the
-     * whole recording (src/main/dictation.ts), the rules-made layout nothing.
+     * whole recording, a live model's for the recording less the silence it wasn't sent
+     * (src/main/dictation.ts; a live retry leaves out the same silence), the rules-made layout nothing.
      */
     fun of(e: History.Entry) = Entry(
         e.createdAt,
         e.durationMs,
-        e.transcripts.map { t -> Paid(t.model, if (t.source == History.Source.FORMATTED) 0.0 else pricePerMinute(t.model) * e.durationMs / 60_000) },
+        e.transcripts.map { t ->
+            val ms = if (t.source == History.Source.LIVE || t.source == History.Source.RETRY_LIVE) e.durationMs - e.skippedMs else e.durationMs
+            Paid(t.model, if (t.source == History.Source.FORMATTED) 0.0 else pricePerMinute(t.model) * ms / 60_000)
+        },
     )
 
     fun providerOf(model: String) = when {

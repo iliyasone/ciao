@@ -297,7 +297,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   period's first day, minutes, dictations, the average per day with dictation), a
   column per day (per hour for 24 hours) split into OpenAI, Gemini and Nemotron, switchable
   between cost and minutes, and each model's share. It is Ciao's estimate at list
-  prices (minutes recorded × the model's price, `src/core/cost.ts`), not the
+  prices (minutes recorded, less the silence the live model wasn't sent, × the
+  model's price, `src/core/cost.ts`), not the
   providers' bill, and counts the dictations of this device's history only.
 - **Gemini or OpenAI** (*Settings → Who transcribes* on the desktop and on
   Android). Ciao doesn't recognize speech itself: it sends the audio to one of
@@ -382,6 +383,18 @@ Pricing is per minute of audio:
 
 Gemini bills per token; the per-minute figures are Google's own estimate for
 speech. Idle time costs nothing.
+
+Long silence isn't sent to OpenAI or Gemini while you dictate, so a pause to
+think isn't billed (on every platform and on Android; Nemotron needs the whole
+audio and bills the session's length anyway). A second of quiet after the last
+sound and half a second before the next still go out, so the model hears a
+pause of about 1.5 s in place of a longer one; the recording in the history
+stays whole, and paragraphs still follow the real pauses. Quiet means below a
+fixed low level and at least 18 dB below the loudest moment of the dictation so
+far, so a soft voice or a weak microphone isn't taken for silence, and steady
+noise such as music is sent whole (`src/core/silence.ts`). On 2,700 real
+dictations (38 hours) that left out 14% of the audio, 20% in dictations longer
+than three minutes.
 
 ## Install
 
@@ -774,7 +787,8 @@ we can see how many people use it. Two events (Android sends the same ones, with
     `RControlKey` or `MButton`, `wake_word`, or `pill` for a click on it), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
   - who transcribed it: `provider` (`openai` or `gemini`);
-  - time and money: `duration_s`, `voice_onset_ms` (not for wake-word starts, whose
+  - time and money: `duration_s`, `silence_skipped_s` (of it, the long silence
+    the provider wasn't sent), `voice_onset_ms` (not for wake-word starts, whose
     audio begins with speech), `first_text_ms`, `final_after_release_ms`,
     `ready_after_release_ms` (from the stop until the text was pasted or put on the
     clipboard, or Ciao gave up with none: how long you waited, including the saved
@@ -895,7 +909,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
   `nemotron.ts` for Nemotron on .wave (desktop only, not ported to Android),
   `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
-  PCM/WAV helpers, prices, `usage.ts` (the Usage tab's sums), shared types,
+  PCM/WAV helpers, `silence.ts` (which silence isn't sent), prices, `usage.ts` (the Usage tab's sums), shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is
   meant to be reused as-is by other shells (a T3 Code integration, mobile).
 - `src/main/` — the Electron main process:
@@ -953,7 +967,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
     Gemini calls as `src/core/realtime.ts`, `src/core/gemini.ts` and
     `src/main/transcribe.ts`; `Proxy.kt` — the port of `src/core/proxy.ts` and
-    `src/main/proxy.ts`, whose test holds the TypeScript outputs; `Revision.kt` — the port of `src/core/revision.ts`,
+    `src/main/proxy.ts`, whose test holds the TypeScript outputs;
+    `SilenceGate.kt` — the port of `src/core/silence.ts`, with the same kind of test; `Revision.kt` — the port of `src/core/revision.ts`,
     whose test holds its TypeScript outputs;
   - `Updater.kt` — updates from GitHub Releases through Android's package
     installer, like `src/main/updater.ts`;

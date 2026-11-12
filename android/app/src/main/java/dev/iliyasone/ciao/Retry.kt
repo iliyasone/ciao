@@ -79,8 +79,9 @@ object Retry {
         val timeoutMs = 60_000 + audio.length() / BYTES_PER_MS / 2
         try {
             main.post { session.configure(prefs) }
-            // Gemini: 250 ms per message, fine enough for the session to find pauses to cut a long one at.
-            val chunk = if (provider == Provider.GEMINI) 250 * BYTES_PER_MS else Recorder.SAMPLE_RATE * 2 // 1 s per message
+            // Gemini: 240 ms per message, fine enough for the session to find pauses to cut a long one at.
+            // Both are whole 40 ms frames, as the microphone gave them: the silence left out is the same (SilenceGate).
+            val chunk = if (provider == Provider.GEMINI) 240 * BYTES_PER_MS else Recorder.SAMPLE_RATE * 2 // 1 s per message
             val pending = AtomicInteger()
             input.use {
                 val buf = ByteArray(chunk)
@@ -95,7 +96,7 @@ object Retry {
                         session.append(part)
                         pending.decrementAndGet()
                     }
-                    if (provider == Provider.GEMINI) Thread.sleep(250L / GEMINI_LIVE_SPEEDUP)
+                    if (provider == Provider.GEMINI) Thread.sleep(240L / GEMINI_LIVE_SPEEDUP)
                 }
             }
             main.post { session.commit() }

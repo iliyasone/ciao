@@ -15,6 +15,9 @@ export const NEMOTRON_LIVE_URL = "wss://api.dotwave.ai/v1/realtime?model=nemotro
  * speed of speech. The first audio is LEAD_MS of silence, so a chunk that comes a little late is
  * still in time.
  *
+ * For the same reason silence is sent too, unlike with the other providers; .wave bills the
+ * session's length anyway.
+ *
  * A session that gets no audio closes after 30 s, the pool's spare included (see SessionPool).
  * No terms, context or language: the language is detected as you speak.
  */

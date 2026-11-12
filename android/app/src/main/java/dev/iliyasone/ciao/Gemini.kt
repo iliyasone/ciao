@@ -119,6 +119,9 @@ object GeminiEndpoint {
  * Vertex AI speaks the same protocol at another address, with the model named by its full path; the
  * socket opens once [GeminiEndpoint] knows which, and what is sent before waits in [pending].
  *
+ * Long silence isn't sent ([SilenceGate]): the audio is billed by the second. The cuts above go by
+ * the clock and by the recording, not by what was sent.
+ *
  * No language codes are sent: without them the language is detected per utterance.
  *
  * Everything the socket reports is handled on the main thread, so the state needs no locks, except
@@ -153,6 +156,8 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     private var heldVoice = false
     /** Audio appended so far, in bytes; where the activity being rolled over ended. Under [lock]. */
     private var bytesIn = 0L
+    /** Under [lock]. */
+    private val gate = SilenceGate()
     private var cutAt = 0L
     /** The finals of the activities that ended so far and the audio they cover. Under [lock]. */
     private var coveredBytes = 0L
@@ -279,9 +284,10 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         bytesIn += length
         val quiet = Recorder.level(pcm, 0, length) < QUIET_LEVEL
         quietMs = if (quiet) quietMs + ms else 0.0
+        val audio = gate.pass(pcm, length)
         if (rolling) {
             if (!quiet) heldVoice = true
-            held.add(pcm.copyOf(length))
+            held.addAll(audio)
             return
         }
         val age = SystemClock.elapsedRealtime() - activityAt
@@ -290,13 +296,15 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || goingAway) {
             rolling = true
             cutAt = bytesIn - length
-            held.add(pcm.copyOf(length))
+            held.addAll(audio)
             heldVoice = !quiet
             send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
             return
         }
-        sendAudio(pcm, length)
+        for (part in audio) sendAudio(part, part.size)
     }
+
+    override val skippedBytes: Long get() = synchronized(lock) { gate.skipped }
 
     /** Under [lock]. */
     private fun startActivity() {

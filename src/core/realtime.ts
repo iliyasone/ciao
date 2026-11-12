@@ -1,4 +1,5 @@
 import { toBase64 } from "./audio";
+import { SilenceGate } from "./silence";
 import { t } from "./i18n";
 import type { Settings } from "./types";
 
@@ -48,6 +49,8 @@ export interface LiveSession {
    * from the start, they are known to cover. Without it the whole recording goes to the file model.
    */
   partial?(): { text: string; bytes: number };
+  /** Audio appended but not sent, as silence the provider needn't hear (SilenceGate), in bytes. */
+  readonly skippedBytes?: number;
 }
 
 /**
@@ -56,6 +59,7 @@ export interface LiveSession {
  * Opening the socket takes 0.3–1 s, so callers connect ahead of time and keep the
  * session idle until speech starts (idle sessions carry no audio and cost nothing).
  * Anything sent before the socket opens is queued and flushed in order.
+ * Long silence isn't sent (SilenceGate): the audio is billed by the second.
  */
 export class RealtimeSession implements LiveSession {
   readonly createdAt = Date.now();
@@ -66,6 +70,7 @@ export class RealtimeSession implements LiveSession {
   private readonly socket: SocketLike;
   private readonly queue: string[] = [];
   private closedByUs = false;
+  private readonly gate = new SilenceGate();
 
   /** url and service: another service that speaks the same events (nemotron.ts). */
   constructor(
@@ -109,7 +114,11 @@ export class RealtimeSession implements LiveSession {
   }
 
   append(pcm: Uint8Array): void {
-    this.send({ type: "input_audio_buffer.append", audio: toBase64(pcm) });
+    for (const part of this.gate.pass(pcm)) this.send({ type: "input_audio_buffer.append", audio: toBase64(part) });
+  }
+
+  get skippedBytes(): number {
+    return this.gate.skipped;
   }
 
   commit(): void {
