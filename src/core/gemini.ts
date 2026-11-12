@@ -105,6 +105,10 @@ export function vocabulary(keywords: string[]): string[] {
  * connection is RECONNECT_AFTER_MS old, at RECONNECT_BY_MS without one, or right after a goAway. The
  * held audio goes to the new connection, so nothing is lost there either.
  *
+ * A connection that hears no speech for about a minute is closed too ("session idle timeout",
+ * measured on Vertex AI: 58 s, whatever audio it gets), so a long pause to think moves to a new one
+ * as well: IDLE_AFTER_MS after the last text, or after the connection opened without any.
+ *
  * Should the session fail all the same, partial() tells what its finals cover, so only the rest of
  * the recording needs the file model.
  *
@@ -121,6 +125,7 @@ export class GeminiLiveSession implements LiveSession {
   static ROLL_BY_MS = 200_000;
   static RECONNECT_AFTER_MS = 6 * 60_000;
   static RECONNECT_BY_MS = 8 * 60_000;
+  static IDLE_AFTER_MS = 40_000;
   /** Quiet this long (below QUIET_LEVEL) counts as a pause to cut at. */
   private static readonly PAUSE_MS = 300;
   private static readonly QUIET_LEVEL = 400;
@@ -138,6 +143,8 @@ export class GeminiLiveSession implements LiveSession {
   private setup: object | null = null;
   /** The server sent goAway: the next cut moves to a new connection. */
   private goingAway = false;
+  /** When the connection last gave text, or opened: without speech it is closed about a minute on. */
+  private heardAt = 0;
   /** Sent before the socket opened. The setup is filled in with the model then, when the endpoint is known. */
   private readonly queue: object[] = [];
   private endpoint: GeminiEndpoint | null = null;
@@ -150,6 +157,8 @@ export class GeminiLiveSession implements LiveSession {
   private completed = false;
   private settleTimer: ReturnType<typeof setTimeout> | undefined;
   private activityAt = 0;
+  /** Whether the current activity was sent any audio. */
+  private activityAudio = false;
   /** Finals from the activities before the current one. */
   private earlierFinals = 0;
   /** Quiet at the end of the audio so far. */
@@ -194,6 +203,7 @@ export class GeminiLiveSession implements LiveSession {
     const socket = this.factory(this.url);
     this.socket = socket;
     this.openedAt = Date.now();
+    this.heardAt = this.openedAt;
     this.connected = false;
     socket.onopen = () => {
       if (this.socket !== socket) return;
@@ -228,6 +238,11 @@ export class GeminiLiveSession implements LiveSession {
   /** How long the connection has been open; 0 before there is one. */
   private connectionAge(): number {
     return this.socket ? Date.now() - this.openedAt : 0;
+  }
+
+  /** No speech for so long that the server is about to close the connection. */
+  private idle(): boolean {
+    return this.socket !== null && Date.now() - this.heardAt >= GeminiLiveSession.IDLE_AFTER_MS;
   }
 
   /** The finals so far that the audio up to `bytes` (from the start) is known to give. */
@@ -280,12 +295,12 @@ export class GeminiLiveSession implements LiveSession {
     const age = Date.now() - this.activityAt;
     const connection = this.connectionAge();
     const pause = this.quietMs >= PAUSE_MS;
-    if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || this.goingAway) {
+    if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || this.goingAway || this.idle()) {
       this.rolling = true;
       this.cutAt = this.bytesIn - pcm.byteLength;
       this.held = audio;
       this.heldVoice = !quiet;
-      return this.send({ realtimeInput: { activityEnd: {} } });
+      return this.endActivity();
     }
     for (const part of audio) this.sendAudio(part);
   }
@@ -293,7 +308,7 @@ export class GeminiLiveSession implements LiveSession {
   /** While rolling over, the turn ends once the held audio is sent (see handle). */
   commit(): void {
     this.committed = true;
-    if (!this.rolling) this.send({ realtimeInput: { activityEnd: {} } });
+    if (!this.rolling) this.endActivity();
   }
 
   close(): void {
@@ -314,10 +329,18 @@ export class GeminiLiveSession implements LiveSession {
   private startActivity(): void {
     this.activityAt = Date.now();
     this.earlierFinals = this.finals.length;
+    this.activityAudio = false;
     this.send({ realtimeInput: { activityStart: {} } });
   }
 
+  /** An activity with no audio in it is refused ("No audio present in the turn"), and long silence isn't sent: a frame of it is. */
+  private endActivity(): void {
+    if (!this.activityAudio) this.sendAudio(new Uint8Array(40 * BYTES_PER_MS));
+    this.send({ realtimeInput: { activityEnd: {} } });
+  }
+
   private sendAudio(pcm: Uint8Array): void {
+    this.activityAudio = true;
     this.send({ realtimeInput: { audio: { data: toBase64(pcm), mimeType: AUDIO_MIME } } });
   }
 
@@ -374,10 +397,10 @@ export class GeminiLiveSession implements LiveSession {
         // Released in the pause the cut was made at: the final for what was said is in, and the
         // quiet tail isn't worth another round trip.
         if (this.committed && !this.heldVoice) return this.complete();
-        if (this.goingAway || this.connectionAge() >= GeminiLiveSession.RECONNECT_AFTER_MS) this.reconnect();
+        if (this.goingAway || this.connectionAge() >= GeminiLiveSession.RECONNECT_AFTER_MS || this.idle()) this.reconnect();
         this.startActivity();
         for (const pcm of this.held.splice(0)) this.sendAudio(pcm);
-        if (this.committed) this.send({ realtimeInput: { activityEnd: {} } });
+        if (this.committed) this.endActivity();
       } else if (!this.committed) {
         // The server cut the activity short: start another, or it ignores the rest. What it ignored
         // meanwhile has no final, so a fallback starts at the last cut of ours.
@@ -393,6 +416,8 @@ export class GeminiLiveSession implements LiveSession {
     }
     const content = msg.serverContent;
     if (!content) return;
+    // Not during a cut: that text is for what was said before it, and must not put off the move.
+    if (!this.rolling && (content.inputTranscription?.text || content.interimInputTranscription?.text)) this.heardAt = Date.now();
     // A frame may carry both; the final wins.
     if (content.inputTranscription?.text !== undefined) {
       this.finals.push(content.inputTranscription.text);
