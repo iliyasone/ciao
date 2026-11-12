@@ -113,6 +113,9 @@ object GeminiEndpoint {
  * A connection lasts about 10 minutes (the server sends goAway, then closes it), so a long dictation
  * moves to a new one at a cut: at a pause once the connection is [RECONNECT_AFTER_MS] old, at
  * [RECONNECT_BY_MS] without one, or right after a goAway. The held audio goes to the new connection.
+ * A connection that hears no speech for about a minute is closed too ("session idle timeout",
+ * measured on Vertex AI: 58 s, whatever audio it gets), so a long pause to think moves to a new one
+ * as well: [IDLE_AFTER_MS] after the last text, or after the connection opened without any.
  * Should the session fail all the same, [partial] tells what its finals cover, so only the rest of the
  * recording needs the file model.
  *
@@ -168,6 +171,10 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     private var openedAt = 0L
     /** The server sent goAway: the next cut moves to a new connection. Under [lock]. */
     private var goingAway = false
+    /** When the connection last gave text, or opened: without speech it is closed about a minute on. */
+    @Volatile private var heardAt = 0L
+    /** Whether the current activity was sent any audio. Under [lock]. */
+    private var activityAudio = false
     /** The setup, sent again on each new connection. */
     private var setup: JSONObject? = null
     private val settle = Runnable { complete() }
@@ -214,6 +221,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
             events,
         )
         openedAt = SystemClock.elapsedRealtime()
+        heardAt = openedAt
     }
 
     private fun current(webSocket: WebSocket) = synchronized(lock) { socket === webSocket }
@@ -250,6 +258,9 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     }
 
     /** Under [lock]. How long the connection has been open; 0 before there is one. */
+    /** No speech for so long that the server is about to close the connection. */
+    private fun idle() = socket != null && SystemClock.elapsedRealtime() - heardAt >= IDLE_AFTER_MS
+
     private fun connectionAge() = if (socket == null) 0L else SystemClock.elapsedRealtime() - openedAt
 
     /** On the main thread, like [finals]. */
@@ -293,12 +304,12 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         val age = SystemClock.elapsedRealtime() - activityAt
         val connection = connectionAge()
         val pause = quietMs >= PAUSE_MS
-        if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || goingAway) {
+        if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || goingAway || idle()) {
             rolling = true
             cutAt = bytesIn - length
             held.addAll(audio)
             heldVoice = !quiet
-            send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
+            endActivity()
             return
         }
         for (part in audio) sendAudio(part, part.size)
@@ -310,10 +321,22 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
     private fun startActivity() {
         activityAt = SystemClock.elapsedRealtime()
         earlierFinals = finals.size
+        activityAudio = false
         send(JSONObject().put("realtimeInput", JSONObject().put("activityStart", JSONObject())))
     }
 
+    /**
+     * Under [lock]. An activity with no audio in it is refused ("No audio present in the turn"), and
+     * long silence isn't sent: a frame of it is.
+     */
+    private fun endActivity() {
+        if (!activityAudio) sendAudio(ByteArray(Recorder.CHUNK_BYTES), Recorder.CHUNK_BYTES)
+        send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
+    }
+
+    /** Under [lock]. */
     private fun sendAudio(pcm: ByteArray, length: Int) {
+        activityAudio = true
         val audio = JSONObject().put("data", Base64.encodeToString(pcm, 0, length, Base64.NO_WRAP)).put("mimeType", AUDIO_MIME)
         send(JSONObject().put("realtimeInput", JSONObject().put("audio", audio)))
     }
@@ -324,7 +347,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
      */
     override fun commit() {
         committed = true
-        synchronized(lock) { if (!rolling) send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject()))) }
+        synchronized(lock) { if (!rolling) endActivity() }
     }
 
     override fun close() {
@@ -410,11 +433,11 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
                         done = true
                         return@synchronized false
                     }
-                    if (goingAway || connectionAge() >= RECONNECT_AFTER_MS) reconnect()
+                    if (goingAway || connectionAge() >= RECONNECT_AFTER_MS || idle()) reconnect()
                     startActivity()
                     for (pcm in held) sendAudio(pcm, pcm.size)
                     held.clear()
-                    if (committed) send(JSONObject().put("realtimeInput", JSONObject().put("activityEnd", JSONObject())))
+                    if (committed) endActivity()
                     false
                 } else if (!committed) {
                     // The server cut the activity short: start another, or it ignores the rest. What it
@@ -435,6 +458,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         // A frame may carry both; the final wins.
         val final = content.optJSONObject("inputTranscription")
         val guess = content.optJSONObject("interimInputTranscription")
+        if (!final?.optString("text").isNullOrEmpty() || !guess?.optString("text").isNullOrEmpty()) heardAt = SystemClock.elapsedRealtime()
         if (final != null && final.has("text")) {
             finals.add(final.optString("text"))
             interim = ""
@@ -462,6 +486,7 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         const val ROLL_BY_MS = 200_000
         const val RECONNECT_AFTER_MS = 6 * 60_000
         const val RECONNECT_BY_MS = 8 * 60_000
+        const val IDLE_AFTER_MS = 40_000
         /** Quiet this long (below QUIET_LEVEL) counts as a pause to cut at. */
         private const val PAUSE_MS = 300
         private const val QUIET_LEVEL = 400

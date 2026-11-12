@@ -317,7 +317,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - A Gemini live connection lasts about 10 minutes, so a longer dictation moves
     to a new connection at a pause once the connection is 6 minutes old (at 8
     minutes without a pause, or right away when Google says it will close it).
-    Nothing said in between is lost, and the text keeps coming.
+    Nothing said in between is lost, and the text keeps coming. Google also
+    closes a connection that hears no speech for about a minute, so a long
+    pause to think moves to a new connection too, after 40 seconds without text.
   - Google's first paid tier takes about 6.5 minutes of audio a minute. *Live*
     in the history therefore sends a recording at 4× its speed with Gemini, one
     at a time, and *More accurate* waits and tries again when a long recording
