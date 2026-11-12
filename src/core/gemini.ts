@@ -416,7 +416,8 @@ export class GeminiLiveSession implements LiveSession {
     }
     const content = msg.serverContent;
     if (!content) return;
-    if (content.inputTranscription?.text || content.interimInputTranscription?.text) this.heardAt = Date.now();
+    // Not during a cut: that text is for what was said before it, and must not put off the move.
+    if (!this.rolling && (content.inputTranscription?.text || content.interimInputTranscription?.text)) this.heardAt = Date.now();
     // A frame may carry both; the final wins.
     if (content.inputTranscription?.text !== undefined) {
       this.finals.push(content.inputTranscription.text);

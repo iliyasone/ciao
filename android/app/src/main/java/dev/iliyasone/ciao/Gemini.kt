@@ -458,7 +458,8 @@ class GeminiSession(private val context: Context, private val apiKey: String) : 
         // A frame may carry both; the final wins.
         val final = content.optJSONObject("inputTranscription")
         val guess = content.optJSONObject("interimInputTranscription")
-        if (!final?.optString("text").isNullOrEmpty() || !guess?.optString("text").isNullOrEmpty()) heardAt = SystemClock.elapsedRealtime()
+        // Not during a cut: that text is for what was said before it, and must not put off the move.
+        if (!isRolling() && (!final?.optString("text").isNullOrEmpty() || !guess?.optString("text").isNullOrEmpty())) heardAt = SystemClock.elapsedRealtime()
         if (final != null && final.has("text")) {
             finals.add(final.optString("text"))
             interim = ""
