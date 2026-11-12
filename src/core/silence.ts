@@ -17,13 +17,17 @@ export class SilenceGate {
   static readonly KEEP_AFTER_MS = 1000;
   static readonly KEEP_BEFORE_MS = 500;
 
-  /** Audio left out so far, in bytes. */
-  skipped = 0;
+  private dropped = 0;
   private loudest = 0;
   private quietMs = 0;
   /** The latest quiet audio not sent, at most KEEP_BEFORE_MS of it. */
   private before: Uint8Array[] = [];
   private beforeBytes = 0;
+
+  /** Audio left out so far, in bytes: what is still held would go out only with a sound to come. */
+  get skipped(): number {
+    return this.dropped + this.beforeBytes;
+  }
 
   /** The audio to send now: none in a long silence, the chunk itself, or it with the quiet just before it. */
   pass(pcm: Uint8Array): Uint8Array[] {
@@ -39,9 +43,9 @@ export class SilenceGate {
     this.before.push(pcm);
     this.beforeBytes += pcm.byteLength;
     while (this.beforeBytes > SilenceGate.KEEP_BEFORE_MS * BYTES_PER_MS) {
-      const dropped = this.before.shift()!.byteLength;
-      this.beforeBytes -= dropped;
-      this.skipped += dropped;
+      const oldest = this.before.shift()!.byteLength;
+      this.beforeBytes -= oldest;
+      this.dropped += oldest;
     }
     return [];
   }

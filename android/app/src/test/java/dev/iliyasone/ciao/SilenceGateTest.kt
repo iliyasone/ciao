@@ -30,7 +30,8 @@ class SilenceGateTest {
     @Test fun `nothing is silence until something loud is heard, and a soft voice sets the bar low`() {
         val (sent, skipped) = run(100 to 20, 3 to 300, 60 to 30)
         assertEquals("1".repeat(128) + "0".repeat(35), sent)
-        assertEquals(44_160L, skipped)
+        // Ends in silence: the half second held for a sound that never came wasn't sent either.
+        assertEquals(67_200L, skipped)
     }
 
     @Test fun `steady noise is sent whole`() {

@@ -12,9 +12,10 @@ package dev.iliyasone.ciao
  * Steady noise above [QUIET_LEVEL] (music, a fan) is sent whole.
  */
 class SilenceGate {
-    /** Audio left out so far, in bytes. */
+    /** Audio left out so far, in bytes: what is still held would go out only with a sound to come. */
     @Volatile var skipped = 0L
         private set
+    private var dropped = 0L
     private var loudest = 0.0
     private var quietMs = 0.0
     /** The latest quiet audio not sent, at most [KEEP_BEFORE_MS] of it. */
@@ -29,6 +30,7 @@ class SilenceGate {
         if (level >= minOf(QUIET_LEVEL, loudest / LOUDEST_RATIO)) {
             quietMs = 0.0
             beforeBytes = 0
+            skipped = dropped
             return (before + chunk).also { before.clear() }
         }
         quietMs += length / BYTES_PER_MS
@@ -36,10 +38,11 @@ class SilenceGate {
         before.addLast(chunk)
         beforeBytes += length
         while (beforeBytes > KEEP_BEFORE_MS * BYTES_PER_MS) {
-            val dropped = before.removeFirst().size
-            beforeBytes -= dropped
-            skipped += dropped
+            val oldest = before.removeFirst().size
+            beforeBytes -= oldest
+            dropped += oldest
         }
+        skipped = dropped + beforeBytes
         return emptyList()
     }
 
