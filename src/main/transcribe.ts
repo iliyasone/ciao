@@ -189,15 +189,16 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       s.commit();
       return;
     }
-    // 250 ms per message, fine enough for the session to find pauses to cut a long one at.
-    const chunk = 250 * BYTES_PER_MS;
+    // 240 ms per message, fine enough for the session to find pauses to cut a long one at, and whole
+    // 40 ms frames, as the microphone gave them: the silence left out is the same (SilenceGate).
+    const chunk = 240 * BYTES_PER_MS;
     let i = 0;
     const next = () => {
       if (stopped) return;
       if (i >= pcm.byteLength) return s.commit();
       s.append(pcm.subarray(i, i + chunk));
       i += chunk;
-      setTimeout(next, 250 / GEMINI_LIVE_SPEEDUP);
+      setTimeout(next, 240 / GEMINI_LIVE_SPEEDUP);
     };
     next();
   });

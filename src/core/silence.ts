@@ -4,8 +4,8 @@ import { BYTES_PER_MS, level } from "./audio";
  * Keeps long silence out of what a provider is sent: live transcription is billed per second of
  * audio, a pause to think included.
  *
- * The audio is judged in frames of 40 ms, however it arrives (the microphone gives 40 ms chunks, a
- * replay of a recording a second at once). A frame is quiet when it is below QUIET_LEVEL and at least 18 dB below the loudest frame of the
+ * The audio is judged in frames of 40 ms from the start of each chunk (the microphone gives 40 ms
+ * chunks, a replay of a recording a multiple of that). A frame is quiet when it is below QUIET_LEVEL and at least 18 dB below the loudest frame of the
  * dictation so far, so a soft voice or a weak microphone is never taken for silence: until
  * something loud is heard, nothing is. Quiet audio still goes out for KEEP_AFTER_MS after the last
  * sound, and the KEEP_BEFORE_MS before the next sound follow with it: word endings, breaths and
