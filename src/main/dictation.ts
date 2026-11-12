@@ -61,6 +61,8 @@ const VOICE_LEVEL = 600;
 export interface DictationReport {
   outcome: DictationOutcome;
   duration_s: number;
+  /** Of them, long silence the provider wasn't sent (and didn't bill). */
+  silence_skipped_s: number;
   /** The trigger spec that started it ("RControlKey", "MButton", "Ctrl+Alt+Space"), "wake_word" or "pill" (a click on it). */
   trigger: string;
   ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
@@ -629,7 +631,9 @@ export class DictationController {
     let live = (a.final?.trim() ? a.final : a.liveText).trim();
     if (a.stoppedByPhrase) live = stripStopPhrase(live);
     if (a.wakeStarted) live = stripWakeWord(live);
-    if (live || a.final !== undefined) add("live", model.live, live);
+    // Billed for the audio sent: long silence isn't.
+    const skippedMs = (a.session.skippedBytes ?? 0) / BYTES_PER_MS;
+    if (live || a.final !== undefined) add("live", model.live, live, entry.durationMs - skippedMs);
 
     let text: string | null = a.final !== undefined ? live : null;
     if (text === null) {
@@ -892,6 +896,7 @@ export class DictationController {
     this.deps.ended({
       outcome,
       duration_s: Math.round(entry.durationMs / 1000),
+      silence_skipped_s: Math.round((a.session.skippedBytes ?? 0) / BYTES_PER_MS / 1000),
       trigger: a.trigger,
       ended_by: a.endedBy ?? "release",
       hands_free: a.handsFree ?? this.handsFree,

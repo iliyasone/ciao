@@ -28,6 +28,8 @@ class History(private val dir: File) {
         val id: String,
         val createdAt: Long,
         val durationMs: Long = 0,
+        /** Of it, long silence the live model wasn't sent ([SilenceGate]) and didn't bill. */
+        val skippedMs: Long = 0,
         val status: Status = Status.RECORDING,
         val provider: Provider = Provider.OPENAI,
         /** Oldest first; the last one is the text. */
@@ -63,6 +65,7 @@ class History(private val dir: File) {
             .put("id", e.id)
             .put("createdAt", e.createdAt)
             .put("durationMs", e.durationMs)
+            .put("skippedMs", e.skippedMs)
             .put("status", e.status.name.lowercase())
             .put("provider", e.provider.id)
             .put("transcripts", transcripts)
@@ -90,6 +93,7 @@ class History(private val dir: File) {
             id = o.getString("id"),
             createdAt = createdAt,
             durationMs = o.optLong("durationMs"),
+            skippedMs = o.optLong("skippedMs"),
             status = Status.entries.firstOrNull { it.name.equals(o.optString("status"), true) } ?: Status.FAILED,
             provider = provider,
             transcripts = transcripts,

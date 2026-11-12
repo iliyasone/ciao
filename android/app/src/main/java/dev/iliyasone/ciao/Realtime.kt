@@ -50,6 +50,9 @@ interface LiveSession {
      */
     fun partial(): Partial? = null
 
+    /** Audio appended but not sent, as silence the provider needn't hear ([SilenceGate]), in bytes. */
+    val skippedBytes: Long
+
     class Partial(val text: String, val bytes: Long)
 }
 
@@ -64,6 +67,7 @@ fun socketError(context: Context, name: String, response: Response?): String = w
  * One OpenAI Realtime transcription session. Opening the socket takes 0.3–1 s, so it is opened
  * ahead of time and kept idle until speech starts (idle sessions carry no audio and cost nothing).
  * OkHttp queues anything sent before the socket opens.
+ * Long silence isn't sent ([SilenceGate]): the audio is billed by the second.
  */
 class RealtimeSession(private val context: Context, apiKey: String) : LiveSession {
     override val createdAt = SystemClock.elapsedRealtime()
@@ -74,6 +78,7 @@ class RealtimeSession(private val context: Context, apiKey: String) : LiveSessio
     override var listener: LiveSession.Listener? = null
 
     @Volatile private var closedByUs = false
+    private val gate = SilenceGate()
     private val main = Handler(Looper.getMainLooper())
 
     private val socket: WebSocket = ApiProxy.client(context).newWebSocket(
@@ -107,9 +112,12 @@ class RealtimeSession(private val context: Context, apiKey: String) : LiveSessio
         send(JSONObject().put("type", "session.update").put("session", session))
     }
 
+    /** From the recorder's thread only, as is the gate. */
     override fun append(pcm: ByteArray, length: Int) {
-        send(JSONObject().put("type", "input_audio_buffer.append").put("audio", Base64.encodeToString(pcm, 0, length, Base64.NO_WRAP)))
+        for (part in gate.pass(pcm, length)) send(JSONObject().put("type", "input_audio_buffer.append").put("audio", Base64.encodeToString(part, Base64.NO_WRAP)))
     }
+
+    override val skippedBytes: Long get() = gate.skipped
 
     override fun commit() = send(JSONObject().put("type", "input_audio_buffer.commit"))
 

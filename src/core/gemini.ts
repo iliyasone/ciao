@@ -2,6 +2,7 @@ import { BYTES_PER_MS, level, SAMPLE_RATE, toBase64 } from "./audio";
 import { t } from "./i18n";
 import { PROVIDERS } from "./providers";
 import type { LiveSession, RealtimeHandlers, SocketFactory, SocketLike } from "./realtime";
+import { SilenceGate } from "./silence";
 import type { Settings } from "./types";
 
 export const GEMINI_API = "https://generativelanguage.googleapis.com";
@@ -109,6 +110,9 @@ export function vocabulary(keywords: string[]): string[] {
  *
  * Vertex AI speaks the same protocol at another address, with the model named by its full path.
  *
+ * Long silence isn't sent (SilenceGate): the audio is billed by the second. The cuts above go by
+ * the clock and by the recording, not by what was sent.
+ *
  * No language codes are sent: without them the language is detected per utterance, mixed Russian and
  * English included.
  */
@@ -157,6 +161,7 @@ export class GeminiLiveSession implements LiveSession {
   private heldVoice = false;
   /** Audio appended so far, in bytes. */
   private bytesIn = 0;
+  private readonly gate = new SilenceGate();
   /** Where the activity being rolled over ended: the held audio begins there. */
   private cutAt = 0;
   /** The finals of the activities that ended so far, and the audio they cover from the start. */
@@ -238,6 +243,10 @@ export class GeminiLiveSession implements LiveSession {
     return JSON.stringify({ setup: { model: liveModelName(this.endpoint!), ...setup } });
   }
 
+  get skippedBytes(): number {
+    return this.gate.skipped;
+  }
+
   get usable(): boolean {
     return this.failure === null && !this.closedByUs;
   }
@@ -262,9 +271,10 @@ export class GeminiLiveSession implements LiveSession {
     this.bytesIn += pcm.byteLength;
     const quiet = level(pcm) < GeminiLiveSession.QUIET_LEVEL;
     this.quietMs = quiet ? this.quietMs + pcm.byteLength / BYTES_PER_MS : 0;
+    const audio = this.gate.pass(pcm);
     if (this.rolling) {
       this.heldVoice ||= !quiet;
-      return void this.held.push(pcm);
+      return void this.held.push(...audio);
     }
     const { ROLL_AFTER_MS, ROLL_BY_MS, RECONNECT_AFTER_MS, RECONNECT_BY_MS, PAUSE_MS } = GeminiLiveSession;
     const age = Date.now() - this.activityAt;
@@ -273,11 +283,11 @@ export class GeminiLiveSession implements LiveSession {
     if ((pause && (age >= ROLL_AFTER_MS || connection >= RECONNECT_AFTER_MS)) || age >= ROLL_BY_MS || connection >= RECONNECT_BY_MS || this.goingAway) {
       this.rolling = true;
       this.cutAt = this.bytesIn - pcm.byteLength;
-      this.held = [pcm];
+      this.held = audio;
       this.heldVoice = !quiet;
       return this.send({ realtimeInput: { activityEnd: {} } });
     }
-    this.sendAudio(pcm);
+    for (const part of audio) this.sendAudio(part);
   }
 
   /** While rolling over, the turn ends once the held audio is sent (see handle). */
