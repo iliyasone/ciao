@@ -799,7 +799,7 @@ export class DictationController {
           : keep
             ? t().overlay.unconfirmed
           : phase === "saved"
-            ? a.micError ? t().errors.microphone(a.micError) : t().overlay.saved
+            ? a.micError ? t().errors.microphone(a.micError) : a.offline ? t().overlay.savedBecause(a.offline) : t().overlay.saved
             : undefined,
     };
     if (!a.foldedEarly) this.deps.overlay.state(state);
@@ -860,7 +860,7 @@ export class DictationController {
 
   /** A dictation that came to nothing: its card folds away, or gives the screen back to a kept one. */
   private emptyOrKept(a: Active): void {
-    if (!this.kept) return this.deps.overlay.state({ ...this.baseState(a), phase: "empty" });
+    if (!this.kept) return this.deps.overlay.state({ ...this.baseState(a), phase: "empty", message: undefined });
     this.deps.overlay.state(this.kept.state);
     this.deps.overlay.final(this.kept.state.seq, this.kept.text);
   }
@@ -929,6 +929,8 @@ export class DictationController {
       // No logo until it is known which one: never T3 Code's for a moment over a chat.
       t3: t3 && a.chatId === null,
       chat: t3 && a.chatId ? a.chatId : undefined,
+      // Why the card stays empty: the live connection failed (a refused key, no network), not silence.
+      message: a.phase === "recording" && a.offline ? t().overlay.noLiveText(a.offline) : undefined,
     };
   }
 
