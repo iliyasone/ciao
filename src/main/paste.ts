@@ -39,6 +39,8 @@ const LAND_EVERY_MS = 40;
 /** After T3 Code's window was activated again: how long it may take to move focus into its chat box (a couple of frames, and the accessibility tree catching up), and how often it is read. */
 const REFOCUS_MS = 600;
 const REFOCUS_EVERY_MS = 60;
+/** Windows activated again while none of their fields had been read yet (see pasteIntoT3): tried once each. */
+const refocusTried = new Set<number>();
 
 /** The clipboard as it was before a paste, waiting to be put back (`running` once it is being put back). */
 let pending: { before: ClipboardItem[]; text: string; timer: ReturnType<typeof setTimeout>; running?: Promise<void> } | null = null;
@@ -131,8 +133,11 @@ export async function pasteIntoT3(
   let pre = await input.field(hwnd);
   // Nothing editable focused, say an image in the chat left focused when its preview closed: T3 Code sends no
   // paste from a button to its chat box, but puts focus back into the box when its window is activated, as a
-  // click into another window and back would. So the window is: then the box is read again.
-  if (pre.text === null && pre.reason === "no-field" && input.fieldsReadable(hwnd) && (await input.refocus(hwnd))) {
+  // click into another window and back would. So the window is: then the box is read again. A window never
+  // read yet (the first dictation after Ciao starts) gets it once too: if the box reads then, it is readable
+  // from now on; where fields never read (Linux without accessibility), that costs only this one try.
+  const tryRefocus = input.fieldsReadable(hwnd) || (hwnd !== 0 && !refocusTried.has(hwnd));
+  if (pre.text === null && pre.reason === "no-field" && tryRefocus && (refocusTried.add(hwnd), await input.refocus(hwnd))) {
     for (const until = Date.now() + REFOCUS_MS; ; ) {
       await new Promise((resolve) => setTimeout(resolve, REFOCUS_EVERY_MS));
       pre = await input.field(hwnd);
