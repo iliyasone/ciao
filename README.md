@@ -46,8 +46,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     while holding: a short tap then starts nothing (useful when a mouse or trackpad
     button is a trigger and gets clicked by accident). The short click still doesn't
     reach other apps, except on Linux, where trigger buttons are never held back.
-  - **Esc** cancels. Nothing is transcribed or pasted, but the recording stays in
-    the history.
+  - **Esc** cancels, if *Settings → Keys → Esc cancels a dictation* is on (off by
+    default; then Esc reaches the app in front as usual). Nothing is transcribed or
+    pasted, but the recording stays in the history.
   - **Stop** on the card finishes a dictation however it started (a key, the pill,
     the wake word), the same as a second press.
   - The card's window also records the microphone. Should it crash or get stuck (no
@@ -510,8 +511,8 @@ How it differs from Windows:
 - **Keys are not hidden from other apps.** The app in front sees the trigger key
   too, so the default is Right Ctrl alone. A middle-click trigger is off by
   default, because the middle click would also paste the selection under the
-  pointer. During a dictation Esc is held back from the app in front on X11, but
-  on Wayland it gets through.
+  pointer. When Esc cancels a dictation, it is held back from the app in front on
+  X11, but on Wayland it gets through.
 - **X11** works fully: Ciao pastes with Ctrl+V (Ctrl+Shift+V in terminals) and
   only into the window that was in front when you finished.
 - **Wayland** gives no app a way to see which window is active, so the text is
@@ -882,7 +883,8 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   `gpt-transcribe` (or `gemini-3.5-transcribe`) instead.
 - `Ciao.Input` is a tiny native helper: .NET on Windows, Swift on macOS. It
   installs a low-level keyboard and mouse hook (an event tap on macOS), so it can
-  see Right Ctrl being held and swallow Esc (the focused app never receives it).
+  see Right Ctrl being held and, when Esc cancels dictations, swallow Esc (the
+  focused app never receives it).
   It also reports the foreground window and injects Ctrl+V. It talks to the
   Electron app over stdin/stdout, one JSON object per line; both helpers speak the
   same protocol (`src/main/input.ts`).

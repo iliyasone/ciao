@@ -74,6 +74,8 @@ export interface Settings {
   t3Send: boolean;
   /** A short press of a dictation trigger starts hands-free mode; off, it is dropped and only a hold dictates. */
   tapHandsFree: boolean;
+  /** Esc during a dictation cancels it (held back from the app in front); off, Esc is left alone. */
+  escCancels: boolean;
   /** Send anonymous usage counts (launches, dictations); never text or audio. */
   telemetry: boolean;
   /**
