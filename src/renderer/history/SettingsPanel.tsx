@@ -150,7 +150,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
             value={s.tapHandsFree}
             onChange={(v) => update({ tapHandsFree: v })}
           />
-          <Keys label={tr.keys.cancel} keys={["Esc"]} hint={tr.keys.cancelHint} />
+          <Toggle label={tr.keys.escCancels} hint={tr.keys.escCancelsHint} value={s.escCancels} onChange={(v) => update({ escCancels: v })} />
           <Row label={tr.keys.pasteLast} hint={tr.keys.pasteLastHint}>
             <AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />
           </Row>
@@ -850,16 +850,3 @@ function AcceleratorRecorder({ value, onChange }: { value: string; onChange: (v:
   );
 }
 
-function Keys({ label, keys, hint }: { label: string; keys: string[]; hint?: string }) {
-  return (
-    <Row label={label} hint={hint}>
-      <div className="flex gap-1">
-        {keys.map((k) => (
-          <kbd key={k} className="rounded-md bg-tint/8 px-2 py-0.5 font-sans text-[12px] text-fg2 ring-1 ring-tint/10">
-            {k}
-          </kbd>
-        ))}
-      </div>
-    </Row>
-  );
-}

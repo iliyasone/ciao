@@ -434,7 +434,7 @@ export class DictationController {
         if (this.active === a) this.push(a);
         return chat;
       });
-    this.deps.input.arm(true);
+    if (settings.escCancels) this.deps.input.arm(true);
     if (!replay) this.deps.overlay.startCapture(seq);
     // At once, so you hear that it listens; later only where the press may still turn out to be nothing:
     // a tap that is dropped, or a held Ctrl that becomes Ctrl+C (the card waits for the same reason).

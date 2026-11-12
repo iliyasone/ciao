@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showDelay: false,
   stopPhrase: true,
   tapHandsFree: true,
+  escCancels: false,
   t3Mode: false,
   t3Prefix: "",
   t3Suffix: "",
