@@ -215,6 +215,7 @@ object KeyMask : android.text.method.TransformationMethod {
  * The proxy for the services, as on the desktop: the saved one shows without its password; a new one
  * is typed in, saved with Save, and checked right away.
  */
+/** [onSaved]: the proxy was saved or removed, so the key is checked again. */
 class ProxyEditor(private val activity: Activity, private val kit: Kit, private val onSaved: () -> Unit = {}) {
     private val prefs = Prefs(activity)
     /** What the last check of the proxy in use found, for that proxy (href); null before one. */
@@ -250,6 +251,8 @@ class ProxyEditor(private val activity: Activity, private val kit: Kit, private 
             field.setText("")
             result = null
             show()
+            // What worked through the proxy may not work without it.
+            onSaved()
         }
         show()
     }

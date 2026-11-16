@@ -29,6 +29,8 @@
     <item name="proxyStatus" type="id" />
     <item name="restoreClipboard" type="id" />
     <item name="setupScroll" type="id" />
+    <item name="setupSyncButton" type="id" />
+    <item name="setupSyncStatus" type="id" />
     <item name="setupSkip" type="id" />
     <item name="showCost" type="id" />
     <item name="showDelay" type="id" />

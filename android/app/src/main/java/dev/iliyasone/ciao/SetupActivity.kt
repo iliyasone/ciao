@@ -210,8 +210,12 @@ class SetupActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(kit.title(getString(R.string.setup_sync_title)))
             addView(kit.hint(getString(R.string.setup_sync_text)))
-            addView(kit.button(getString(R.string.sync_sign_in), primary = false).apply { setOnClickListener { GoogleSync.signIn(this@SetupActivity) } },
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(10) })
+            addView(kit.button(getString(R.string.sync_sign_in), primary = false).apply {
+                id = R.id.setupSyncButton
+                setOnClickListener { GoogleSync.signIn(this@SetupActivity) }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(10) })
+            // Signing in, or why it failed (Drive access not ticked, say): otherwise no key arrives without a word.
+            addView(kit.hint().apply { id = R.id.setupSyncStatus }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(6) })
         }
         keyStep.add(syncBlock, top = 16)
 
@@ -416,7 +420,14 @@ class SetupActivity : Activity() {
                 else -> R.color.muted
             }
         }
-        syncBlock.visibility = if (GoogleSync.status.email == null && GoogleSync.available(this)) View.VISIBLE else View.GONE
+        val sync = GoogleSync.status
+        syncBlock.visibility = if (sync.email == null && GoogleSync.available(this)) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.setupSyncButton).isEnabled = !sync.busy
+        findViewById<TextView>(R.id.setupSyncStatus).apply {
+            text = sync.error ?: if (sync.busy) getString(R.string.sync_signing_in) else ""
+            setTextColor(kit.color(if (sync.error != null) R.color.error else R.color.muted))
+            visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+        }
 
         // Microphone
         val mic = micGranted()

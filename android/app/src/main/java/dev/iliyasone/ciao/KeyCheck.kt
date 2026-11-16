@@ -38,8 +38,12 @@ object KeyCheck {
                 if (res.isSuccessful || vertex) return Result.Works(System.currentTimeMillis() - started)
                 val message = runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrNull() ?: "HTTP ${res.code}"
                 // Gemini: "User location is not supported for the API use."; OpenAI: unsupported_country_region_territory.
-                if (body.contains("location is not supported", true) || body.contains("unsupported_country", true)) Result.Region(message)
-                else Result.Rejected(message)
+                when {
+                    body.contains("location is not supported", true) || body.contains("unsupported_country", true) -> Result.Region(message)
+                    // Only these say the key itself is wrong; 429 or a 5xx says nothing about it.
+                    res.code == 400 || res.code == 401 || res.code == 403 -> Result.Rejected(message)
+                    else -> Result.Offline(message)
+                }
             }
         } catch (e: Exception) {
             var cause: Throwable = e
