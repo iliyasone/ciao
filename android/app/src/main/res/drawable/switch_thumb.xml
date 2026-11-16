@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An 18dp knob with 2dp of the track around it, as in T3 Code. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true">
+        <layer-list>
+            <item android:width="22dp" android:height="22dp"><shape android:shape="oval"><solid android:color="@android:color/transparent" /></shape></item>
+            <item android:left="2dp" android:top="2dp" android:right="2dp" android:bottom="2dp"><shape android:shape="oval"><solid android:color="@color/switch_thumb_on" /></shape></item>
+        </layer-list>
+    </item>
+    <item>
+        <layer-list>
+            <item android:width="22dp" android:height="22dp"><shape android:shape="oval"><solid android:color="@android:color/transparent" /></shape></item>
+            <item android:left="2dp" android:top="2dp" android:right="2dp" android:bottom="2dp"><shape android:shape="oval"><solid android:color="@color/switch_thumb" /></shape></item>
+        </layer-list>
+    </item>
+</selector>

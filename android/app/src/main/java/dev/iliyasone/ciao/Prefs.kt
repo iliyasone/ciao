@@ -54,6 +54,39 @@ class Prefs(context: Context) {
 
     fun keyOf(p: Provider): String = if (p == Provider.GEMINI) geminiKey else apiKey
 
+    /**
+     * The key of [p] that last passed KeyCheck, with the proxy it went through (a hash, not the
+     * key), so it shows as working at once next time; another proxy (from sync, say) checks again.
+     */
+    fun keyVerified(p: Provider): Boolean = keyOf(p).let { it.isNotEmpty() && sp.getString("keyVerified_${p.id}", null) == verifiedHash(it, proxy) }
+    fun setKeyVerified(p: Provider, key: String, proxy: String, works: Boolean) =
+        sp.edit().putString("keyVerified_${p.id}", if (works) verifiedHash(key, proxy) else null).apply()
+    private fun verifiedHash(key: String, proxy: String) = "$key|$proxy".hashCode().toString()
+
+    /** The microphone was asked for once: refused again, Android stops asking and only the app's settings can allow it. */
+    var micAsked: Boolean
+        get() = sp.getBoolean("micAsked", false)
+        set(v) = sp.edit().putBoolean("micAsked", v).apply()
+
+    var notificationsAsked: Boolean
+        get() = sp.getBoolean("notificationsAsked", false)
+        set(v) = sp.edit().putBoolean("notificationsAsked", v).apply()
+
+    /** The setup screen was finished or skipped: it no longer opens by itself. */
+    var setupDone: Boolean
+        get() = sp.getBoolean("setupDone", false)
+        set(v) = sp.edit().putBoolean("setupDone", v).apply()
+
+    /** When the setup screen sent the user to the accessibility settings: the service brings them back. */
+    var setupLeftAt: Long
+        get() = sp.getLong("setupLeftAt", 0L)
+        set(v) = sp.edit().putLong("setupLeftAt", v).apply()
+
+    /** The user says they let Ciao run in the background in the phone maker's settings (Background.kt). */
+    var backgroundConfirmed: Boolean
+        get() = sp.getBoolean("backgroundConfirmed", false)
+        set(v) = sp.edit().putBoolean("backgroundConfirmed", v).apply()
+
     /** The key of the service in use. */
     val currentKey: String get() = keyOf(provider)
 

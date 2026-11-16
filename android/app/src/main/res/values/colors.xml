@@ -1,16 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mirrors the desktop palette in src/renderer/styles.css. -->
+<!-- Neutrals after T3 Code's settings; the accent is the desktop's (src/renderer/styles.css). -->
 <resources>
+    <!-- The brand pink; in light mode buttons, links and switches use accent_strong, readable on white. -->
     <color name="accent">#F4677F</color>
-    <color name="app">#F4F4F6</color>
+    <color name="on_accent">#FFFFFF</color>
+    <!-- Buttons, links and switches in both themes: the brand pink is too light for white text. -->
+    <color name="accent_strong">#D9435E</color>
+    <color name="app">#FCFCFC</color>
     <color name="fg">#18181B</color>
-    <color name="muted">#52525B</color>
-    <color name="faint">#71717A</color>
+    <color name="muted">#71717B</color>
+    <color name="faint">#8E8E99</color>
     <color name="ghost">#A1A1AA</color>
     <color name="card">#FFFFFF</color>
+    <color name="border">#E9E9EC</color>
+    <color name="divider">#F0F0F2</color>
+    <color name="field">#FCFCFC</color>
+    <color name="field_border">#DCDCE0</color>
+    <color name="field_focus">#6618181B</color>
+    <color name="switch_off">#D4D4D8</color>
+    <color name="switch_thumb">#FFFFFF</color>
+    <color name="switch_thumb_on">#FFFFFF</color>
     <color name="overlay">#FDFDFE</color>
     <color name="settled">#6B6B78</color>
     <color name="fresh">#09090B</color>
     <color name="ok">#047857</color>
     <color name="warn">#B45309</color>
+    <color name="error">#B91C1C</color>
+    <color name="ok_bg">#1A047857</color>
 </resources>

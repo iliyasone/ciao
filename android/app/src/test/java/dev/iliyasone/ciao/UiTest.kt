@@ -3,7 +3,6 @@ package dev.iliyasone.ciao
 import android.content.ClipboardManager
 import android.widget.EditText
 import android.widget.ListView
-import android.widget.RadioButton
 import android.widget.Switch
 import android.widget.TextView
 import android.view.View
@@ -13,6 +12,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLooper
 import java.io.File
 import org.robolectric.annotation.Config
@@ -29,20 +29,66 @@ class UiTest {
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         // None picked yet: Gemini, the cheaper, listed first with its price.
         assertEquals(Provider.GEMINI, prefs.provider)
-        assertEquals("Google Gemini · ≈ $0.54 per hour of speech", activity.findViewById<RadioButton>(R.id.providerGemini).text.toString())
+        val select = activity.findViewById<TextView>(R.id.provider)
+        assertEquals("Google Gemini · ≈ $0.54 per hour", select.text.toString())
         val key = activity.findViewById<EditText>(R.id.apiKey)
         assertEquals("AQ.gemini", key.text.toString())
-        assertEquals("✓  Gemini API key", activity.findViewById<TextView>(R.id.keyTitle).text.toString())
+        assertEquals("Gemini API key", activity.findViewById<TextView>(R.id.keyTitle).text.toString())
 
-        activity.findViewById<RadioButton>(R.id.providerOpenai).performClick()
+        pick(select, "OpenAI · ≈ $1.02 per hour")
         assertEquals(Provider.OPENAI, prefs.provider)
         assertEquals("sk-openai", key.text.toString())
+        assertEquals("OpenAI API key", activity.findViewById<TextView>(R.id.keyTitle).text.toString())
 
         // Each service keeps its own key.
         key.setText("sk-other")
-        activity.findViewById<RadioButton>(R.id.providerGemini).performClick()
+        pick(select, "Google Gemini · ≈ $0.54 per hour")
         assertEquals("AQ.gemini", key.text.toString())
         assertEquals("sk-other", prefs.apiKey)
+    }
+
+    @Test
+    fun opensTheSetupUntilItIsDone() {
+        val app = RuntimeEnvironment.getApplication()
+        val main = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        assertEquals(SetupActivity::class.java.name, shadowOf(app).nextStartedActivity.component!!.className)
+        // The status card says what is left.
+        assertEquals("Setup is not finished", main.findViewById<TextView>(R.id.statusTitle).text.toString())
+        assertEquals("Left: Service and key, Microphone, Ciao button", main.findViewById<TextView>(R.id.statusText).text.toString())
+
+        val setup = Robolectric.buildActivity(SetupActivity::class.java).setup().get()
+        assertEquals("Ciao checks the key as soon as it is pasted", setup.findViewById<TextView>(R.id.keyStatus).text.toString())
+        setup.findViewById<TextView>(R.id.setupSkip).performClick()
+        assertEquals(true, Prefs(app).setupDone)
+        // Opened on its own (as the first screen): it leads on to the settings.
+        assertEquals(MainActivity::class.java.name, shadowOf(app).nextStartedActivity.component!!.className)
+        Robolectric.buildActivity(MainActivity::class.java).setup()
+        assertEquals(null, shadowOf(app).nextStartedActivity)
+    }
+
+    @Test
+    fun pasteSavesTheKeyAndChecksIt() {
+        val app = RuntimeEnvironment.getApplication()
+        // Nothing listens on port 1: the check fails at once, with no network involved.
+        Prefs(app).proxy = "http://127.0.0.1:1"
+        app.getSystemService(ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("", "  AQ.pasted-key  "))
+        val setup = Robolectric.buildActivity(SetupActivity::class.java).setup().get()
+        setup.findViewById<View>(R.id.keyPaste).performClick()
+        assertEquals("AQ.pasted-key", Prefs(app).geminiKey)
+        val status = setup.findViewById<TextView>(R.id.keyStatus)
+        val deadline = System.currentTimeMillis() + 5000
+        while (status.text.startsWith("Checking") && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+            ShadowLooper.idleMainLooper()
+        }
+        assertEquals(true, status.text.startsWith("Key saved. Could not check it: no answer from Gemini"))
+    }
+
+    private fun pick(select: TextView, label: String) {
+        select.performClick()
+        val menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu()
+        val item = (0 until menu.menu.size()).map { menu.menu.getItem(it) }.first { it.title.toString() == label }
+        shadowOf(menu).onMenuItemClickListener.onMenuItemClick(item)
     }
 
     @Test

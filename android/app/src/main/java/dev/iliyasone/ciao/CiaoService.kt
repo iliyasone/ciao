@@ -57,6 +57,10 @@ class CiaoService : AccessibilityService() {
     private var cardHost: FrameLayout? = null
     private var card: CardView? = null
     private var imeTop = 0
+    /** A keyboard window was listed since the service started: until one is, the phone may not list them. */
+    private var imeEverSeen = false
+    /** Since when a text field has had the focus (uptime), 0 when none. */
+    private var fieldSince = 0L
     /** The keyboard top as last seen, and since when: the bubble waits for it to stop moving. */
     private var imeTopSeen = -1
     private var imeTopSince = 0L
@@ -111,6 +115,12 @@ class CiaoService : AccessibilityService() {
         wm = getSystemService(WindowManager::class.java)
         history = History(File(filesDir, "history"))
         instance = this
+        Diag.connectedAt = System.currentTimeMillis()
+        // Turned on from the setup screen a moment ago: take the user back there, out of the phone's settings.
+        if (System.currentTimeMillis() - prefs.setupLeftAt < 5 * 60_000L) {
+            prefs.setupLeftAt = 0L
+            runCatching { startActivity(Intent(this, SetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }
+        }
         Telemetry.capture(this, "app_started", mapOf(
             "has_api_key" to prefs.currentKey.isNotEmpty(),
             "provider" to prefs.provider.id,
@@ -135,6 +145,7 @@ class CiaoService : AccessibilityService() {
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        Diag.connectedAt = 0L
         dictation?.let { cancel() }
         RecordingService.hide(this)
         hideBubble()
@@ -168,10 +179,22 @@ class CiaoService : AccessibilityService() {
                 return
             }
             imeTop = top
+            imeEverSeen = true
         } else {
             imeTopSeen = -1
         }
-        if (!idle || (ime != null && field != null)) showBubble() else hideBubble()
+        if (ime != null) Diag.keyboardAt = System.currentTimeMillis()
+        if (field != null) Diag.fieldAt = System.currentTimeMillis()
+        Diag.windows = runCatching { windows.joinToString(", ") { windowType(it.type) } }.getOrElse { it.toString() }
+        // Some phones (Huawei among them) never list the keyboard among the windows: there the
+        // bubble follows the focused field alone, at the height a keyboard usually reaches. Only
+        // after a second without one, so elsewhere the keyboard opening first isn't mistaken for it.
+        val now = SystemClock.uptimeMillis()
+        if (field == null) fieldSince = 0L else if (fieldSince == 0L) fieldSince = now
+        val noKeyboardList = !imeEverSeen && field != null && now - fieldSince >= NO_IME_AFTER_MS
+        if (!imeEverSeen && field != null && !noKeyboardList) main.postDelayed(refresh, fieldSince + NO_IME_AFTER_MS - now)
+        if (noKeyboardList) imeTop = resources.displayMetrics.heightPixels * 3 / 5
+        if (!idle || (field != null && (ime != null || noKeyboardList))) showBubble() else hideBubble()
         // Over the shade they'd cover its notifications, ours with Done and Cancel among them.
         val open = shadeOpen()
         if (open != shade) {
@@ -181,6 +204,15 @@ class CiaoService : AccessibilityService() {
         bubble?.visibility = if (shade) View.INVISIBLE else View.VISIBLE
         cardHost?.visibility = if (shade) View.GONE else View.VISIBLE
         suggestionHost?.visibility = if (shade) View.GONE else View.VISIBLE
+    }
+
+    private fun windowType(type: Int) = when (type) {
+        AccessibilityWindowInfo.TYPE_APPLICATION -> "APPLICATION"
+        AccessibilityWindowInfo.TYPE_INPUT_METHOD -> "INPUT_METHOD"
+        AccessibilityWindowInfo.TYPE_SYSTEM -> "SYSTEM"
+        AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY -> "ACCESSIBILITY_OVERLAY"
+        AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER -> "SPLIT_SCREEN_DIVIDER"
+        else -> "TYPE_$type"
     }
 
     /** The notification shade or quick settings are pulled down (the lock screen doesn't count: the card belongs there). */
@@ -231,7 +263,15 @@ class CiaoService : AccessibilityService() {
             v.alpha = 0f
             v.scaleX = APPEAR_SCALE
             v.scaleY = APPEAR_SCALE
-            wm.addView(v, bubbleParams)
+            try {
+                wm.addView(v, bubbleParams)
+            } catch (e: RuntimeException) {
+                // The phone refused the overlay: say so on the setup screen rather than stop the service.
+                Diag.bubbleError = e.toString()
+                return
+            }
+            Diag.bubbleShown = true
+            Diag.bubbleError = null
             bubble = v
             v.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(APPEAR_MS).setInterpolator(DecelerateInterpolator())
                 .withEndAction { if (bubble === v && !motion.running && imeSettled) setBubbleTouchable(true) }
@@ -278,6 +318,7 @@ class CiaoService : AccessibilityService() {
         v.animate().cancel()
         runCatching { wm.removeView(v) }
         bubble = null
+        Diag.bubbleShown = false
         // A touch cut short by the keyboard closing never gets its ACTION_UP.
         touching = false
         bubbleTouch?.abandon()
@@ -741,6 +782,8 @@ class CiaoService : AccessibilityService() {
             delivery == History.Delivery.PASTED -> "pasted"
             else -> "clipboard"
         }
+        Diag.outcome = outcome
+        Diag.outcomeAt = System.currentTimeMillis()
         val by = transcripts.firstOrNull()?.source
         val seconds = (end - d.startedAt) / 1000.0
         val skipped = d.session.skippedBytes / SilenceGate.BYTES_PER_MS / 1000
@@ -931,7 +974,7 @@ class CiaoService : AccessibilityService() {
 
     private fun openApp(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(Intent(this, SetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     companion object {
@@ -943,6 +986,8 @@ class CiaoService : AccessibilityService() {
         private const val SHADE_CLOSE_MS = 450L
         /** How long the keyboard's top must hold still before the bubble is placed against it. */
         private const val IME_SETTLE_MS = 250L
+        /** A field this long in focus with no keyboard window listed: the phone doesn't list them. */
+        private const val NO_IME_AFTER_MS = 1000L
         private const val APPEAR_MS = 160L
         private const val APPEAR_SCALE = 0.6f
         private const val PRESS_MS = 120L
