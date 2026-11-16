@@ -42,7 +42,6 @@
     <item name="stopPhrase" type="id" />
     <item name="syncButton" type="id" />
     <item name="syncKeys" type="id" />
-    <item name="syncKeysRow" type="id" />
     <item name="syncStatus" type="id" />
     <item name="telemetry" type="id" />
     <item name="testField" type="id" />

@@ -89,7 +89,8 @@ class Kit(val context: Context) {
 
     /** The whole row toggles the switch. */
     fun switchRow(id: Int, title: CharSequence, hint: CharSequence? = null): LinearLayout {
-        val sw = switch(id)
+        // Its title is a separate view: TalkBack reads it from here.
+        val sw = switch(id).apply { contentDescription = title }
         return row(title, hint, sw).apply {
             setBackgroundResource(selectable())
             setOnClickListener { sw.toggle() }

@@ -126,7 +126,7 @@ class MainActivity : Activity() {
         kit.section(page, getString(R.string.section_sync), kit.card()).apply {
             kit.add(this, kit.row(getString(R.string.sync_title), getString(R.string.sync_text), hintId = R.id.syncStatus,
                 below = listOf(kit.button(getString(R.string.sync_sign_in), primary = false, id = R.id.syncButton))))
-            kit.add(this, kit.switchRow(R.id.syncKeys, getString(R.string.sync_keys), getString(R.string.sync_keys_hint)).apply { id = R.id.syncKeysRow })
+            kit.add(this, kit.switchRow(R.id.syncKeys, getString(R.string.sync_keys), getString(R.string.sync_keys_hint)))
         }
 
         // History
@@ -342,7 +342,6 @@ class MainActivity : Activity() {
             setText(if (s.email != null) R.string.sync_sign_out_short else R.string.sync_sign_in_short)
             isEnabled = s.email != null || !s.busy // not while Google's screen is on its way
         }
-        findViewById<View>(R.id.syncKeysRow).visibility = if (s.email != null) View.VISIBLE else View.GONE
     }
 
     private fun addTile() {
