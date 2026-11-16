@@ -10,7 +10,7 @@
     <string name="provider_gemini" translatable="false">Google Gemini</string>
     <string name="key_title">%1$s API key</string>
     <string name="key_text_openai">Needs access to gpt-live-transcribe.</string>
-    <string name="key_text_gemini">From aistudio.google.com/apikey, or a link to a server with a key (https://…?key=…).</string>
+    <string name="key_text_gemini">From aistudio.google.com/apikey, or a link to your server with a key.</string>
     <string name="key_hint_openai">OpenAI key (sk-…)</string>
     <string name="key_hint_gemini">Gemini key</string>
     <string name="proxy_title">Proxy</string>
@@ -35,7 +35,7 @@
 
     <string name="section_recognition">Recognition</string>
     <string name="sync_title">Sync with Google</string>
-    <string name="sync_text">Terms, context and key on all your devices. Kept in a hidden Ciao folder on your Google Drive; Ciao sees no other file there.</string>
+    <string name="sync_text">Terms, context and key on all your devices, in a hidden Ciao folder on Google Drive.</string>
     <string name="sync_sign_in">Sign in with Google</string>
     <string name="sync_keys">Sync API keys</string>
     <string name="sync_keys_hint">Easier: on a new device you just sign in, no key to paste. The keys sit in the hidden Ciao folder in your Google Drive, so anyone who can sign in to your Google account can read them. The proxy syncs along with them. Turn this off to keep each key and the proxy on its own device only: Ciao removes them from Drive.</string>
@@ -157,14 +157,14 @@
     <string name="paste_last_text">Add the “Paste last” tile to the quick settings (pull the shade down twice, then the pencil): tap it and the shade closes and the last dictation goes into the field you were typing in, or onto the clipboard.</string>
     <string name="section_appearance">Appearance</string>
     <string name="ui_language">Language</string>
-    <string name="system_default">As the system</string>
+    <string name="system_default">System</string>
     <string name="theme">Theme</string>
-    <string name="theme_system">As the system</string>
+    <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="section_developer">Legacy</string>
-    <string name="show_delay">Choose the delay level</string>
-    <string name="show_delay_hint">The OpenAI recognizer’s delay level: lower shows words sooner, higher is more accurate. The price is the same.</string>
+    <string name="show_delay">Delay level picker</string>
+    <string name="show_delay_hint">Shows the OpenAI recognizer’s delay level under this switch: lower shows words sooner, higher is more accurate. The price is the same.</string>
     <string name="usage_title">Usage</string>
     <string name="usage_open">Usage</string>
     <string name="usage_window_day">24 hours</string>
@@ -201,7 +201,6 @@
     <string name="key_paste">Paste</string>
     <string name="key_where">Where to get a key</string>
     <string name="key_clipboard_empty">The clipboard is empty</string>
-    <string name="key_status_empty">Paste a key and Ciao checks it right away</string>
     <string name="key_status_unchecked">Saved, not checked yet</string>
     <string name="key_status_saved">Saved, not checked</string>
     <string name="key_status_checking">Checking the key…</string>
@@ -242,7 +241,7 @@
     <string name="setup_bg_title">Running in the background</string>
     <string name="setup_bg_text">This phone closes apps by itself, and the Ciao button disappears. Let Ciao run in the background.</string>
     <string name="setup_bg_open">Open settings</string>
-    <string name="setup_bg_confirm">Done, it’s on</string>
+    <string name="setup_bg_confirm">Done</string>
     <string name="setup_bg_done">Marked by you</string>
     <string name="setup_bg_not_yet">Not set</string>
     <string name="setup_bg_battery">The phone closes Ciao less often when it doesn’t save battery on it.</string>
@@ -276,7 +275,7 @@
     <string name="setup_copy_report">Copy report</string>
     <string name="diag_copied">Report copied</string>
     <string name="status_ready">All set</string>
-    <string name="status_ready_text">%1$s · the Ciao button is on</string>
+    <string name="status_ready_text">The Ciao button is on · tap to run the setup again</string>
     <string name="status_problem">Needs your attention</string>
     <string name="status_bad_key">%1$s rejected the key</string>
     <string name="status_stopped">The phone stopped Ciao</string>
@@ -302,7 +301,7 @@
     <string name="setup_trouble">Having trouble?</string>
     <string name="setup_finish_anyway">Finish without testing</string>
     <string name="settings_title">Settings</string>
-    <string name="setup_bg_more">More reliable still</string>
     <string name="paste_last_short">A quick-settings tile that pastes your last dictation.</string>
     <string name="paste_last_add">Add</string>
+    <string name="key_status_works_short">Key works</string>
 </resources>

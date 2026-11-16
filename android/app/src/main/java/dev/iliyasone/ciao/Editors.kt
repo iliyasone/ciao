@@ -90,8 +90,12 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
     }
     val text: TextView = kit.hint().apply { id = R.id.keyText }
 
-    /** The field, Paste under it. */
-    val fieldRow = kit.stack(field, paste)
+    /** The field with a compact Paste at its end. */
+    val fieldRow = LinearLayout(activity).apply {
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        addView(field, LinearLayout.LayoutParams(0, kit.dp(44), 1f))
+        addView(paste, LinearLayout.LayoutParams(-2, kit.dp(44)).apply { marginStart = kit.dp(8) })
+    }
 
     private val autoCheck = Runnable { if (field.text.length >= 20) startCheck() }
 
@@ -172,15 +176,17 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         state = s
         val name = prefs.provider.displayName
         status.text = when (s) {
-            State.EMPTY -> activity.getString(R.string.key_status_empty)
+            State.EMPTY -> ""
             State.UNCHECKED -> activity.getString(R.string.key_status_unchecked)
             State.CHECKING -> activity.getString(R.string.key_status_checking)
-            State.WORKS -> activity.getString(R.string.key_status_works, name)
+            State.WORKS -> activity.getString(R.string.key_status_works_short)
             State.REJECTED -> activity.getString(R.string.key_status_rejected, name, reason)
             State.REGION -> activity.getString(R.string.key_status_region, name)
             State.OFFLINE -> activity.getString(R.string.key_status_offline, name, reason)
         }
         where.visibility = if (s == State.WORKS) View.GONE else View.VISIBLE
+        // Nothing to say before there is a key: the line comes with the check.
+        status.visibility = if (s == State.EMPTY) View.GONE else View.VISIBLE
         status.setTextColor(kit.color(when (s) {
             State.WORKS -> R.color.ok
             State.REJECTED -> R.color.error

@@ -7,7 +7,7 @@
     <string name="provider_option">%1$s · ≈ %2$s за час</string>
     <string name="key_title">Ключ %1$s API</string>
     <string name="key_text_openai">Нужен доступ к gpt-live-transcribe.</string>
-    <string name="key_text_gemini">Ключ с aistudio.google.com/apikey или ссылка на сервер с ключом (https://…?key=…).</string>
+    <string name="key_text_gemini">С aistudio.google.com/apikey или ссылка на ваш сервер с ключом.</string>
     <string name="proxy_title">Прокси</string>
     <string name="proxy_text">Запросы к сервису идут через него — например, если Gemini недоступен в вашей стране. Только HTTP. Синхронизируется вместе с ключами.</string>
     <string name="proxy_remove">Убрать</string>
@@ -29,7 +29,7 @@
 
     <string name="section_recognition">Распознавание</string>
     <string name="sync_title">Синхронизация с Google</string>
-    <string name="sync_text">Термины, контекст и ключ — на всех устройствах. Хранятся в скрытой папке Ciao на Google Диске; другие файлы Ciao не видит.</string>
+    <string name="sync_text">Термины, контекст и ключ на всех устройствах — в скрытой папке Ciao на Google Диске.</string>
     <string name="sync_sign_in">Войти через Google</string>
     <string name="sync_keys">Синхронизировать API-ключи</string>
     <string name="sync_keys_hint">Так удобнее: на новом устройстве достаточно войти, ключ вставлять не нужно. Ключи лежат в скрытой папке Ciao на вашем Google Диске, так что их прочитает любой, кто сможет войти в ваш аккаунт Google. Прокси синхронизируется вместе с ними. Выключите, и каждый ключ и прокси останутся только на своём устройстве: Ciao уберёт их с Диска.</string>
@@ -157,8 +157,8 @@
     <string name="theme_light">Светлая</string>
     <string name="theme_dark">Тёмная</string>
     <string name="section_developer">Устаревшее</string>
-    <string name="show_delay">Выбирать уровень задержки</string>
-    <string name="show_delay_hint">Уровень задержки распознавания OpenAI: меньше — слова появляются раньше, больше — точнее. На цену не влияет.</string>
+    <string name="show_delay">Выбор уровня задержки</string>
+    <string name="show_delay_hint">Показывает под этим переключателем уровень задержки распознавания OpenAI: меньше — слова раньше, больше — точнее. На цену не влияет.</string>
     <string name="usage_title">Расходы</string>
     <string name="usage_open">Аналитика</string>
     <string name="usage_window_day">24 часа</string>
@@ -195,7 +195,6 @@
     <string name="key_paste">Вставить</string>
     <string name="key_where">Где взять ключ</string>
     <string name="key_clipboard_empty">В буфере обмена пусто</string>
-    <string name="key_status_empty">Вставьте ключ — Ciao сразу его проверит</string>
     <string name="key_status_unchecked">Сохранён, ещё не проверен</string>
     <string name="key_status_saved">Сохранён, не проверен</string>
     <string name="key_status_checking">Проверяю ключ…</string>
@@ -236,7 +235,7 @@
     <string name="setup_bg_title">Работа в фоне</string>
     <string name="setup_bg_text">Этот телефон сам закрывает приложения, и кнопка Ciao пропадает. Разрешите Ciao работать в фоне.</string>
     <string name="setup_bg_open">Открыть настройки</string>
-    <string name="setup_bg_confirm">Готово, включено</string>
+    <string name="setup_bg_confirm">Готово</string>
     <string name="setup_bg_done">Отмечено вами</string>
     <string name="setup_bg_not_yet">Не настроена</string>
     <string name="setup_bg_battery">Телефон реже закрывает Ciao, если не экономить на нём заряд.</string>
@@ -270,7 +269,7 @@
     <string name="setup_copy_report">Скопировать отчёт</string>
     <string name="diag_copied">Отчёт скопирован</string>
     <string name="status_ready">Всё готово</string>
-    <string name="status_ready_text">%1$s · кнопка Ciao включена</string>
+    <string name="status_ready_text">Кнопка Ciao включена · нажмите, чтобы пройти настройку снова</string>
     <string name="status_problem">Нужно ваше внимание</string>
     <string name="status_bad_key">%1$s не принял ключ</string>
     <string name="status_stopped">Телефон остановил Ciao</string>
@@ -298,7 +297,7 @@
     <string name="key_hint_gemini">Ключ Gemini</string>
     <string name="key_hint_openai">Ключ OpenAI (sk-…)</string>
     <string name="settings_title">Настройки</string>
-    <string name="setup_bg_more">Ещё надёжнее</string>
     <string name="paste_last_short">Плитка в быстрых настройках: вставляет последнюю диктовку.</string>
     <string name="paste_last_add">Добавить</string>
+    <string name="key_status_works_short">Ключ работает</string>
 </resources>

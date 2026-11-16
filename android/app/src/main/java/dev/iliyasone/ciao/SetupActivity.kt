@@ -192,9 +192,6 @@ class SetupActivity : Activity() {
         key.onRegion = { proxyBlock.visibility = View.VISIBLE }
         keyStep.add(kit.hint(getString(R.string.setup_key_text)), top = 0)
         keyStep.add(key.provider, top = 12)
-        // Pasting is this step's main action.
-        key.paste.setBackgroundResource(R.drawable.button_primary)
-        key.paste.setTextColor(kit.color(R.color.on_accent))
         keyStep.add(key.fieldRow, top = 10)
         keyStep.add(key.status, top = 8)
         keyStep.add(key.where, top = 4)
@@ -267,22 +264,20 @@ class SetupActivity : Activity() {
                 kit.button(getString(R.string.setup_bg_open), primary = true).apply { setOnClickListener { Background.openLaunchManager(this@SetupActivity) } },
                 bgConfirm,
             ), top = 14)
-            val manual = kit.hint(getString(backgroundManual())).apply { visibility = View.GONE }
-            step.add(fold(getString(R.string.setup_trouble)) { manual.visibility = if (manual.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
-            step.add(manual, top = 0)
-            // Optional extras, folded: battery saving off, and the card pinned in the recent apps.
+            // Folded: the way by hand, battery saving off, and the card pinned in the recent apps.
             batteryLine = kit.hint()
             batteryButton = link(getString(R.string.setup_bg_battery_allow)) { Background.askUnrestricted(this@SetupActivity) }
-            val more = LinearLayout(this).apply {
+            val help = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 visibility = View.GONE
-                addView(batteryLine)
+                addView(kit.hint(getString(backgroundManual())))
+                addView(batteryLine, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(10) })
                 addView(batteryButton)
                 addView(kit.hint(getString(if (Background.maker == Background.Maker.XIAOMI) R.string.hint_recents_xiaomi else R.string.hint_recents_huawei)),
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(4) })
             }
-            step.add(fold(getString(R.string.setup_bg_more)) { more.visibility = if (more.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 0)
-            step.add(more, top = 0)
+            step.add(fold(getString(R.string.setup_trouble)) { help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
+            step.add(help, top = 0)
             backgroundStep = step
         }
 
@@ -296,7 +291,7 @@ class SetupActivity : Activity() {
         }
         tryStep.add(testField, top = 12)
         for (s in listOf(R.string.diag_enabled, R.string.diag_running, R.string.diag_field, R.string.diag_keyboard, R.string.diag_bubble)) {
-            val icon = kit.icon(R.drawable.ic_dash, R.color.ghost, 16)
+            val icon = kit.icon(R.drawable.ic_circle, R.color.ghost, 16)
             val text = kit.text(14f, value = getString(s))
             tryStep.add(LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
@@ -305,14 +300,14 @@ class SetupActivity : Activity() {
             }, top = if (diagLines.isEmpty()) 14 else 6)
             diagLines += icon to text
         }
-        diagResult = kit.text(14f, medium = true).apply { id = R.id.diagResult }
+        diagResult = kit.text(14f).apply { id = R.id.diagResult }
         tryStep.add(diagResult, top = 12)
         doneButton = kit.button(getString(R.string.setup_done), primary = true).apply {
             visibility = View.GONE
             setOnClickListener { finishSetup() }
         }
         tryStep.add(kit.stack(doneButton), top = 14)
-        tryStep.add(link(getString(R.string.setup_copy_report)) {
+        tryStep.add(link(getString(R.string.setup_copy_report), R.color.muted) {
             getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Ciao", report()))
             Toast.makeText(this@SetupActivity, R.string.diag_copied, Toast.LENGTH_SHORT).show()
         }, top = 4)
@@ -405,7 +400,11 @@ class SetupActivity : Activity() {
                 KeyEditor.State.REJECTED, KeyEditor.State.REGION -> Mark.PROBLEM
                 else -> Mark.UPCOMING
             }
-            status = if (key.state == KeyEditor.State.OFFLINE) getString(R.string.key_status_saved) else key.status.text
+            status = when (key.state) {
+                KeyEditor.State.OFFLINE -> getString(R.string.key_status_saved)
+                KeyEditor.State.WORKS -> getString(R.string.key_status_works, prefs.provider.displayName)
+                else -> key.status.text
+            }
             statusColor = when {
                 key.state == KeyEditor.State.OFFLINE -> R.color.warn
                 mark == Mark.DONE -> R.color.ok
@@ -496,7 +495,7 @@ class SetupActivity : Activity() {
         )
         for ((i, s) in states.withIndex()) {
             val (icon, _) = diagLines[i]
-            icon.setImageResource(when (s) { true -> R.drawable.ic_check; false -> R.drawable.ic_cross; null -> R.drawable.ic_dash })
+            icon.setImageResource(when (s) { true -> R.drawable.ic_check; false -> R.drawable.ic_cross; null -> R.drawable.ic_circle })
             icon.imageTintList = ColorStateList.valueOf(kit.color(when (s) { true -> R.color.ok; false -> R.color.error; null -> R.color.ghost }))
         }
         val (text, color) = when {
@@ -578,9 +577,9 @@ class SetupActivity : Activity() {
     }
 
     /** A link that opens a block under it. */
-    private fun fold(text: String, onClick: () -> Unit) = link("$text ▾", onClick)
+    private fun fold(text: String, onClick: () -> Unit) = link("$text ▾", onClick = onClick)
 
-    private fun link(text: String, onClick: () -> Unit) = kit.text(14f, R.color.accent_strong, medium = true, value = text).apply {
+    private fun link(text: String, colorId: Int = R.color.accent_strong, onClick: () -> Unit) = kit.text(14f, colorId, medium = true, value = text).apply {
         setPadding(0, kit.dp(8), 0, kit.dp(8))
         setOnClickListener { onClick() }
     }

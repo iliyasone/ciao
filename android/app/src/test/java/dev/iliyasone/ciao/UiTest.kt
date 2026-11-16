@@ -57,7 +57,7 @@ class UiTest {
         assertEquals("Left: Service and key, Microphone, Ciao button", main.findViewById<TextView>(R.id.statusText).text.toString())
 
         val setup = Robolectric.buildActivity(SetupActivity::class.java).setup().get()
-        assertEquals("Paste a key and Ciao checks it right away", setup.findViewById<TextView>(R.id.keyStatus).text.toString())
+        assertEquals(View.GONE, setup.findViewById<TextView>(R.id.keyStatus).visibility)
         setup.findViewById<TextView>(R.id.setupSkip).performClick()
         assertEquals(true, Prefs(app).setupDone)
         // Opened on its own (as the first screen): it leads on to the settings.

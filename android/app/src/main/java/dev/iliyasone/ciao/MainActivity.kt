@@ -82,7 +82,7 @@ class MainActivity : Activity() {
             addView(ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply {
                 id = R.id.updateProgress
                 max = 100
-                progressTintList = ColorStateList.valueOf(kit.color(R.color.accent))
+                progressTintList = ColorStateList.valueOf(kit.color(R.color.accent_strong))
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(8) })
             addView(kit.buttons(
                 kit.button("", primary = true, id = R.id.updateButton),
@@ -96,6 +96,8 @@ class MainActivity : Activity() {
         kit.section(page, getString(R.string.section_recognition), kit.card()).apply {
             kit.add(this, kit.row(getString(R.string.row_service), getString(R.string.row_service_text), below = listOf(key.provider)))
             kit.add(this, kit.row(key.title(), null, titleId = R.id.keyTitle, below = listOf(key.text, key.fieldRow, key.status, key.where)))
+            // The description sits as close under the title as in the other rows.
+            (key.text.layoutParams as LinearLayout.LayoutParams).topMargin = kit.dp(3)
             kit.add(this, kit.row(getString(R.string.proxy_title), getString(R.string.proxy_text), below = listOf(proxy.status, proxy.field, proxy.buttons)))
             kit.add(this, kit.row(getString(R.string.languages_title), getString(R.string.languages_text), below = listOf(
                 kit.field(R.id.languages, "ru, en"),
@@ -122,11 +124,8 @@ class MainActivity : Activity() {
 
         // Sync
         kit.section(page, getString(R.string.section_sync), kit.card()).apply {
-            kit.add(this, kit.row(getString(R.string.sync_title), getString(R.string.sync_text), kit.button(getString(R.string.sync_sign_in), primary = false, id = R.id.syncButton).apply {
-                minHeight = kit.dp(36)
-                minimumHeight = kit.dp(36)
-                setPadding(kit.dp(12), 0, kit.dp(12), 0)
-            }, hintId = R.id.syncStatus))
+            kit.add(this, kit.row(getString(R.string.sync_title), getString(R.string.sync_text), hintId = R.id.syncStatus,
+                below = listOf(kit.button(getString(R.string.sync_sign_in), primary = false, id = R.id.syncButton))))
             kit.add(this, kit.switchRow(R.id.syncKeys, getString(R.string.sync_keys), getString(R.string.sync_keys_hint)).apply { id = R.id.syncKeysRow })
         }
 

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Neutrals after T3 Code's settings; the accent is the desktop's (src/renderer/styles.css). -->
 <resources>
+    <!-- The brand pink; in light mode buttons, links and switches use accent_strong, readable on white. -->
     <color name="accent">#F4677F</color>
     <color name="on_accent">#FFFFFF</color>
     <!-- Buttons and links: the brand pink is too light for white or small text on white. -->
