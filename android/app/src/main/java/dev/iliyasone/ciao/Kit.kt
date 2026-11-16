@@ -138,7 +138,8 @@ class Kit(val context: Context) {
         var current = value
         fun show() { text = options.firstOrNull { it.first == current }?.second ?: options.first().second }
         show()
-        tag = options
+        // For [setSelect]: a value changed elsewhere (another screen) shows without calling onPick.
+        tag = { v: String -> current = v; show() }
         setOnClickListener {
             val menu = PopupMenu(context, this)
             options.forEachIndexed { i, (_, label) -> menu.menu.add(0, i, i, label) }
@@ -154,6 +155,10 @@ class Kit(val context: Context) {
             menu.show()
         }
     }
+
+    /** Shows [value] in a select made by [select], as picked elsewhere. */
+    @Suppress("UNCHECKED_CAST")
+    fun setSelect(select: TextView, value: String) = (select.tag as (String) -> Unit)(value)
 
     fun field(id: Int, hint: CharSequence, lines: Int = 1, mono: Boolean = false) = EditText(context).apply {
         this.id = id

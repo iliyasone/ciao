@@ -97,6 +97,11 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         addView(paste, LinearLayout.LayoutParams(-2, kit.dp(44)).apply { marginStart = kit.dp(8) })
     }
 
+    private companion object {
+        /** The last check started on any screen; only its answer counts. Main thread only. */
+        var latestCheck = 0
+    }
+
     private val autoCheck = Runnable { if (field.text.length >= 20) startCheck() }
 
     init {
@@ -131,6 +136,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
 
     /** A key arrived through sync, or the screen came back: show it and check it if it isn't yet. */
     fun refresh() {
+        kit.setSelect(provider, prefs.provider.id)
         if (field.text.toString().filter { it in '!'..'~' } != prefs.currentKey) field.setText(prefs.currentKey)
         showProvider()
         if (state == State.UNCHECKED) startCheck()
@@ -149,11 +155,13 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         if (key.isEmpty()) return showState(State.EMPTY)
         showState(State.CHECKING)
         val app = activity.applicationContext
+        val check = ++latestCheck
         Thread {
             val result = KeyCheck.check(app, provider, key)
-            prefs.setKeyVerified(provider, key, result is KeyCheck.Result.Works)
             main.post {
-                // Answered for a key or service no longer in the field: the newer check will answer.
+                // A newer check (another key, service or proxy) answers instead: this one is stale.
+                if (check != latestCheck) return@post
+                prefs.setKeyVerified(provider, key, result is KeyCheck.Result.Works)
                 if (activity.isDestroyed || prefs.provider != provider || prefs.currentKey != key) return@post
                 reason = when (result) {
                     is KeyCheck.Result.Works -> ""

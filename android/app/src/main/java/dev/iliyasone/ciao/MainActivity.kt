@@ -236,9 +236,11 @@ class MainActivity : Activity() {
         val missing = Setup.missing(this)
         val stopped = Setup.serviceEnabled(this) && CiaoService.instance == null
         val bad = key.state == KeyEditor.State.REJECTED
+        val region = key.state == KeyEditor.State.REGION
         val (title, text, color) = when {
-            missing.isEmpty() && !bad -> Triple(getString(R.string.status_ready), getString(R.string.status_ready_text, prefs.provider.displayName), R.color.ok)
+            missing.isEmpty() && !bad && !region -> Triple(getString(R.string.status_ready), getString(R.string.status_ready_text), R.color.ok)
             bad -> Triple(getString(R.string.status_problem), getString(R.string.status_bad_key, prefs.provider.displayName), R.color.error)
+            region -> Triple(getString(R.string.status_problem), getString(R.string.key_status_region, prefs.provider.displayName), R.color.warn)
             stopped && missing.size == 1 -> Triple(getString(R.string.status_stopped), getString(R.string.status_stopped_text), R.color.error)
             else -> Triple(getString(if (prefs.setupDone) R.string.status_problem else R.string.status_unfinished), getString(R.string.status_left, missing.joinToString(", ")), R.color.warn)
         }

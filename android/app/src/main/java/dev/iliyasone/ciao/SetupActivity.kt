@@ -488,7 +488,9 @@ class SetupActivity : Activity() {
         val fieldSeen = focused && Diag.fieldAt >= focusedAt - 1000
         val keyboardSeen = keyboard && Diag.keyboardAt >= keyboardAt - 1000
         val bubble = Diag.bubbleShown
-        val worked = Diag.outcomeAt > resumedAt && (Diag.outcome == "pasted" || Diag.outcome == "clipboard")
+        // Into the field, not onto the clipboard: a clipboard-only delivery is the failure this step is for.
+        val worked = Diag.outcomeAt > resumedAt && Diag.outcome == "pasted"
+        val clipboard = Diag.outcomeAt > resumedAt && Diag.outcome == "clipboard"
         // null: not known yet.
         val states = listOf<Boolean?>(
             enabled,
@@ -508,6 +510,7 @@ class SetupActivity : Activity() {
             stopped -> getString(R.string.diag_result_stopped) to R.color.warn
             !running -> getString(R.string.setup_checking) to R.color.muted
             worked -> getString(R.string.diag_result_works) to R.color.ok
+            clipboard -> getString(if (prefs.autoPaste) R.string.diag_result_clipboard else R.string.diag_result_clipboard_setting) to R.color.warn
             prefs.currentKey.isEmpty() -> getString(R.string.need_key, prefs.provider.displayName) to R.color.warn
             !micGranted() -> getString(R.string.need_mic) to R.color.warn
             !focused -> getString(R.string.diag_result_tap_field) to R.color.muted

@@ -307,4 +307,6 @@
     <string name="key_status_empty">Ciao checks the key as soon as it is pasted</string>
     <string name="setup_a11y_back">Then come back here: the step marks itself done.</string>
     <string name="setup_copy_report_text">The button didn’t appear? Copy the report and send it.</string>
+    <string name="diag_result_clipboard">The text went onto the clipboard, not into the field: the phone didn’t let Ciao type here. Copy the report.</string>
+    <string name="diag_result_clipboard_setting">The text went onto the clipboard: “Insert the text right away” is off in the settings.</string>
 </resources>
