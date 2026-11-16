@@ -28,8 +28,8 @@
     <string name="try_hint">Нажмите сюда и диктуйте…</string>
 
     <string name="section_recognition">Распознавание</string>
-    <string name="sync_title">Синхронизация с Google</string>
-    <string name="sync_text">Термины, контекст и ключ на всех устройствах — в скрытой папке Ciao на Google Диске.</string>
+    <string name="sync_title">Google</string>
+    <string name="sync_text">Термины, ключ и прокси на всех устройствах — в скрытой папке Ciao на Google Диске.</string>
     <string name="sync_sign_in">Войти через Google</string>
     <string name="sync_keys">Синхронизировать API-ключи</string>
     <string name="sync_keys_hint">Так удобнее: на новом устройстве достаточно войти, ключ вставлять не нужно. Ключи лежат в скрытой папке Ciao на вашем Google Диске, так что их прочитает любой, кто сможет войти в ваш аккаунт Google. Прокси синхронизируется вместе с ними. Выключите, и каждый ключ и прокси останутся только на своём устройстве: Ciao уберёт их с Диска.</string>
@@ -157,8 +157,8 @@
     <string name="theme_light">Светлая</string>
     <string name="theme_dark">Тёмная</string>
     <string name="section_developer">Устаревшее</string>
-    <string name="show_delay">Выбор уровня задержки</string>
-    <string name="show_delay_hint">Показывает под этим переключателем уровень задержки распознавания OpenAI: меньше — слова раньше, больше — точнее. На цену не влияет.</string>
+    <string name="show_delay">Уровень задержки OpenAI</string>
+    <string name="show_delay_hint">Меньше — слова появляются раньше, больше — точнее. На цену не влияет.</string>
     <string name="usage_title">Расходы</string>
     <string name="usage_open">Аналитика</string>
     <string name="usage_window_day">24 часа</string>
@@ -198,7 +198,7 @@
     <string name="key_status_unchecked">Сохранён, ещё не проверен</string>
     <string name="key_status_saved">Сохранён, не проверен</string>
     <string name="key_status_checking">Проверяю ключ…</string>
-    <string name="key_status_works">Ключ работает · %1$s</string>
+    <string name="key_status_works">Работает · %1$s</string>
     <string name="key_status_rejected">%1$s не принял ключ: %2$s</string>
     <string name="key_status_region">Ключ сохранён, но %1$s не работает в вашей стране. Укажите прокси ниже.</string>
     <string name="key_status_offline">Ключ сохранён. Проверить не удалось: %1$s не ответил (%2$s).</string>
@@ -207,10 +207,10 @@
     <string name="setup_mic_done_no_notifications">Разрешён · без уведомлений</string>
     <string name="setup_notifications_allow">Разрешить уведомления</string>
     <string name="setup_a11y_title">Кнопка Ciao</string>
-    <string name="setup_a11y_text">Включите «Диктовка Ciao» — это и есть кнопка Ciao. Так Ciao видит, что открыта клавиатура, и вставляет текст в поле; читает он только поле, в котором вы пишете.</string>
+    <string name="setup_a11y_text">Включите службу «Диктовка Ciao» — она показывает кнопку над клавиатурой и вставляет текст. Ciao читает только поле, в котором вы пишете.</string>
     <string name="setup_a11y_open">Открыть настройки</string>
     <string name="setup_a11y_off">Выключена</string>
-    <string name="setup_a11y_done">Включена и работает</string>
+    <string name="setup_a11y_done">Работает</string>
     <string name="setup_a11y_search">Не нашли? Наберите в поиске настроек «Специальные возможности».</string>
     <string name="setup_a11y_stopped">Включена, но не работает</string>
     <string name="setup_a11y_stopped_text">Телефон остановил Ciao, а переключатель оставил включённым. Выключите «Диктовка Ciao» и включите снова.</string>
@@ -269,7 +269,7 @@
     <string name="setup_copy_report">Скопировать отчёт</string>
     <string name="diag_copied">Отчёт скопирован</string>
     <string name="status_ready">Всё готово</string>
-    <string name="status_ready_text">Кнопка Ciao включена · нажмите, чтобы пройти настройку снова</string>
+    <string name="status_ready_text">Кнопка Ciao включена · пройти настройку снова</string>
     <string name="status_problem">Нужно ваше внимание</string>
     <string name="status_bad_key">%1$s не принял ключ</string>
     <string name="status_stopped">Телефон остановил Ciao</string>
@@ -297,7 +297,10 @@
     <string name="key_hint_gemini">Ключ Gemini</string>
     <string name="key_hint_openai">Ключ OpenAI (sk-…)</string>
     <string name="settings_title">Настройки</string>
-    <string name="paste_last_short">Плитка в быстрых настройках: вставляет последнюю диктовку.</string>
+    <string name="paste_last_short">Плитка быстрых настроек: вставляет последнюю диктовку.</string>
     <string name="paste_last_add">Добавить</string>
     <string name="key_status_works_short">Ключ работает</string>
+    <string name="key_status_empty">Ciao проверит ключ сразу после вставки</string>
+    <string name="setup_a11y_back">Потом вернитесь сюда — шаг отметится сам.</string>
+    <string name="setup_copy_report_text">Кнопка не появилась? Скопируйте отчёт и пришлите его.</string>
 </resources>

@@ -180,7 +180,7 @@ class MainActivity : Activity() {
         // Legacy
         kit.section(page, getString(R.string.section_developer), kit.card()).apply {
             kit.add(this, kit.switchRow(R.id.formatText, getString(R.string.format_text), getString(R.string.format_text_hint)))
-            kit.add(this, kit.switchRow(R.id.showDelay, getString(R.string.show_delay), getString(R.string.show_delay_hint)))
+            kit.add(this, kit.switchRow(R.id.showDelay, getString(R.string.show_delay), getString(R.string.show_delay_hint)).apply { id = R.id.showDelayRow })
             kit.add(this, kit.row(getString(R.string.delay_title), null, kit.select(R.id.delay, Prefs.DELAYS.map { it to it }, prefs.delay) { prefs.delay = it })
                 .apply { id = R.id.delayRow })
         }
@@ -225,6 +225,7 @@ class MainActivity : Activity() {
         // OpenAI only, as on the desktop: Gemini detects the language itself, takes no context and has no delay level.
         findViewById<View>(R.id.contextRow).visibility = if (gemini) View.GONE else View.VISIBLE
         findViewById<View>(R.id.languagesRow).visibility = if (gemini) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.showDelayRow).visibility = if (gemini) View.GONE else View.VISIBLE
         findViewById<View>(R.id.delayRow).visibility = if (!gemini && prefs.showDelay) View.VISIBLE else View.GONE
     }
 

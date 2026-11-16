@@ -231,6 +231,7 @@ class SetupActivity : Activity() {
         a11yPath().forEachIndexed { i, line -> a11yStep.add(pathLine(i + 1, line), top = if (i == 0) 12 else 6) }
         a11yButton = kit.button(getString(R.string.setup_a11y_open), primary = true).apply { setOnClickListener { openAccessibility() } }
         a11yStep.add(kit.stack(a11yButton), top = 14)
+        a11yStep.add(kit.hint(getString(R.string.setup_a11y_back)), top = 8)
         // The ways round, folded: by hand, the settings search, and the greyed-out switch of Android 13+.
         val help = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -307,10 +308,13 @@ class SetupActivity : Activity() {
             setOnClickListener { finishSetup() }
         }
         tryStep.add(kit.stack(doneButton), top = 14)
-        tryStep.add(link(getString(R.string.setup_copy_report), R.color.muted) {
-            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Ciao", report()))
-            Toast.makeText(this@SetupActivity, R.string.diag_copied, Toast.LENGTH_SHORT).show()
-        }, top = 4)
+        tryStep.add(kit.hint(getString(R.string.setup_copy_report_text)), top = 14)
+        tryStep.add(kit.stack(kit.button(getString(R.string.setup_copy_report), primary = false).apply {
+            setOnClickListener {
+                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Ciao", report()))
+                Toast.makeText(this@SetupActivity, R.string.diag_copied, Toast.LENGTH_SHORT).show()
+            }
+        }), top = 8)
 
         steps += listOfNotNull(keyStep, micStep, a11yStep, backgroundStep, tryStep)
         for (s in steps) kit.add(card, s.view)
@@ -494,7 +498,8 @@ class SetupActivity : Activity() {
             if (!running || !focused) null else if (bubble) true else if (Diag.bubbleError != null || (fieldSeen && now - focusedAt > 2500)) false else null,
         )
         for ((i, s) in states.withIndex()) {
-            val (icon, _) = diagLines[i]
+            val (icon, label) = diagLines[i]
+            label.setTextColor(kit.color(if (s == null) R.color.muted else R.color.fg))
             icon.setImageResource(when (s) { true -> R.drawable.ic_check; false -> R.drawable.ic_cross; null -> R.drawable.ic_circle })
             icon.imageTintList = ColorStateList.valueOf(kit.color(when (s) { true -> R.color.ok; false -> R.color.error; null -> R.color.ghost }))
         }

@@ -176,7 +176,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         state = s
         val name = prefs.provider.displayName
         status.text = when (s) {
-            State.EMPTY -> ""
+            State.EMPTY -> activity.getString(R.string.key_status_empty)
             State.UNCHECKED -> activity.getString(R.string.key_status_unchecked)
             State.CHECKING -> activity.getString(R.string.key_status_checking)
             State.WORKS -> activity.getString(R.string.key_status_works_short)
@@ -185,8 +185,6 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             State.OFFLINE -> activity.getString(R.string.key_status_offline, name, reason)
         }
         where.visibility = if (s == State.WORKS) View.GONE else View.VISIBLE
-        // Nothing to say before there is a key: the line comes with the check.
-        status.visibility = if (s == State.EMPTY) View.GONE else View.VISIBLE
         status.setTextColor(kit.color(when (s) {
             State.WORKS -> R.color.ok
             State.REJECTED -> R.color.error

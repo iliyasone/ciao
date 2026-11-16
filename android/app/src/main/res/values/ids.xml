@@ -32,6 +32,7 @@
     <item name="setupSkip" type="id" />
     <item name="showCost" type="id" />
     <item name="showDelay" type="id" />
+    <item name="showDelayRow" type="id" />
     <item name="statusCard" type="id" />
     <item name="statusDot" type="id" />
     <item name="statusText" type="id" />

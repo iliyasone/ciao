@@ -633,7 +633,7 @@ yours.
   its price per hour; the key field below is for that service's key, and the
   proxy field below that works as on the desktop ([Features](#features)). A key
   is checked as soon as it is pasted (or after *Done*, or a pause in typing): the
-  line under it says *Key works · Gemini*, that the service refused it, that the
+  line under it says *Key works*, that the service refused it, that the
   service isn't available in your country (the proxy then opens on the setup
   screen), or that it is saved but couldn't be checked. *Paste* puts the
   clipboard in and checks it, and the keyboard goes away.
@@ -670,8 +670,8 @@ yours.
    - **Running in the background**, on Huawei, Honor and Xiaomi only: these
      phones close apps on their own and the Ciao icon disappears. *Open settings*
      opens the maker's app launch screen (Huawei: Settings → Battery → App
-     launch), whose state Ciao can't read, so you tap *Done, it's on*. *More
-     reliable still* offers to turn off battery saving for Ciao.
+     launch), whose state Ciao can't read, so you tap *Done*. *Having trouble?*
+     holds the way by hand and offers to turn off battery saving for Ciao.
    - **Try it**: a field to dictate into, and a live check of what the service
      sees: whether it is on and running, sees the field and the keyboard, and
      shows the icon, with a sentence on what to do when a link is missing.

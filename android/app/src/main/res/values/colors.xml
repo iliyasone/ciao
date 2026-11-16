@@ -4,7 +4,7 @@
     <!-- The brand pink; in light mode buttons, links and switches use accent_strong, readable on white. -->
     <color name="accent">#F4677F</color>
     <color name="on_accent">#FFFFFF</color>
-    <!-- Buttons and links: the brand pink is too light for white or small text on white. -->
+    <!-- Buttons, links and switches in both themes: the brand pink is too light for white text. -->
     <color name="accent_strong">#D9435E</color>
     <color name="app">#FCFCFC</color>
     <color name="fg">#18181B</color>

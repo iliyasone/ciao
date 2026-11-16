@@ -34,8 +34,8 @@
     <string name="try_hint">Tap here and dictate…</string>
 
     <string name="section_recognition">Recognition</string>
-    <string name="sync_title">Sync with Google</string>
-    <string name="sync_text">Terms, context and key on all your devices, in a hidden Ciao folder on Google Drive.</string>
+    <string name="sync_title">Google</string>
+    <string name="sync_text">Terms, key and proxy on all your devices, in a hidden Ciao folder on Google Drive.</string>
     <string name="sync_sign_in">Sign in with Google</string>
     <string name="sync_keys">Sync API keys</string>
     <string name="sync_keys_hint">Easier: on a new device you just sign in, no key to paste. The keys sit in the hidden Ciao folder in your Google Drive, so anyone who can sign in to your Google account can read them. The proxy syncs along with them. Turn this off to keep each key and the proxy on its own device only: Ciao removes them from Drive.</string>
@@ -163,8 +163,8 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="section_developer">Legacy</string>
-    <string name="show_delay">Delay level picker</string>
-    <string name="show_delay_hint">Shows the OpenAI recognizer’s delay level under this switch: lower shows words sooner, higher is more accurate. The price is the same.</string>
+    <string name="show_delay">OpenAI delay level</string>
+    <string name="show_delay_hint">Lower shows words sooner, higher is more accurate. The price is the same.</string>
     <string name="usage_title">Usage</string>
     <string name="usage_open">Usage</string>
     <string name="usage_window_day">24 hours</string>
@@ -204,7 +204,7 @@
     <string name="key_status_unchecked">Saved, not checked yet</string>
     <string name="key_status_saved">Saved, not checked</string>
     <string name="key_status_checking">Checking the key…</string>
-    <string name="key_status_works">Key works · %1$s</string>
+    <string name="key_status_works">Works · %1$s</string>
     <string name="key_status_rejected">%1$s rejected the key: %2$s</string>
     <string name="key_status_region">Key saved, but %1$s is not available in your country. Set a proxy below.</string>
     <string name="key_status_offline">Key saved. Could not check it: no answer from %1$s (%2$s).</string>
@@ -213,10 +213,10 @@
     <string name="setup_mic_done_no_notifications">Allowed · no notifications</string>
     <string name="setup_notifications_allow">Allow notifications</string>
     <string name="setup_a11y_title">Ciao button</string>
-    <string name="setup_a11y_text">Turn on “Ciao dictation”: that is the Ciao button. With it Ciao sees an open keyboard and puts the text into the field; it reads only the field you type in.</string>
+    <string name="setup_a11y_text">Turn on the “Ciao dictation” service: it shows the button above the keyboard and puts the text in. Ciao reads only the field you type in.</string>
     <string name="setup_a11y_open">Open settings</string>
     <string name="setup_a11y_off">Off</string>
-    <string name="setup_a11y_done">On and running</string>
+    <string name="setup_a11y_done">Running</string>
     <string name="setup_a11y_search">Can’t find it? Search the settings for “Accessibility”.</string>
     <string name="setup_a11y_stopped">On, but not running</string>
     <string name="setup_a11y_stopped_text">The phone stopped Ciao and left the switch on. Turn “Ciao dictation” off and on again.</string>
@@ -275,7 +275,7 @@
     <string name="setup_copy_report">Copy report</string>
     <string name="diag_copied">Report copied</string>
     <string name="status_ready">All set</string>
-    <string name="status_ready_text">The Ciao button is on · tap to run the setup again</string>
+    <string name="status_ready_text">The Ciao button is on · run setup again</string>
     <string name="status_problem">Needs your attention</string>
     <string name="status_bad_key">%1$s rejected the key</string>
     <string name="status_stopped">The phone stopped Ciao</string>
@@ -301,7 +301,10 @@
     <string name="setup_trouble">Having trouble?</string>
     <string name="setup_finish_anyway">Finish without testing</string>
     <string name="settings_title">Settings</string>
-    <string name="paste_last_short">A quick-settings tile that pastes your last dictation.</string>
+    <string name="paste_last_short">A quick-settings tile that pastes the last dictation.</string>
     <string name="paste_last_add">Add</string>
     <string name="key_status_works_short">Key works</string>
+    <string name="key_status_empty">Ciao checks the key as soon as it is pasted</string>
+    <string name="setup_a11y_back">Then come back here: the step marks itself done.</string>
+    <string name="setup_copy_report_text">The button didn’t appear? Copy the report and send it.</string>
 </resources>
