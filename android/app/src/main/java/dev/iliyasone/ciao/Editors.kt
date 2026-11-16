@@ -97,10 +97,8 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         addView(paste, LinearLayout.LayoutParams(-2, kit.dp(44)).apply { marginStart = kit.dp(8) })
     }
 
-    private companion object {
-        /** The last check started on any screen; only its answer counts. Main thread only. */
-        var latestCheck = 0
-    }
+    /** The last check this editor started; only its answer counts (main thread only). */
+    private var latestCheck = 0
 
     private val autoCheck = Runnable { if (field.text.length >= 20) startCheck() }
 
@@ -162,7 +160,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         Thread {
             val result = KeyCheck.check(app, provider, key)
             main.post {
-                // A newer check (another key, service or proxy) answers instead: this one is stale.
+                // A newer check here answers instead, and one through another proxy says nothing now.
                 if (check != latestCheck) return@post
                 if (prefs.proxy != proxy) return@post
                 prefs.setKeyVerified(provider, key, proxy, result is KeyCheck.Result.Works)

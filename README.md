@@ -655,8 +655,8 @@ yours.
      you tap the field. *Need a proxy?* opens the proxy field. With Google Play services
      on the phone, *Sign in with Google* brings the key from your other devices.
    - **Microphone**, then notifications (optional: they give *Done* and *Cancel*
-     while the screen is off). Refused twice, Android stops asking; the button
-     then opens the app's settings.
+     while the screen is off). Refused twice, Android stops asking; the buttons
+     then open the app's settings.
    - **Ciao button**: turn on **Ciao dictation** in the accessibility settings.
      Ciao uses the accessibility service to see when a keyboard is open and to
      type into the field; it reads only the focused field and sends nothing but

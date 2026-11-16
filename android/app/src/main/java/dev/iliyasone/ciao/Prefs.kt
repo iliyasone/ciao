@@ -68,6 +68,10 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("micAsked", false)
         set(v) = sp.edit().putBoolean("micAsked", v).apply()
 
+    var notificationsAsked: Boolean
+        get() = sp.getBoolean("notificationsAsked", false)
+        set(v) = sp.edit().putBoolean("notificationsAsked", v).apply()
+
     /** The setup screen was finished or skipped: it no longer opens by itself. */
     var setupDone: Boolean
         get() = sp.getBoolean("setupDone", false)

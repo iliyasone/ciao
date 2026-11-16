@@ -224,7 +224,7 @@ class SetupActivity : Activity() {
         micButton = kit.button(getString(R.string.mic_allow), primary = true).apply { setOnClickListener { askMic() } }
         micStep.add(kit.stack(micButton), top = 12)
         notifyButton = kit.button(getString(R.string.setup_notifications_allow), primary = false).apply {
-            setOnClickListener { requestPermissions(notificationPermission(), 2) }
+            setOnClickListener { askNotifications() }
         }
         micStep.add(kit.stack(notifyButton), top = 8)
 
@@ -356,7 +356,7 @@ class SetupActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         // Right after the microphone: the notification with Done and Cancel while the screen is off.
-        if (requestCode == 1 && micGranted() && !notificationsGranted()) requestPermissions(notificationPermission(), 2)
+        if (requestCode == 1 && micGranted() && !notificationsGranted()) askNotifications()
         refresh()
     }
 
@@ -365,6 +365,13 @@ class SetupActivity : Activity() {
         if (prefs.micAsked && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) return Background.appInfo(this)
         prefs.micAsked = true
         requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+    }
+
+    private fun askNotifications() {
+        // As with the microphone: refused twice, only the app's settings can allow them.
+        if (prefs.notificationsAsked && notificationPermission().none { shouldShowRequestPermissionRationale(it) }) return Background.appInfo(this)
+        prefs.notificationsAsked = true
+        requestPermissions(notificationPermission(), 2)
     }
 
     private fun openAccessibility() {
