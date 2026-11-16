@@ -303,7 +303,7 @@
     <string name="settings_title">Settings</string>
     <string name="paste_last_short">A quick-settings tile that pastes the last dictation.</string>
     <string name="paste_last_add">Add</string>
-    <string name="key_status_works_short">Key works</string>
+    <string name="key_status_works_short">Key saved and verified</string>
     <string name="key_status_empty">Ciao checks the key as soon as it is pasted</string>
     <string name="setup_a11y_back">Then come back here: the step marks itself done.</string>
     <string name="setup_copy_report_text">The button didn’t appear? Copy the report and send it.</string>

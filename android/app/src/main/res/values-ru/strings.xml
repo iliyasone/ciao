@@ -299,7 +299,7 @@
     <string name="settings_title">Настройки</string>
     <string name="paste_last_short">Плитка быстрых настроек: вставляет последнюю диктовку.</string>
     <string name="paste_last_add">Добавить</string>
-    <string name="key_status_works_short">Ключ работает</string>
+    <string name="key_status_works_short">Ключ сохранён и проверен</string>
     <string name="key_status_empty">Ciao проверит ключ сразу после вставки</string>
     <string name="setup_a11y_back">Потом вернитесь сюда — шаг отметится сам.</string>
     <string name="setup_copy_report_text">Кнопка не появилась? Скопируйте отчёт и пришлите его.</string>

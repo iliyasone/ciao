@@ -633,7 +633,7 @@ yours.
   its price per hour; the key field below is for that service's key, and the
   proxy field below that works as on the desktop ([Features](#features)). A key
   is checked as soon as it is pasted (or after *Done*, or a pause in typing): the
-  line under it says *Key works*, that the service refused it, that the
+  line under it says *Key saved and verified*, that the service refused it, that the
   service isn't available in your country (the proxy then opens on the setup
   screen), or that it is saved but couldn't be checked. *Paste* puts the
   clipboard in and checks it, and the keyboard goes away.
