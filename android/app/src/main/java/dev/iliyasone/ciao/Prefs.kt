@@ -54,10 +54,14 @@ class Prefs(context: Context) {
 
     fun keyOf(p: Provider): String = if (p == Provider.GEMINI) geminiKey else apiKey
 
-    /** The key of [p] that last passed KeyCheck (a hash, not the key), so it shows as working at once next time. */
-    fun keyVerified(p: Provider): Boolean = keyOf(p).let { it.isNotEmpty() && sp.getString("keyVerified_${p.id}", null) == it.hashCode().toString() }
-    fun setKeyVerified(p: Provider, key: String, works: Boolean) =
-        sp.edit().putString("keyVerified_${p.id}", if (works) key.hashCode().toString() else null).apply()
+    /**
+     * The key of [p] that last passed KeyCheck, with the proxy it went through (a hash, not the
+     * key), so it shows as working at once next time; another proxy (from sync, say) checks again.
+     */
+    fun keyVerified(p: Provider): Boolean = keyOf(p).let { it.isNotEmpty() && sp.getString("keyVerified_${p.id}", null) == verifiedHash(it, proxy) }
+    fun setKeyVerified(p: Provider, key: String, proxy: String, works: Boolean) =
+        sp.edit().putString("keyVerified_${p.id}", if (works) verifiedHash(key, proxy) else null).apply()
+    private fun verifiedHash(key: String, proxy: String) = "$key|$proxy".hashCode().toString()
 
     /** The microphone was asked for once: refused again, Android stops asking and only the app's settings can allow it. */
     var micAsked: Boolean

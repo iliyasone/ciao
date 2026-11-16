@@ -150,8 +150,11 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
     }
 
     fun startCheck() {
+        // A screen gone (rotated, closed) mustn't start a check that would void the new screen's.
+        if (activity.isDestroyed) return
         val provider = prefs.provider
         val key = prefs.currentKey
+        val proxy = prefs.proxy
         if (key.isEmpty()) return showState(State.EMPTY)
         showState(State.CHECKING)
         val app = activity.applicationContext
@@ -161,7 +164,8 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             main.post {
                 // A newer check (another key, service or proxy) answers instead: this one is stale.
                 if (check != latestCheck) return@post
-                prefs.setKeyVerified(provider, key, result is KeyCheck.Result.Works)
+                if (prefs.proxy != proxy) return@post
+                prefs.setKeyVerified(provider, key, proxy, result is KeyCheck.Result.Works)
                 if (activity.isDestroyed || prefs.provider != provider || prefs.currentKey != key) return@post
                 reason = when (result) {
                     is KeyCheck.Result.Works -> ""
