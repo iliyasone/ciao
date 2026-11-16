@@ -49,16 +49,25 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         startCheck()
     }
 
-    val field: EditText = kit.field(R.id.apiKey, "", mono = true).apply {
+    val field: EditText = kit.field(R.id.apiKey, "").apply {
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        // That input type turns the font monospace; the hint reads better in the screen's own.
+        typeface = android.graphics.Typeface.DEFAULT
         imeOptions = EditorInfo.IME_ACTION_DONE
         setText(prefs.currentKey)
+        // Shown in full only while edited: a saved key reads AQ.Ab8R…-key, and doesn't run off the field.
+        transformationMethod = KeyMask
+        setOnFocusChangeListener { _, _ ->
+            // The same method again is ignored: clear it so the text is transformed anew.
+            transformationMethod = null
+            transformationMethod = KeyMask
+        }
         setOnEditorActionListener { _, action, _ ->
             if (action == EditorInfo.IME_ACTION_DONE) submit()
             action == EditorInfo.IME_ACTION_DONE
         }
     }
-    private val paste = kit.button(activity.getString(R.string.key_paste), primary = false, id = R.id.keyPaste).apply {
+    val paste = kit.button(activity.getString(R.string.key_paste), primary = false, id = R.id.keyPaste).apply {
         setOnClickListener {
             val clip = activity.getSystemService(ClipboardManager::class.java).primaryClip
             val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(activity)?.toString()?.trim().orEmpty()
@@ -71,7 +80,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         }
     }
     val status: TextView = kit.text(13f, R.color.muted).apply { id = R.id.keyStatus }
-    val where: TextView = kit.text(13f, R.color.accent, medium = true, value = activity.getString(R.string.key_where)).apply {
+    val where: TextView = kit.text(13f, R.color.accent_strong, medium = true, value = activity.getString(R.string.key_where) + " ↗").apply {
         id = R.id.keyWhere
         setPadding(0, kit.dp(4), 0, kit.dp(4))
         setOnClickListener {
@@ -81,12 +90,8 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
     }
     val text: TextView = kit.hint().apply { id = R.id.keyText }
 
-    /** The field with Paste on its right. */
-    val fieldRow = LinearLayout(activity).apply {
-        gravity = android.view.Gravity.CENTER_VERTICAL
-        addView(field, LinearLayout.LayoutParams(0, kit.dp(44), 1f))
-        addView(paste, LinearLayout.LayoutParams(-2, kit.dp(44)).apply { marginStart = kit.dp(8) })
-    }
+    /** The field, Paste under it. */
+    val fieldRow = kit.stack(field, paste)
 
     private val autoCheck = Runnable { if (field.text.length >= 20) startCheck() }
 
@@ -175,6 +180,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             State.REGION -> activity.getString(R.string.key_status_region, name)
             State.OFFLINE -> activity.getString(R.string.key_status_offline, name, reason)
         }
+        where.visibility = if (s == State.WORKS) View.GONE else View.VISIBLE
         status.setTextColor(kit.color(when (s) {
             State.WORKS -> R.color.ok
             State.REJECTED -> R.color.error
@@ -183,6 +189,14 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         }))
         onChange()
     }
+}
+
+/** Shows a key as its start and end (AQ.Ab8R…-key) while its field isn't being edited. */
+object KeyMask : android.text.method.TransformationMethod {
+    override fun getTransformation(source: CharSequence, view: View): CharSequence =
+        if (view.hasFocus() || source.length <= 14) source else "${source.subSequence(0, 8)}…${source.subSequence(source.length - 4, source.length)}"
+
+    override fun onFocusChanged(view: View, sourceText: CharSequence, focused: Boolean, direction: Int, previouslyFocusedRect: android.graphics.Rect?) {}
 }
 
 /**
@@ -259,6 +273,8 @@ class ProxyEditor(private val activity: Activity, private val kit: Kit, private 
         result?.takeIf { it.first == saved?.href }?.let { lines += it.second }
         if (typed.isNotBlank() && parsed == null) lines += activity.getString(R.string.proxy_invalid)
         status.text = lines.joinToString("\n")
+        // "No proxy" over an empty field says nothing the field doesn't.
+        status.visibility = if (saved == null && lines.size == 1) View.GONE else View.VISIBLE
         // Only once there is something new to save.
         save.isEnabled = parsed != null && parsed.href != prefs.proxy
         save.visibility = if (save.isEnabled) View.VISIBLE else View.GONE

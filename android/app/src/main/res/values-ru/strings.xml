@@ -29,7 +29,7 @@
 
     <string name="section_recognition">Распознавание</string>
     <string name="sync_title">Синхронизация с Google</string>
-    <string name="sync_text">Войдите, чтобы термины, контекст и API-ключ были одни на всех ваших устройствах. Они хранятся в скрытой папке Ciao на вашем Google Диске; другие файлы на Диске Ciao не видит.</string>
+    <string name="sync_text">Термины, контекст и ключ — на всех устройствах. Хранятся в скрытой папке Ciao на Google Диске; другие файлы Ciao не видит.</string>
     <string name="sync_sign_in">Войти через Google</string>
     <string name="sync_keys">Синхронизировать API-ключи</string>
     <string name="sync_keys_hint">Так удобнее: на новом устройстве достаточно войти, ключ вставлять не нужно. Ключи лежат в скрытой папке Ciao на вашем Google Диске, так что их прочитает любой, кто сможет войти в ваш аккаунт Google. Прокси синхронизируется вместе с ними. Выключите, и каждый ключ и прокси останутся только на своём устройстве: Ciao уберёт их с Диска.</string>
@@ -146,7 +146,7 @@
     <string name="restore_clipboard">Возвращать буфер обмена</string>
     <string name="restore_clipboard_hint">После вставки в буфере снова то, что было до диктовки.</string>
     <string name="telemetry">Анонимная статистика</string>
-    <string name="telemetry_hint">Анонимные счётчики: как проходят диктовки, версии Ciao и Android, модель телефона. Без текста, звука и названий приложений.</string>
+    <string name="telemetry_hint">Как проходят диктовки, версии Ciao и Android, модель телефона. Без текста, звука и названий приложений.</string>
     <string name="paste_last">Вставить последнее</string>
     <string name="paste_last_text">Добавьте плитку «Вставить последнее» в быстрые настройки (дважды потяните шторку вниз, затем карандаш): нажмёте — шторка закроется, а последняя диктовка вставится в поле, где вы печатали, или окажется в буфере.</string>
     <string name="section_appearance">Оформление</string>
@@ -157,7 +157,7 @@
     <string name="theme_light">Светлая</string>
     <string name="theme_dark">Тёмная</string>
     <string name="section_developer">Устаревшее</string>
-    <string name="show_delay">Показывать задержку</string>
+    <string name="show_delay">Выбирать уровень задержки</string>
     <string name="show_delay_hint">Уровень задержки распознавания OpenAI: меньше — слова появляются раньше, больше — точнее. На цену не влияет.</string>
     <string name="usage_title">Расходы</string>
     <string name="usage_open">Аналитика</string>
@@ -195,7 +195,7 @@
     <string name="key_paste">Вставить</string>
     <string name="key_where">Где взять ключ</string>
     <string name="key_clipboard_empty">В буфере обмена пусто</string>
-    <string name="key_status_empty">Ключа пока нет</string>
+    <string name="key_status_empty">Вставьте ключ — Ciao сразу его проверит</string>
     <string name="key_status_unchecked">Сохранён, ещё не проверен</string>
     <string name="key_status_saved">Сохранён, не проверен</string>
     <string name="key_status_checking">Проверяю ключ…</string>
@@ -208,7 +208,7 @@
     <string name="setup_mic_done_no_notifications">Разрешён · без уведомлений</string>
     <string name="setup_notifications_allow">Разрешить уведомления</string>
     <string name="setup_a11y_title">Кнопка Ciao</string>
-    <string name="setup_a11y_text">Включите «Диктовка Ciao» в специальных возможностях. Так Ciao видит, что открыта клавиатура, и вставляет текст в поле. Он читает только поле, в котором вы пишете.</string>
+    <string name="setup_a11y_text">Включите «Диктовка Ciao» — это и есть кнопка Ciao. Так Ciao видит, что открыта клавиатура, и вставляет текст в поле; читает он только поле, в котором вы пишете.</string>
     <string name="setup_a11y_open">Открыть настройки</string>
     <string name="setup_a11y_off">Выключена</string>
     <string name="setup_a11y_done">Включена и работает</string>
@@ -237,12 +237,12 @@
     <string name="setup_bg_text">Этот телефон сам закрывает приложения, и кнопка Ciao пропадает. Разрешите Ciao работать в фоне.</string>
     <string name="setup_bg_open">Открыть настройки</string>
     <string name="setup_bg_confirm">Готово, включено</string>
-    <string name="setup_bg_done">Разрешена</string>
+    <string name="setup_bg_done">Отмечено вами</string>
     <string name="setup_bg_not_yet">Не настроена</string>
-    <string name="setup_bg_battery">Ещё надёжнее: не экономить заряд на Ciao.</string>
+    <string name="setup_bg_battery">Телефон реже закрывает Ciao, если не экономить на нём заряд.</string>
     <string name="setup_bg_battery_allow">Не экономить заряд на Ciao</string>
     <string name="setup_bg_battery_done">Заряд на Ciao не экономится</string>
-    <string name="path_bg_huawei_1">Найдите Ciao в списке «Запуск приложений» и выключите его переключатель (это автоматическое управление): откроется окно «Управление вручную».</string>
+    <string name="path_bg_huawei_1">Найдите Ciao в списке «Запуск приложений» и выключите переключатель: откроется окно «Управление вручную».</string>
     <string name="path_bg_huawei_2">В окне «Управление вручную» оставьте включёнными все три: автозапуск, косвенный запуск, работа в фоне.</string>
     <string name="path_bg_huawei_3">Нажмите «ОК» и вернитесь сюда.</string>
     <string name="path_bg_huawei_note">Вручную: Настройки → Батарея → Запуск приложений.</string>
@@ -285,13 +285,11 @@
     <string name="row_service">Сервис</string>
     <string name="row_service_text">Куда уходит звук. Оплата по вашему ключу.</string>
     <string name="stop_phrase_hint">Скажите в конце, и текст вставится.</string>
-    <string name="pause_media_hint">Плеер сам продолжит, когда вы закончите.</string>
+    <string name="pause_media_hint">Плеер продолжит сам.</string>
     <string name="show_cost_hint">На карточке после каждой диктовки.</string>
     <string name="format_text_hint">Пауза начинает абзац, «во-первых», «во-вторых» — пункты списка.</string>
     <string name="delay_title">Уровень задержки</string>
     <string name="usage_text">Стоимость и минуты по дням</string>
-    <string name="row_setup">Настройка и проверка</string>
-    <string name="row_setup_text">Шаги настройки, поле для пробы, что видит Ciao</string>
     <string name="update_check_short">Проверить</string>
     <string name="sync_sign_in_short">Войти</string>
     <string name="sync_sign_out_short">Выйти</string>
@@ -300,4 +298,7 @@
     <string name="key_hint_gemini">Ключ Gemini</string>
     <string name="key_hint_openai">Ключ OpenAI (sk-…)</string>
     <string name="settings_title">Настройки</string>
+    <string name="setup_bg_more">Ещё надёжнее</string>
+    <string name="paste_last_short">Плитка в быстрых настройках: вставляет последнюю диктовку.</string>
+    <string name="paste_last_add">Добавить</string>
 </resources>

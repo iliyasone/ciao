@@ -35,7 +35,7 @@
 
     <string name="section_recognition">Recognition</string>
     <string name="sync_title">Sync with Google</string>
-    <string name="sync_text">Sign in to use the same terms, context and API key on all your devices. They\'re kept in a hidden Ciao folder in your Google Drive; Ciao can\'t see any other file there.</string>
+    <string name="sync_text">Terms, context and key on all your devices. Kept in a hidden Ciao folder on your Google Drive; Ciao sees no other file there.</string>
     <string name="sync_sign_in">Sign in with Google</string>
     <string name="sync_keys">Sync API keys</string>
     <string name="sync_keys_hint">Easier: on a new device you just sign in, no key to paste. The keys sit in the hidden Ciao folder in your Google Drive, so anyone who can sign in to your Google account can read them. The proxy syncs along with them. Turn this off to keep each key and the proxy on its own device only: Ciao removes them from Drive.</string>
@@ -152,7 +152,7 @@
     <string name="restore_clipboard">Restore the clipboard</string>
     <string name="restore_clipboard_hint">After an insert, the clipboard holds what it held before the dictation.</string>
     <string name="telemetry">Anonymous usage counts</string>
-    <string name="telemetry_hint">Anonymous counts of how dictation goes, with the Ciao and Android versions and the phone model. No text, audio or app names.</string>
+    <string name="telemetry_hint">How dictation goes, the Ciao and Android versions, the phone model. No text, audio or app names.</string>
     <string name="paste_last">Paste last</string>
     <string name="paste_last_text">Add the “Paste last” tile to the quick settings (pull the shade down twice, then the pencil): tap it and the shade closes and the last dictation goes into the field you were typing in, or onto the clipboard.</string>
     <string name="section_appearance">Appearance</string>
@@ -163,7 +163,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="section_developer">Legacy</string>
-    <string name="show_delay">Show delay</string>
+    <string name="show_delay">Choose the delay level</string>
     <string name="show_delay_hint">The OpenAI recognizer’s delay level: lower shows words sooner, higher is more accurate. The price is the same.</string>
     <string name="usage_title">Usage</string>
     <string name="usage_open">Usage</string>
@@ -201,7 +201,7 @@
     <string name="key_paste">Paste</string>
     <string name="key_where">Where to get a key</string>
     <string name="key_clipboard_empty">The clipboard is empty</string>
-    <string name="key_status_empty">No key yet</string>
+    <string name="key_status_empty">Paste a key and Ciao checks it right away</string>
     <string name="key_status_unchecked">Saved, not checked yet</string>
     <string name="key_status_saved">Saved, not checked</string>
     <string name="key_status_checking">Checking the key…</string>
@@ -214,7 +214,7 @@
     <string name="setup_mic_done_no_notifications">Allowed · no notifications</string>
     <string name="setup_notifications_allow">Allow notifications</string>
     <string name="setup_a11y_title">Ciao button</string>
-    <string name="setup_a11y_text">Turn on “Ciao dictation” among the accessibility services. With it Ciao sees that a keyboard is open and puts the text into the field. It reads only the field you are typing in.</string>
+    <string name="setup_a11y_text">Turn on “Ciao dictation”: that is the Ciao button. With it Ciao sees an open keyboard and puts the text into the field; it reads only the field you type in.</string>
     <string name="setup_a11y_open">Open settings</string>
     <string name="setup_a11y_off">Off</string>
     <string name="setup_a11y_done">On and running</string>
@@ -243,12 +243,12 @@
     <string name="setup_bg_text">This phone closes apps by itself, and the Ciao button disappears. Let Ciao run in the background.</string>
     <string name="setup_bg_open">Open settings</string>
     <string name="setup_bg_confirm">Done, it’s on</string>
-    <string name="setup_bg_done">Allowed</string>
+    <string name="setup_bg_done">Marked by you</string>
     <string name="setup_bg_not_yet">Not set</string>
-    <string name="setup_bg_battery">More reliable still: no battery saving for Ciao.</string>
+    <string name="setup_bg_battery">The phone closes Ciao less often when it doesn’t save battery on it.</string>
     <string name="setup_bg_battery_allow">Don’t save battery on Ciao</string>
     <string name="setup_bg_battery_done">No battery saving for Ciao</string>
-    <string name="path_bg_huawei_1">Find Ciao in the “App launch” list and turn its switch off (that is “Manage automatically”): the “Manage manually” window opens.</string>
+    <string name="path_bg_huawei_1">Find Ciao in the “App launch” list and turn its switch off: the “Manage manually” window opens.</string>
     <string name="path_bg_huawei_2">In “Manage manually” keep all three on: auto-launch, secondary launch, run in background.</string>
     <string name="path_bg_huawei_3">Tap “OK” and come back here.</string>
     <string name="path_bg_huawei_note">By hand: Settings → Battery → App launch.</string>
@@ -291,17 +291,18 @@
     <string name="row_service">Service</string>
     <string name="row_service_text">Where the audio goes. Billed to your key.</string>
     <string name="stop_phrase_hint">Say it at the end and the text goes in.</string>
-    <string name="pause_media_hint">The player goes on by itself when you finish.</string>
+    <string name="pause_media_hint">The player resumes by itself.</string>
     <string name="show_cost_hint">On the card after each dictation.</string>
     <string name="format_text_hint">A pause starts a paragraph, “first”, “second” start list items.</string>
     <string name="delay_title">Delay level</string>
     <string name="usage_text">Cost and minutes by day</string>
-    <string name="row_setup">Setup and test</string>
-    <string name="row_setup_text">Setup steps, a field to try it in, what Ciao sees</string>
     <string name="update_check_short">Check</string>
     <string name="sync_sign_in_short">Sign in</string>
     <string name="sync_sign_out_short">Sign out</string>
     <string name="setup_trouble">Having trouble?</string>
     <string name="setup_finish_anyway">Finish without testing</string>
     <string name="settings_title">Settings</string>
+    <string name="setup_bg_more">More reliable still</string>
+    <string name="paste_last_short">A quick-settings tile that pastes your last dictation.</string>
+    <string name="paste_last_add">Add</string>
 </resources>

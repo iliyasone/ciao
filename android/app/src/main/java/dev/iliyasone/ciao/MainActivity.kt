@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -137,7 +138,17 @@ class MainActivity : Activity() {
             kit.add(this, kit.linkRow(getString(R.string.usage_title), getString(R.string.usage_text)) {
                 startActivity(Intent(this@MainActivity, UsageActivity::class.java))
             })
-            kit.add(this, kit.row(getString(R.string.paste_last), getString(R.string.paste_last_text)))
+            // Android 13+ adds the tile from here; older ones need the shade's edit screen.
+            kit.add(this, if (Build.VERSION.SDK_INT >= 33) {
+                kit.row(getString(R.string.paste_last), getString(R.string.paste_last_short), kit.button(getString(R.string.paste_last_add), primary = false).apply {
+                    minHeight = kit.dp(36)
+                    minimumHeight = kit.dp(36)
+                    setPadding(kit.dp(12), 0, kit.dp(12), 0)
+                    setOnClickListener { addTile() }
+                })
+            } else {
+                kit.row(getString(R.string.paste_last), getString(R.string.paste_last_text))
+            })
         }
 
         // Appearance: language and theme apply to every screen and the card, so this one is recreated.
@@ -156,14 +167,6 @@ class MainActivity : Activity() {
             }))
         }
 
-        // Legacy
-        kit.section(page, getString(R.string.section_developer), kit.card()).apply {
-            kit.add(this, kit.switchRow(R.id.formatText, getString(R.string.format_text), getString(R.string.format_text_hint)))
-            kit.add(this, kit.switchRow(R.id.showDelay, getString(R.string.show_delay), getString(R.string.show_delay_hint)))
-            kit.add(this, kit.row(getString(R.string.delay_title), null, kit.select(R.id.delay, Prefs.DELAYS.map { it to it }, prefs.delay) { prefs.delay = it })
-                .apply { id = R.id.delayRow })
-        }
-
         // About
         kit.section(page, getString(R.string.section_about), kit.card()).apply {
             kit.add(this, kit.row(getString(R.string.version, version), null, kit.button(getString(R.string.update_check_short), primary = false, id = R.id.checkButton).apply {
@@ -173,10 +176,16 @@ class MainActivity : Activity() {
                 setOnClickListener { Updater.check(this@MainActivity) }
             }, titleId = R.id.version, hintId = R.id.updateStatus))
             kit.add(this, kit.switchRow(R.id.telemetry, getString(R.string.telemetry), getString(R.string.telemetry_hint)))
-            kit.add(this, kit.linkRow(getString(R.string.row_setup), getString(R.string.row_setup_text)) {
-                startActivity(Intent(this@MainActivity, SetupActivity::class.java))
-            })
         }
+
+        // Legacy
+        kit.section(page, getString(R.string.section_developer), kit.card()).apply {
+            kit.add(this, kit.switchRow(R.id.formatText, getString(R.string.format_text), getString(R.string.format_text_hint)))
+            kit.add(this, kit.switchRow(R.id.showDelay, getString(R.string.show_delay), getString(R.string.show_delay_hint)))
+            kit.add(this, kit.row(getString(R.string.delay_title), null, kit.select(R.id.delay, Prefs.DELAYS.map { it to it }, prefs.delay) { prefs.delay = it })
+                .apply { id = R.id.delayRow })
+        }
+
 
         bind()
         // First run, or a run with a required step missing and setup never finished: the steps first.
@@ -332,6 +341,16 @@ class MainActivity : Activity() {
             isEnabled = s.email != null || !s.busy // not while Google's screen is on its way
         }
         findViewById<View>(R.id.syncKeysRow).visibility = if (s.email != null) View.VISIBLE else View.GONE
+    }
+
+    private fun addTile() {
+        if (Build.VERSION.SDK_INT < 33) return
+        getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
+            android.content.ComponentName(this, PasteLastTile::class.java),
+            getString(R.string.paste_last),
+            android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_clipboard),
+            mainExecutor,
+        ) {}
     }
 
     private fun bindText(id: Int, value: String, save: (String) -> Unit) {

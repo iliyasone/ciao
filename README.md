@@ -650,8 +650,9 @@ yours.
    and open it. Allow installing apps from that source if Android asks.
 2. Open Ciao. Until setup is finished (or skipped) it opens on **Set up Ciao**, a
    list of steps; the first one not done is open, and each says when it is done:
-   - **Service and key**: pick Gemini or OpenAI and paste its key; the step
-     checks it. *Need a proxy?* opens the proxy field. With Google Play services
+   - **Service and key**: pick Gemini or OpenAI and *Paste* its key; the step
+     checks it. A saved key shows as its start and end (`AQ.Ab8R…-key`) until
+     you tap the field. *Need a proxy?* opens the proxy field. With Google Play services
      on the phone, *Sign in with Google* brings the key from your other devices.
    - **Microphone**, then notifications (optional: they give *Done* and *Cancel*
      while the screen is off). Refused twice, Android stops asking; the button
@@ -662,22 +663,23 @@ yours.
      your audio to the service you picked. The step shows the way there for the
      phone's maker (Huawei and Honor, Xiaomi, Samsung, others), and once the
      service is on Ciao comes back to the front by itself. On Android 13+ the
-     switch is greyed out for apps installed from a file: *Is the switch grey?*
+     switch is greyed out for apps installed from a file: *Having trouble?*
      explains *Allow restricted settings* in App info. If the switch is on but
      the service isn't running (the phone stopped it), the step says to turn it
      off and on again.
    - **Running in the background**, on Huawei, Honor and Xiaomi only: these
      phones close apps on their own and the Ciao icon disappears. *Open settings*
      opens the maker's app launch screen (Huawei: Settings → Battery → App
-     launch), whose state Ciao can't read, so you tap *I did it*. The step also
-     offers to turn off battery saving for Ciao.
+     launch), whose state Ciao can't read, so you tap *Done, it's on*. *More
+     reliable still* offers to turn off battery saving for Ciao.
    - **Try it**: a field to dictate into, and a live check of what the service
      sees: whether it is on and running, sees the field and the keyboard, and
      shows the icon, with a sentence on what to do when a link is missing.
-     *Copy report* copies the phone model, Android version and these findings
+     *Done* appears once a dictation went into the field; *Finish without
+     testing* below the list ends the setup without one. *Copy report* copies the phone model, Android version and these findings
      (no key, no text) for a bug report.
 3. The settings open after that. The card at the top says *All set* or what is
-   left, and opens the setup again; so does *Setup and test* under *About*.
+   left, and opens the setup again.
 
 Terms are one per line, as on the desktop, and *Sign in with Google* syncs them,
 the context and the API keys (OpenAI and Gemini) with your other devices
@@ -698,7 +700,7 @@ ones keep only their text. Entries from Ciao 0.8.3 keep their text as the live
 one. The history stays on the
 phone: it isn't synced.
 
-*Usage* (under *History* in the settings, and at the top of the history) is the desktop's Usage tab for the phone's
+*Usage* (under *Your dictations* in the settings, and at the top of the history) is the desktop's Usage tab for the phone's
 dictations: the same periods, totals, chart and models (`Usage.kt`, a port of
 `src/core/usage.ts`, and `UsageActivity.kt`).
 
@@ -712,12 +714,13 @@ once to allow notifications; without them the dictation still goes on with the
 screen off, just without the buttons.
 
 The settings match the desktop's, in sections (*Recognition*, *Dictation*,
-*Vocabulary*, *Sync*, *History*, *Appearance*, *Legacy*, *About*): *Languages*
+*Vocabulary*, *Sync*, *Your dictations*, *Appearance*, *About*, *Legacy*): *Languages*
 (OpenAI), *Insert the text right away* (off: the clipboard only), *Restore the
 clipboard*, *Pause music* (Ciao takes the audio focus while recording: players pause and play on by
 themselves afterwards), *Anonymous usage counts*, the interface language and the theme (*As the system*, light, dark), and
 under *Legacy* *Paragraphs and lists* (off by default) and the delay level. *Paste last* is a quick-settings tile:
-add it once (pull the shade down twice, then the pencil); tapping it closes the
+add it once (on Android 13+ with *Add* under *Your dictations*; otherwise pull the
+shade down twice, then the pencil); tapping it closes the
 shade and puts the last dictation into the field you were typing in, or onto the
 clipboard. What the desktop has and Android doesn't: the wake word, and what a
 phone has no use for (hotkeys, the card going see-through under the pointer,

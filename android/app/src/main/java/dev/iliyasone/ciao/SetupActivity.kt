@@ -192,9 +192,12 @@ class SetupActivity : Activity() {
         key.onRegion = { proxyBlock.visibility = View.VISIBLE }
         keyStep.add(kit.hint(getString(R.string.setup_key_text)), top = 0)
         keyStep.add(key.provider, top = 12)
-        keyStep.add(key.where, top = 4)
-        keyStep.add(key.fieldRow, top = 4)
+        // Pasting is this step's main action.
+        key.paste.setBackgroundResource(R.drawable.button_primary)
+        key.paste.setTextColor(kit.color(R.color.on_accent))
+        keyStep.add(key.fieldRow, top = 10)
         keyStep.add(key.status, top = 8)
+        keyStep.add(key.where, top = 4)
         proxy = ProxyEditor(this, kit) { key.startCheck() }
         proxyBlock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -204,7 +207,7 @@ class SetupActivity : Activity() {
             addView(proxy.field, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(8) })
             addView(proxy.buttons, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(8) })
         }
-        keyStep.add(link(getString(R.string.setup_key_proxy)) { proxyBlock.visibility = if (proxyBlock.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
+        keyStep.add(fold(getString(R.string.setup_key_proxy)) { proxyBlock.visibility = if (proxyBlock.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
         keyStep.add(proxyBlock, top = 4)
         syncBlock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -246,13 +249,13 @@ class SetupActivity : Activity() {
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(10) })
             }
         }
-        a11yStep.add(link(getString(R.string.setup_trouble)) { help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
+        a11yStep.add(fold(getString(R.string.setup_trouble)) { help.visibility = if (help.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
         a11yStep.add(help, top = 0)
 
         if (Background.hasLaunchManager) {
             val step = Step(4, getString(R.string.setup_bg_title), required = false)
             step.add(kit.hint(getString(R.string.setup_bg_text)), top = 0)
-            addPath(step, backgroundPath())
+            backgroundPath().forEachIndexed { i, line -> step.add(pathLine(i + 1, line), top = if (i == 0) 12 else 6) }
             // The maker's screen can't be read back: the user says when it's done.
             bgConfirm = kit.button(getString(R.string.setup_bg_confirm), primary = false).apply {
                 setOnClickListener {
@@ -264,11 +267,22 @@ class SetupActivity : Activity() {
                 kit.button(getString(R.string.setup_bg_open), primary = true).apply { setOnClickListener { Background.openLaunchManager(this@SetupActivity) } },
                 bgConfirm,
             ), top = 14)
+            val manual = kit.hint(getString(backgroundManual())).apply { visibility = View.GONE }
+            step.add(fold(getString(R.string.setup_trouble)) { manual.visibility = if (manual.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
+            step.add(manual, top = 0)
+            // Optional extras, folded: battery saving off, and the card pinned in the recent apps.
             batteryLine = kit.hint()
             batteryButton = link(getString(R.string.setup_bg_battery_allow)) { Background.askUnrestricted(this@SetupActivity) }
-            step.add(batteryLine, top = 16)
-            step.add(batteryButton, top = 0)
-            step.add(kit.hint(getString(if (Background.maker == Background.Maker.XIAOMI) R.string.hint_recents_xiaomi else R.string.hint_recents_huawei)), top = 4)
+            val more = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = View.GONE
+                addView(batteryLine)
+                addView(batteryButton)
+                addView(kit.hint(getString(if (Background.maker == Background.Maker.XIAOMI) R.string.hint_recents_xiaomi else R.string.hint_recents_huawei)),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(4) })
+            }
+            step.add(fold(getString(R.string.setup_bg_more)) { more.visibility = if (more.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 0)
+            step.add(more, top = 0)
             backgroundStep = step
         }
 
@@ -282,7 +296,7 @@ class SetupActivity : Activity() {
         }
         tryStep.add(testField, top = 12)
         for (s in listOf(R.string.diag_enabled, R.string.diag_running, R.string.diag_field, R.string.diag_keyboard, R.string.diag_bubble)) {
-            val icon = kit.icon(R.drawable.ic_circle, R.color.ghost, 16)
+            val icon = kit.icon(R.drawable.ic_dash, R.color.ghost, 16)
             val text = kit.text(14f, value = getString(s))
             tryStep.add(LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
@@ -293,16 +307,15 @@ class SetupActivity : Activity() {
         }
         diagResult = kit.text(14f, medium = true).apply { id = R.id.diagResult }
         tryStep.add(diagResult, top = 12)
-        doneButton = kit.button(getString(R.string.setup_finish_anyway), primary = false).apply { setOnClickListener { finishSetup() } }
-        tryStep.add(kit.stack(
-            doneButton,
-            kit.button(getString(R.string.setup_copy_report), primary = false).apply {
-                setOnClickListener {
-                    getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Ciao", report()))
-                    Toast.makeText(this@SetupActivity, R.string.diag_copied, Toast.LENGTH_SHORT).show()
-                }
-            },
-        ), top = 14)
+        doneButton = kit.button(getString(R.string.setup_done), primary = true).apply {
+            visibility = View.GONE
+            setOnClickListener { finishSetup() }
+        }
+        tryStep.add(kit.stack(doneButton), top = 14)
+        tryStep.add(link(getString(R.string.setup_copy_report)) {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Ciao", report()))
+            Toast.makeText(this@SetupActivity, R.string.diag_copied, Toast.LENGTH_SHORT).show()
+        }, top = 4)
 
         steps += listOfNotNull(keyStep, micStep, a11yStep, backgroundStep, tryStep)
         for (s in steps) kit.add(card, s.view)
@@ -433,8 +446,9 @@ class SetupActivity : Activity() {
         // Background
         backgroundStep?.apply {
             mark = if (prefs.backgroundConfirmed) Mark.DONE else Mark.UPCOMING
+            // Marked by the user, not checked: said as such, and not in green.
             status = getString(if (prefs.backgroundConfirmed) R.string.setup_bg_done else R.string.setup_bg_not_yet)
-            statusColor = if (prefs.backgroundConfirmed) R.color.ok else R.color.muted
+            statusColor = R.color.muted
             bgConfirm.visibility = if (prefs.backgroundConfirmed) View.GONE else View.VISIBLE
             val battery = Background.unrestricted(this@SetupActivity)
             batteryLine.text = getString(if (battery) R.string.setup_bg_battery_done else R.string.setup_bg_battery)
@@ -451,6 +465,7 @@ class SetupActivity : Activity() {
             if (s.mark == Mark.UPCOMING && s === open) s.mark = Mark.CURRENT
             s.show(s === open)
         }
+        findViewById<TextView>(R.id.setupSkip).setText(if (open === tryStep) R.string.setup_finish_anyway else R.string.setup_skip)
         if (open != null && open !== shownOpen) {
             shownOpen = open
             // The step that just opened, at the top of the screen.
@@ -481,7 +496,7 @@ class SetupActivity : Activity() {
         )
         for ((i, s) in states.withIndex()) {
             val (icon, _) = diagLines[i]
-            icon.setImageResource(when (s) { true -> R.drawable.ic_check; false -> R.drawable.ic_cross; null -> R.drawable.ic_circle })
+            icon.setImageResource(when (s) { true -> R.drawable.ic_check; false -> R.drawable.ic_cross; null -> R.drawable.ic_dash })
             icon.imageTintList = ColorStateList.valueOf(kit.color(when (s) { true -> R.color.ok; false -> R.color.error; null -> R.color.ghost }))
         }
         val (text, color) = when {
@@ -500,13 +515,8 @@ class SetupActivity : Activity() {
         }
         diagResult.text = text
         diagResult.setTextColor(kit.color(color))
-        // Done is the main action once a dictation went in; before, finishing is allowed but quieter.
-        if (worked != (doneButton.tag == true)) {
-            doneButton.tag = worked
-            doneButton.setText(if (worked) R.string.setup_done else R.string.setup_finish_anyway)
-            doneButton.setBackgroundResource(if (worked) R.drawable.button_primary else R.drawable.button_outline)
-            doneButton.setTextColor(kit.color(if (worked) R.color.on_accent else R.color.fg))
-        }
+        // Done once a dictation went in; until then the link under the card finishes without it.
+        doneButton.visibility = if (worked) View.VISIBLE else View.GONE
         tryStep.mark = if (worked) Mark.DONE else Mark.UPCOMING
         tryStep.status = if (worked) getString(R.string.setup_try_done) else ""
         tryStep.statusColor = R.color.ok
@@ -546,17 +556,11 @@ class SetupActivity : Activity() {
     }
 
     private fun backgroundPath(): List<String> = when (Background.maker) {
-        Background.Maker.XIAOMI -> listOf(R.string.path_bg_xiaomi_1, R.string.path_bg_xiaomi_2, R.string.path_bg_xiaomi_note)
-        else -> listOf(R.string.path_bg_huawei_1, R.string.path_bg_huawei_2, R.string.path_bg_huawei_3, R.string.path_bg_huawei_note)
+        Background.Maker.XIAOMI -> listOf(R.string.path_bg_xiaomi_1, R.string.path_bg_xiaomi_2)
+        else -> listOf(R.string.path_bg_huawei_1, R.string.path_bg_huawei_2, R.string.path_bg_huawei_3)
     }.map { getString(it) }
 
-    /** Numbered lines; a last line that starts with the way by hand (a «…» path) is a muted note under them. */
-    private fun addPath(step: Step, lines: List<String>) {
-        val note = lines.last().takeIf { it.contains("→") && lines.size > 1 }
-        val numbered = if (note != null) lines.dropLast(1) else lines
-        numbered.forEachIndexed { i, line -> step.add(pathLine(i + 1, line), top = if (i == 0) 12 else 6) }
-        if (note != null) step.add(kit.hint(note), top = 8)
-    }
+    private fun backgroundManual() = if (Background.maker == Background.Maker.XIAOMI) R.string.path_bg_xiaomi_note else R.string.path_bg_huawei_note
 
     /** A numbered line of a path; the «names» (“names”) in it are set in bold, without the quotes. */
     private fun pathLine(n: Int, line: String): View {
@@ -573,7 +577,10 @@ class SetupActivity : Activity() {
         }
     }
 
-    private fun link(text: String, onClick: () -> Unit) = kit.text(14f, R.color.accent, medium = true, value = text).apply {
+    /** A link that opens a block under it. */
+    private fun fold(text: String, onClick: () -> Unit) = link("$text ▾", onClick)
+
+    private fun link(text: String, onClick: () -> Unit) = kit.text(14f, R.color.accent_strong, medium = true, value = text).apply {
         setPadding(0, kit.dp(8), 0, kit.dp(8))
         setOnClickListener { onClick() }
     }

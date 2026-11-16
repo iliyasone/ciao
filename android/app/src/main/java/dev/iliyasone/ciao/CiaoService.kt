@@ -59,6 +59,8 @@ class CiaoService : AccessibilityService() {
     private var imeTop = 0
     /** A keyboard window was listed since the service started: until one is, the phone may not list them. */
     private var imeEverSeen = false
+    /** Since when a text field has had the focus (uptime), 0 when none. */
+    private var fieldSince = 0L
     /** The keyboard top as last seen, and since when: the bubble waits for it to stop moving. */
     private var imeTopSeen = -1
     private var imeTopSince = 0L
@@ -185,9 +187,14 @@ class CiaoService : AccessibilityService() {
         if (field != null) Diag.fieldAt = System.currentTimeMillis()
         Diag.windows = runCatching { windows.joinToString(", ") { windowType(it.type) } }.getOrElse { it.toString() }
         // Some phones (Huawei among them) never list the keyboard among the windows: there the
-        // bubble follows the focused field alone, at the height a keyboard usually reaches.
-        if (!imeEverSeen) imeTop = resources.displayMetrics.heightPixels * 3 / 5
-        if (!idle || (field != null && (ime != null || !imeEverSeen))) showBubble() else hideBubble()
+        // bubble follows the focused field alone, at the height a keyboard usually reaches. Only
+        // after a second without one, so elsewhere the keyboard opening first isn't mistaken for it.
+        val now = SystemClock.uptimeMillis()
+        if (field == null) fieldSince = 0L else if (fieldSince == 0L) fieldSince = now
+        val noKeyboardList = !imeEverSeen && field != null && now - fieldSince >= NO_IME_AFTER_MS
+        if (!imeEverSeen && field != null && !noKeyboardList) main.postDelayed(refresh, fieldSince + NO_IME_AFTER_MS - now)
+        if (noKeyboardList) imeTop = resources.displayMetrics.heightPixels * 3 / 5
+        if (!idle || (field != null && (ime != null || noKeyboardList))) showBubble() else hideBubble()
         // Over the shade they'd cover its notifications, ours with Done and Cancel among them.
         val open = shadeOpen()
         if (open != shade) {
@@ -979,6 +986,8 @@ class CiaoService : AccessibilityService() {
         private const val SHADE_CLOSE_MS = 450L
         /** How long the keyboard's top must hold still before the bubble is placed against it. */
         private const val IME_SETTLE_MS = 250L
+        /** A field this long in focus with no keyboard window listed: the phone doesn't list them. */
+        private const val NO_IME_AFTER_MS = 1000L
         private const val APPEAR_MS = 160L
         private const val APPEAR_SCALE = 0.6f
         private const val PRESS_MS = 120L
