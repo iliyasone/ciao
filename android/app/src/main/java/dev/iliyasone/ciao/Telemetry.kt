@@ -37,6 +37,8 @@ object Telemetry {
             .put("os", "android")
             .put("os_version", Build.VERSION.RELEASE)
             .put("arch", Build.SUPPORTED_ABIS.firstOrNull())
+            // The phone maker and model (Huawei P30, say): setup differs between makers.
+            .put("device", "${Build.MANUFACTURER} ${Build.MODEL}")
             // Counts only: no person profiles, one anonymous id per install, no location from the IP.
             .put("\$process_person_profile", false)
             .put("\$geoip_disable", true)

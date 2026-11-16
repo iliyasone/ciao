@@ -4,7 +4,8 @@ import android.content.Context
 import android.view.ViewGroup
 
 /** Lays its children out in a row and wraps to the next line when the row is full (History's buttons). */
-class FlowLayout(context: Context) : ViewGroup(context) {
+/** [gap]: the space between children, across and between lines. */
+class FlowLayout(context: Context, private val gap: Int = 0) : ViewGroup(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
         var x = 0
@@ -16,10 +17,10 @@ class FlowLayout(context: Context) : ViewGroup(context) {
             measureChild(c, MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
             if (x > 0 && x + c.measuredWidth > width) {
                 x = 0
-                y += line
+                y += line + gap
                 line = 0
             }
-            x += c.measuredWidth
+            x += c.measuredWidth + gap
             line = maxOf(line, c.measuredHeight)
         }
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), y + line + paddingTop + paddingBottom)
@@ -35,11 +36,11 @@ class FlowLayout(context: Context) : ViewGroup(context) {
             if (c.visibility == GONE) continue
             if (x > 0 && x + c.measuredWidth > width) {
                 x = 0
-                y += line
+                y += line + gap
                 line = 0
             }
             c.layout(paddingLeft + x, paddingTop + y, paddingLeft + x + c.measuredWidth, paddingTop + y + c.measuredHeight)
-            x += c.measuredWidth
+            x += c.measuredWidth + gap
             line = maxOf(line, c.measuredHeight)
         }
     }

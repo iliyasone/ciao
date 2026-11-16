@@ -629,26 +629,55 @@ yours.
   the desktop.
   If that fails too (still offline), the card keeps the recording with a
   *Transcribe again* button until you dismiss it.
-- **Gemini or OpenAI**: pick the service at the top of the Ciao screen, where
-  each shows its price per hour; the key field below is for that service's key,
-  and the proxy field below that works as on the desktop ([Features](#features)).
-  With Gemini the context field isn't used, and the language is detected on its own.
+- **Gemini or OpenAI**: pick the service under *Recognition*, where each shows
+  its price per hour; the key field below is for that service's key, and the
+  proxy field below that works as on the desktop ([Features](#features)). A key
+  is checked as soon as it is pasted (or after *Done*, or a pause in typing): the
+  line under it says *Key works · Gemini*, that the service refused it, that the
+  service isn't available in your country (the proxy then opens on the setup
+  screen), or that it is saved but couldn't be checked. *Paste* puts the
+  clipboard in and checks it, and the keyboard goes away.
+  With Gemini the context and languages fields are hidden: Gemini takes no
+  context and detects the language on its own.
+- On some phones (Huawei among them) the system never tells an accessibility
+  service where the keyboard is. There the icon shows whenever a text field has
+  the focus, at the height a keyboard usually reaches.
 
 ### Install on Android
 
 1. Download `Ciao-<version>.apk` from the
    [latest release](https://github.com/iliyasone/ciao/releases/latest) on the phone
    and open it. Allow installing apps from that source if Android asks.
-2. Open Ciao, pick OpenAI or Gemini and paste that service's API key.
-3. Allow the microphone.
-4. Tap *Open Accessibility settings* and turn on **Ciao dictation**. Ciao uses the
-   accessibility service to see when a keyboard is open and to type into the
-   field; it reads only the focused field and sends nothing but your audio to the
-   service you picked.
-   - If the switch is greyed out (Android 13+ does this for apps installed from a
-     file), open *App info*, tap **⋮** in the corner, choose *Allow restricted
-     settings*, and try again.
-5. Try it in the field at the bottom of the Ciao screen.
+2. Open Ciao. Until setup is finished (or skipped) it opens on **Set up Ciao**, a
+   list of steps; the first one not done is open, and each says when it is done:
+   - **Service and key**: pick Gemini or OpenAI and paste its key; the step
+     checks it. *Need a proxy?* opens the proxy field. With Google Play services
+     on the phone, *Sign in with Google* brings the key from your other devices.
+   - **Microphone**, then notifications (optional: they give *Done* and *Cancel*
+     while the screen is off). Refused twice, Android stops asking; the button
+     then opens the app's settings.
+   - **Ciao button**: turn on **Ciao dictation** in the accessibility settings.
+     Ciao uses the accessibility service to see when a keyboard is open and to
+     type into the field; it reads only the focused field and sends nothing but
+     your audio to the service you picked. The step shows the way there for the
+     phone's maker (Huawei and Honor, Xiaomi, Samsung, others), and once the
+     service is on Ciao comes back to the front by itself. On Android 13+ the
+     switch is greyed out for apps installed from a file: *Is the switch grey?*
+     explains *Allow restricted settings* in App info. If the switch is on but
+     the service isn't running (the phone stopped it), the step says to turn it
+     off and on again.
+   - **Running in the background**, on Huawei, Honor and Xiaomi only: these
+     phones close apps on their own and the Ciao icon disappears. *Open settings*
+     opens the maker's app launch screen (Huawei: Settings → Battery → App
+     launch), whose state Ciao can't read, so you tap *I did it*. The step also
+     offers to turn off battery saving for Ciao.
+   - **Try it**: a field to dictate into, and a live check of what the service
+     sees: whether it is on and running, sees the field and the keyboard, and
+     shows the icon, with a sentence on what to do when a link is missing.
+     *Copy report* copies the phone model, Android version and these findings
+     (no key, no text) for a bug report.
+3. The settings open after that. The card at the top says *All set* or what is
+   left, and opens the setup again; so does *Setup and test* under *About*.
 
 Terms are one per line, as on the desktop, and *Sign in with Google* syncs them,
 the context and the API keys (OpenAI and Gemini) with your other devices
@@ -669,7 +698,7 @@ ones keep only their text. Entries from Ciao 0.8.3 keep their text as the live
 one. The history stays on the
 phone: it isn't synced.
 
-*Usage*, at the top of the history, is the desktop's Usage tab for the phone's
+*Usage* (under *History* in the settings, and at the top of the history) is the desktop's Usage tab for the phone's
 dictations: the same periods, totals, chart and models (`Usage.kt`, a port of
 `src/core/usage.ts`, and `UsageActivity.kt`).
 
@@ -682,9 +711,10 @@ transcribes it into the history and says so in a notification. Android 13+ asks
 once to allow notifications; without them the dictation still goes on with the
 screen off, just without the buttons.
 
-The settings match the desktop's: *Languages* (OpenAI), *Insert the text right
-away* (off: the clipboard only), *Restore the clipboard*, *Pause music while you
-dictate* (Ciao takes the audio focus while recording: players pause and play on by
+The settings match the desktop's, in sections (*Recognition*, *Dictation*,
+*Vocabulary*, *Sync*, *History*, *Appearance*, *Legacy*, *About*): *Languages*
+(OpenAI), *Insert the text right away* (off: the clipboard only), *Restore the
+clipboard*, *Pause music* (Ciao takes the audio focus while recording: players pause and play on by
 themselves afterwards), *Anonymous usage counts*, the interface language and the theme (*As the system*, light, dark), and
 under *Legacy* *Paragraphs and lists* (off by default) and the delay level. *Paste last* is a quick-settings tile:
 add it once (pull the shade down twice, then the pencil); tapping it closes the
@@ -699,7 +729,7 @@ The APK from GitHub updates itself from the same
 [releases](https://github.com/iliyasone/ciao/releases) as the desktop app. Each
 time you open the Ciao screen (at most every 4 hours) it checks for a newer
 version; when there is one, a card at the top offers *Update to X* and *What's
-new*. To check by hand, tap *Check for updates* at the bottom of the screen.
+new*. To check by hand, tap *Check* next to the version under *About*.
 
 *Update* downloads the APK and hands it to Android, which asks you to confirm and
 installs it over the old one; your settings stay. The first time, Android asks you
@@ -776,7 +806,8 @@ transcribed by OpenAI or Google, whichever you chose.
 
 Ciao sends anonymous usage counts to [PostHog](https://posthog.com) (EU cloud), so
 we can see how many people use it. Two events (Android sends the same ones, with
-`os` `android`, `trigger` `bubble` and no `target_app`):
+`os` `android`, `trigger` `bubble` and no `target_app`; Android adds `device`, the
+phone's maker and model, to each):
 
 - `app_started`: app version, OS version, CPU architecture, the transcription
   service (`provider`: `openai` or `gemini`), and whether its API key is set and the
@@ -956,6 +987,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `CiaoService.kt` — the accessibility service: the icon over the keyboard
     (`Spring.kt` moves it), the dictation pipeline, typing into the field;
   - `CardView.kt` — the live card;
+  - `MainActivity.kt` — the settings; `SetupActivity.kt` — the setup steps and
+    the check of what the service sees (`Diag.kt`); `Kit.kt` — the rows, cards,
+    switches and selects both are built from; `Editors.kt` — the service, key
+    and proxy fields both share; `KeyCheck.kt` — the key check, as `checkKey` in
+    `src/main/transcribe.ts`; `Background.kt` — battery optimization and the
+    phone makers' app launch screens;
   - `RecordingService.kt` — the foreground service and notification of a
     running dictation; `Recovery.kt` — transcribes dictations cut off by a kill;
   - `History.kt`, `HistoryActivity.kt` — the history, stored as on the desktop

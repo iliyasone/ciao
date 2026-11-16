@@ -85,6 +85,9 @@ object GoogleSync {
     }
 
     /** Shows Google's consent screen; the answer comes back through [onActivityResult]. */
+    /** Google Play services are on the phone (not on recent Huawei phones): without them there is no sign-in. */
+    fun available(context: Context) = runCatching { context.packageManager.getPackageInfo("com.google.android.gms", 0) }.isSuccess
+
     fun signIn(activity: Activity) {
         set(activity) { copy(busy = true, error = null) }
         Identity.getAuthorizationClient(activity).authorize(request)
