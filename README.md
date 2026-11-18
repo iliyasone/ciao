@@ -112,7 +112,13 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   accessibility on), or else by the window title. A ChatGPT conversation is
   titled by its subject alone, so there only the address tells: with focus in the
   address bar, or on Linux without accessibility, only its start page is known.
-  macOS and Wayland give no window titles, so there it is the address or nothing. For a
+  macOS and Wayland give no window titles, so there it is the address or nothing.
+  The same goes for a dictation started while you are in a text field of any
+  other web page in the browser (a site's form, or T3 Code's web app served
+  under another title): it stays there, as without T3 mode, with no icon on
+  the card. Ciao knows that by reading the page's address and the focused field
+  through accessibility, as above; focus in the address bar doesn't count. A
+  page with no field in focus gets T3 mode as anywhere else. For a
   hands-free dictation anywhere else:
   - the card shows T3 Code's logo by its clock, so you know where the text goes;
   - the text is pasted only into T3 Code, whichever chat is open there, wherever

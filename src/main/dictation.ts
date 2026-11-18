@@ -112,11 +112,12 @@ interface Active {
   /** T3 mode, hands-free from a tap: T3 Code comes forward once the first words are transcribed. */
   forwardOnVoice?: boolean;
   /**
-   * T3 mode: the AI chat (ChatGPT, Claude, …, see core/t3.ts) in front as it started. Such a dictation
-   * stays there, as without T3 mode, and T3 Code isn't brought forward. `chatId` once known.
+   * T3 mode: the AI chat (ChatGPT, Claude, …, see core/t3.ts) in front as it started, or "field": a field
+   * in another web page had focus. Such a dictation stays there, as without T3 mode, and T3 Code isn't
+   * brought forward. `chatId` once known.
    */
-  chat: Promise<AiChat | null>;
-  chatId?: AiChat | null;
+  chat: Promise<AiChat | "field" | null>;
+  chatId?: AiChat | "field" | null;
   /** T3 mode: T3 Code is being called forward; true once a window was. */
   forwarded?: Promise<boolean>;
   targetMoved?: boolean;
@@ -432,7 +433,7 @@ export class DictationController {
     if (!replay && settings.t3Mode)
       a.chat = this.chatIn(a).then((chat) => {
         a.chatId = chat;
-        if (chat) console.log("t3: started in", chat, "- staying there");
+        if (chat) console.log("t3: started in", chat === "field" ? "a web page's field" : chat, "- staying there");
         if (this.active === a) this.push(a);
         return chat;
       });
@@ -475,15 +476,15 @@ export class DictationController {
     // noise, like keys clicking, or a false alarm): a stray one must not take the focus from your typing.
     if (!replay && settings.t3Mode && settings.t3Forward && settings.autoPaste)
       setTimeout(async () => {
-        if (await a.chat) return; // started in an AI chat: it stays there
+        if (await a.chat) return; // started in an AI chat or a web page's field: it stays there
         if (this.active !== a || a.phase !== "recording" || !this.handsFree) return;
         if (trigger !== "pill" && a.firstTextAt === undefined) a.forwardOnVoice = true;
         else a.forwarded = this.bringT3Forward(a);
       }, TAP_MS); // hands-free by then means the key was let go: no shortcut can claim it any more
   }
 
-  /** The AI chat in the window the dictation started in (see Active.chat). */
-  private async chatIn(a: Active): Promise<AiChat | null> {
+  /** The AI chat in the window the dictation started in, or "field" for a field in a web page (see Active.chat). */
+  private async chatIn(a: Active): Promise<AiChat | "field" | null> {
     const w = await a.target;
     if (!w) return null;
     // The page's address only in a browser (or in whatever is in front on Wayland, which names no window):
@@ -493,7 +494,12 @@ export class DictationController {
     if (appLabel(w.process) !== "browser" && !unnamed) return aiChat(w, null);
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, a.startedAt + TAP_MS - Date.now())));
     if (this.active !== a) return null; // cancelled: its read would only hold up the next one
-    return aiChat(w, await this.deps.input.page(w.hwnd));
+    const [url, field] = await Promise.all([this.deps.input.page(w.hwnd), this.deps.input.field(w.hwnd)]);
+    const chat = aiChat(w, url);
+    if (chat || isT3Code(w)) return chat;
+    // A field in any other page (a site's form, T3 Code's web app under another title): you are typing
+    // there. A known address means the focus is in the page, not in the address bar.
+    return url && field.text !== null ? "field" : null;
   }
 
   /**
@@ -713,7 +719,7 @@ export class DictationController {
       }
       const target = await this.target(a);
       // A hold pastes where you are, T3 mode or not: T3 mode is for hands-free dictations. So does one
-      // started in an AI chat.
+      // started in an AI chat or a web page's field.
       const t3 = settings.t3Mode && !!a.handsFree && !chat;
       /** What went to the window or the clipboard (with T3's prefix and suffix): what a kept card shows. */
       let sent = text;
@@ -933,7 +939,7 @@ export class DictationController {
       layout: a.settings.paragraphs,
       // No logo until it is known which one: never T3 Code's for a moment over a chat.
       t3: t3 && a.chatId === null,
-      chat: t3 && a.chatId ? a.chatId : undefined,
+      chat: t3 && a.chatId && a.chatId !== "field" ? a.chatId : undefined,
       // Why the card stays empty: the live connection failed (a refused key, no network), not silence.
       message: a.phase === "recording" && a.offline ? t().overlay.noLiveText(a.offline) : undefined,
     };
