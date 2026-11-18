@@ -494,12 +494,14 @@ export class DictationController {
     if (appLabel(w.process) !== "browser" && !unnamed) return aiChat(w, null);
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, a.startedAt + TAP_MS - Date.now())));
     if (this.active !== a) return null; // cancelled: its read would only hold up the next one
-    const [url, field] = await Promise.all([this.deps.input.page(w.hwnd), this.deps.input.field(w.hwnd)]);
+    const url = await this.deps.input.page(w.hwnd);
     const chat = aiChat(w, url);
-    if (chat || isT3Code(w)) return chat;
+    if (chat || isT3Code(w) || !url) return chat;
     // A field in any other page (a site's form, T3 Code's web app under another title): you are typing
-    // there. A known address means the focus is in the page, not in the address bar.
-    return url && field.text !== null ? "field" : null;
+    // there. A known address means the focus is in the page, not in the address bar. Read after the page:
+    // on macOS that read is the one that waits for a Chromium turning its accessibility on.
+    const field = await this.deps.input.field(w.hwnd);
+    return field.text !== null || field.reason === "too-long" ? "field" : null;
   }
 
   /**
