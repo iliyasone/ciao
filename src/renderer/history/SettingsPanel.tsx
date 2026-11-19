@@ -455,6 +455,14 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
   );
 }
 
+/**
+ * How many key checks each service has started. Only the latest one's answer counts, even when the
+ * row that started an earlier one is gone (the service was switched away and back meanwhile).
+ */
+const checksStarted: Partial<Record<Provider, number>> = {};
+const startCheck = (provider: Provider) => (checksStarted[provider] = (checksStarted[provider] ?? 0) + 1);
+const isLatestCheck = (provider: Provider, n: number) => checksStarted[provider] === n;
+
 function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey: boolean; onChecked: (provider: Provider, reason: string | null) => void }) {
   const [value, setValue] = useState("");
   /** The last check's line and whether the key worked (null while checking); null before one. */
@@ -464,13 +472,11 @@ function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey
     setValue("");
     setCheck(null);
   }, [provider]);
-  /** Counts the checks started: only the latest one's answer is shown. */
-  const checks = useRef(0);
   const runCheck = async (key?: string) => {
-    const n = ++checks.current;
+    const n = startCheck(provider);
     setCheck({ text: tr.checking, ok: null });
     const r = await ciao.settings.checkKey(provider, key);
-    if (n !== checks.current) return; // a newer check (of a key saved meanwhile) is running
+    if (!isLatestCheck(provider, n)) return; // a newer check (of a key saved meanwhile) is running
     setCheck(r.ok ? { text: tr.works(r.ms), ok: true } : { text: tr.failed(r.reason), ok: false });
     onChecked(provider, r.ok ? null : r.reason);
   };
@@ -535,8 +541,10 @@ function ChatGPTAccountRow({ onChecked }: { onChecked: (provider: Provider, reas
     if (ok) onChecked("chatgpt", null);
   };
   const check = async () => {
+    const n = startCheck("chatgpt");
     setNote({ text: strings.apiKey.checking, ok: null });
     const r = await ciao.settings.checkKey("chatgpt");
+    if (!isLatestCheck("chatgpt", n)) return;
     setNote(r.ok ? { text: strings.apiKey.works(r.ms), ok: true } : { text: strings.apiKey.failed(r.reason), ok: false });
     onChecked("chatgpt", r.ok ? null : r.reason);
   };
