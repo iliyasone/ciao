@@ -18,7 +18,7 @@ const LANGUAGES: { value: Lang; label: string }[] = [
 ];
 
 type Update = (patch: Partial<Settings>, debounce?: boolean) => void;
-/** The last check of the key (or ChatGPT sign-in) in use, when it failed; the status card shows it. */
+/** Why the last check of a service's key (or ChatGPT sign-in) failed; the status card shows the one in use. */
 type Failed = { provider: Provider; reason: string } | null;
 
 const displayName = (provider: Provider) => {
@@ -35,13 +35,13 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   const [wakeAvailable, setWakeAvailable] = useState(false);
   const [canBringForward, setCanBringForward] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [failed, setFailed] = useState<Failed>(null);
+  const [failed, setFailed] = useState<Partial<Record<Provider, string>>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** What a pending save sends: the latest settings, including terms merged by a sync meanwhile. */
   const latest = useRef<Settings | null>(null);
   const hasKey = useHasKeys();
   // New keys (saved here or brought by sync): an earlier failed check no longer says anything about them.
-  useEffect(() => ciao.settings.onKeys(() => setFailed(null)), []);
+  useEffect(() => ciao.settings.onKeys(() => setFailed({})), []);
   const mics = useMics();
   const accessibility = useAccessibility();
   const tr = useStrings().settings;
@@ -94,14 +94,14 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   };
 
   if (!s) return null;
-  // A check clears only its own service's failure: a late answer for another service changes nothing here.
-  const onChecked = (provider: Provider, reason: string | null) =>
-    setFailed((f) => (reason !== null ? { provider, reason } : f?.provider === provider ? null : f));
+  // Each service keeps its own result: an answer for one leaves the others' as they are.
+  const onChecked = (provider: Provider, reason: string | null) => setFailed((f) => ({ ...f, [provider]: reason ?? undefined }));
+  const reason = failed[s.provider];
 
   return (
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[56rem] flex-col px-6 pt-6 pb-16">
-        <StatusCard s={s} hasKey={hasKey[s.provider]} failed={failed?.provider === s.provider ? failed : null} mics={mics} accessibility={accessibility} />
+        <StatusCard s={s} hasKey={hasKey[s.provider]} failed={reason === undefined ? null : { provider: s.provider, reason }} mics={mics} accessibility={accessibility} />
 
         {accessibility !== null && (
           <Section title={tr.permissions.title}>
@@ -464,9 +464,13 @@ function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey
     setValue("");
     setCheck(null);
   }, [provider]);
+  /** Counts the checks started: only the latest one's answer is shown. */
+  const checks = useRef(0);
   const runCheck = async (key?: string) => {
+    const n = ++checks.current;
     setCheck({ text: tr.checking, ok: null });
     const r = await ciao.settings.checkKey(provider, key);
+    if (n !== checks.current) return; // a newer check (of a key saved meanwhile) is running
     setCheck(r.ok ? { text: tr.works(r.ms), ok: true } : { text: tr.failed(r.reason), ok: false });
     onChecked(provider, r.ok ? null : r.reason);
   };
