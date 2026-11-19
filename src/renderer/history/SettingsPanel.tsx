@@ -1,4 +1,4 @@
-import { ArrowDownToLine, Check, Cloud, KeyRound, Loader2, Mic, Monitor, Moon, MousePointerClick, Plus, RefreshCw, Square, Sun, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Loader2, Mic, MousePointerClick, Plus, Square, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { acceleratorFromEvent, acceleratorParts, isMouseTrigger, triggerParts } from "../../core/triggers";
 import type { Strings } from "../../core/i18n";
@@ -9,11 +9,7 @@ import { DELAYS, type Lang, type Provider, type Settings, type SyncStatus, type 
 import { useStrings } from "../lang";
 import { errorText, listMics, openMicStream, trackName } from "../mic";
 
-const THEMES: { value: Theme; icon: typeof Sun }[] = [
-  { value: "system", icon: Monitor },
-  { value: "light", icon: Sun },
-  { value: "dark", icon: Moon },
-];
+const THEMES: Theme[] = ["system", "light", "dark"];
 
 // Each language is named in itself, so it can be found whatever the current one is.
 const LANGUAGES: { value: Lang; label: string }[] = [
@@ -21,14 +17,31 @@ const LANGUAGES: { value: Lang; label: string }[] = [
   { value: "en", label: "English" },
 ];
 
+type Update = (patch: Partial<Settings>, debounce?: boolean) => void;
+/** The last check of the key (or ChatGPT sign-in) in use, when it failed; the status card shows it. */
+type Failed = { provider: Provider; reason: string } | null;
+
+const displayName = (provider: Provider) => {
+  const info = PROVIDERS[provider];
+  return info.company === info.name ? info.name : `${info.company} ${info.name}`;
+};
+
+/**
+ * The settings, in T3 Code's style and in the Android app's order (android/.../MainActivity.kt): a
+ * status card that says what is missing, then sections of bordered cards with rows.
+ */
 export function SettingsPanel({ updateState }: { updateState: UpdateState | null }) {
   const [s, setS] = useState<Settings | null>(null);
   const [wakeAvailable, setWakeAvailable] = useState(false);
   const [canBringForward, setCanBringForward] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [failed, setFailed] = useState<Failed>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** What a pending save sends: the latest settings, including terms merged by a sync meanwhile. */
   const latest = useRef<Settings | null>(null);
+  const hasKey = useHasKeys();
+  const mics = useMics();
+  const accessibility = useAccessibility();
   const tr = useStrings().settings;
 
   useEffect(() => {
@@ -63,7 +76,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     };
   }, []);
 
-  const update = (patch: Partial<Settings>, debounce = false) => {
+  const update: Update = (patch, debounce = false) => {
     if (!latest.current) return;
     latest.current = { ...latest.current, ...patch };
     setS(latest.current);
@@ -79,201 +92,321 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   };
 
   if (!s) return null;
+  const onChecked = (provider: Provider, reason: string | null) => setFailed(reason === null ? null : { provider, reason });
 
   return (
     <div className="scroll-thin h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 pt-5 pb-16">
-        <div className="h-4 text-right text-[12px] text-emerald-700 dark:text-emerald-400/80">{saved && <><Check className="mr-1 inline size-3.5" />{tr.saved}</>}</div>
+      <div className="mx-auto flex max-w-[56rem] flex-col px-6 pt-6 pb-16">
+        <StatusCard s={s} hasKey={hasKey[s.provider]} failed={failed?.provider === s.provider ? failed : null} mics={mics} accessibility={accessibility} />
 
-        <ProvidersCard s={s} update={update} />
-        <PermissionsCard />
-        <SyncCard syncKeys={s.syncKeys} onSyncKeys={(syncKeys) => update({ syncKeys })} />
-
-        <MicCard value={s.microphone} onChange={(microphone) => update({ microphone })} />
-
-        <Card title={tr.recognition.title}>
-          <Field label={tr.recognition.terms} hint={[tr.recognition.termsHint, { openai: "", gemini: tr.recognition.geminiNote, nemotron: tr.recognition.nemotronNote, chatgpt: tr.recognition.chatgptNote }[s.provider]].filter(Boolean).join(" ")}>
-            <textarea
-              value={s.keywords.join("\n")}
-              onChange={(e) => update({ keywords: e.target.value.split("\n") }, true)}
-              rows={6}
-              className="selectable w-full rounded-xl bg-tint/5 px-3 py-2 font-mono text-[12.5px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
+        {accessibility !== null && (
+          <Section title={tr.permissions.title}>
+            <Row id="setting-accessibility" title={tr.permissions.accessibility} hint={accessibility ? undefined : tr.permissions.accessibilityHint}
+              control={accessibility ? <StatusText ok>{tr.permissions.granted}</StatusText> : <Button primary onClick={() => void ciao.settings.openAccessibility()}>{tr.permissions.open}</Button>}
             />
-          </Field>
-        </Card>
+          </Section>
+        )}
 
-        <Card title={tr.appearance.title}>
-          <Row label={tr.appearance.language} hint={tr.appearance.languageHint}>
-            <Segmented value={s.language} options={LANGUAGES} onChange={(language) => update({ language })} />
-          </Row>
-          <Row label={tr.appearance.theme} hint={tr.appearance.themeHint}>
-            <Segmented value={s.theme} options={THEMES.map((o) => ({ ...o, label: tr.appearance.themes[o.value] }))} onChange={(theme) => update({ theme })} />
-          </Row>
-        </Card>
-
-        <Card title={tr.behaviour.title}>
-          <Toggle label={tr.behaviour.autoPaste} hint={tr.behaviour.autoPasteHint} value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
-          <Toggle label={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
-          <Toggle label={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
-          <Toggle label={tr.behaviour.pill} hint={tr.behaviour.pillHint} value={s.overlayPill} onChange={(v) => update({ overlayPill: v })} />
-          <Toggle label={tr.behaviour.sounds} hint={tr.behaviour.soundsHint} value={s.sounds} onChange={(v) => update({ sounds: v })} />
-          <Toggle label={tr.behaviour.pauseMedia} hint={tr.behaviour.pauseMediaHint} value={s.pauseMedia} onChange={(v) => update({ pauseMedia: v })} />
-          <Toggle label={tr.behaviour.learn} hint={tr.behaviour.learnHint} value={s.learnCorrections} onChange={(v) => update({ learnCorrections: v })} />
-          <Toggle label={tr.behaviour.openAtLogin} value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
-          <Toggle label={tr.behaviour.telemetry} hint={tr.behaviour.telemetryHint} value={s.telemetry} onChange={(v) => update({ telemetry: v })} />
-        </Card>
-
-        <Card title={tr.voice.title}>
-          {wakeAvailable && (
-            <Toggle
-              label={tr.voice.wakeWord}
-              hint={tr.voice.wakeWordHint}
-              value={s.wakeWord}
-              onChange={(v) => update({ wakeWord: v })}
-            />
-          )}
-          <Toggle
-            label={tr.voice.stopPhrase}
-            hint={tr.voice.stopPhraseHint}
-            value={s.stopPhrase}
-            onChange={(v) => update({ stopPhrase: v })}
-          />
-        </Card>
-
-        <Card title={tr.keys.title}>
-          <Field label={tr.keys.dictation} hint={tr.keys.dictationHint}>
-            <TriggerList value={s.triggers} onChange={(triggers) => update({ triggers })} />
-          </Field>
-          <Toggle
-            label={tr.keys.tapHandsFree}
-            hint={tr.keys.tapHandsFreeHint}
-            value={s.tapHandsFree}
-            onChange={(v) => update({ tapHandsFree: v })}
-          />
-          <Toggle label={tr.keys.escCancels} hint={tr.keys.escCancelsHint} value={s.escCancels} onChange={(v) => update({ escCancels: v })} />
-          <Row label={tr.keys.pasteLast} hint={tr.keys.pasteLastHint}>
-            <AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />
-          </Row>
-        </Card>
-
-        <Card title={tr.t3.title}>
-          <Toggle label={tr.t3.mode} hint={tr.t3.modeHint} value={s.t3Mode} onChange={(v) => update({ t3Mode: v })} />
-          {s.t3Mode && (
-            <>
-              {canBringForward && (
-                <Toggle label={tr.t3.forward} hint={tr.t3.forwardHint} value={s.t3Forward} onChange={(v) => update({ t3Forward: v })} />
-              )}
-              {canBringForward && (
-                <Toggle label={tr.t3.send} hint={tr.t3.sendHint} value={s.t3Send} onChange={(v) => update({ t3Send: v })} />
-              )}
-              <Row label={tr.t3.prefix} hint={tr.t3.affixHint}>
-                <input
-                  value={s.t3Prefix}
-                  onChange={(e) => update({ t3Prefix: e.target.value }, true)}
-                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-                />
-              </Row>
-              <Row label={tr.t3.suffix}>
-                <input
-                  value={s.t3Suffix}
-                  onChange={(e) => update({ t3Suffix: e.target.value }, true)}
-                  className="selectable w-48 rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-                />
-              </Row>
-            </>
-          )}
-        </Card>
-
-        {updateState && <UpdateCard state={updateState} />}
-
-        <Card title={tr.developer.title}>
-          <Toggle label={tr.developer.formatText} hint={tr.developer.formatTextHint} value={s.paragraphs} onChange={(v) => update({ paragraphs: v })} />
-          {/* Only OpenAI has a delay level. */}
+        <Section title={tr.recognition.title}>
+          <ServiceRow s={s} hasKey={hasKey} update={update} />
+          {PROVIDERS[s.provider].signIn ? <ChatGPTAccountRow onChecked={onChecked} /> : <ApiKeyRow provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />}
+          {/* OpenAI only: the others detect the language themselves. */}
           {s.provider === "openai" && (
-            <Toggle label={tr.developer.showDelay} hint={tr.developer.showDelayHint} value={s.showDelay} onChange={(v) => update({ showDelay: v })} />
+            <Row title={tr.recognition.languages} hint={tr.recognition.languagesHint}
+              control={<input value={s.languages.join(", ")} onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)} className={`${INPUT} w-[18rem]`} />}
+            />
           )}
+          <ProxyRow value={s.proxy} provider={s.provider} onChange={(proxy) => update({ proxy })} />
+        </Section>
+
+        <Section title={tr.dictation}>
+          <MicRow value={s.microphone} mics={mics} onChange={(microphone) => update({ microphone })} />
+          <SwitchRow title={tr.behaviour.autoPaste} hint={tr.behaviour.autoPasteHint} value={s.autoPaste} onChange={(v) => update({ autoPaste: v })} />
+          <SwitchRow title={tr.behaviour.restoreClipboard} hint={tr.behaviour.restoreClipboardHint} value={s.restoreClipboard} onChange={(v) => update({ restoreClipboard: v })} />
+          {wakeAvailable && <SwitchRow title={tr.voice.wakeWord} hint={tr.voice.wakeWordHint} value={s.wakeWord} onChange={(v) => update({ wakeWord: v })} />}
+          <SwitchRow title={tr.voice.stopPhrase} hint={tr.voice.stopPhraseHint} value={s.stopPhrase} onChange={(v) => update({ stopPhrase: v })} />
+          <SwitchRow title={tr.behaviour.pauseMedia} hint={tr.behaviour.pauseMediaHint} value={s.pauseMedia} onChange={(v) => update({ pauseMedia: v })} />
+          {/* A free service has no cost to show: the card shows none (src/main/dictation.ts). */}
+          {pricePerMinute(models(s).live) > 0 && (
+            <SwitchRow title={tr.behaviour.showCost} hint={tr.behaviour.showCostHint} value={s.showCost} onChange={(v) => update({ showCost: v })} />
+          )}
+          <SwitchRow title={tr.behaviour.sounds} hint={tr.behaviour.soundsHint} value={s.sounds} onChange={(v) => update({ sounds: v })} />
+        </Section>
+
+        <Section title={tr.keys.title}>
+          <Row title={tr.keys.dictation} hint={tr.keys.dictationHint} below={<TriggerList value={s.triggers} onChange={(triggers) => update({ triggers })} />} />
+          <SwitchRow title={tr.keys.tapHandsFree} hint={tr.keys.tapHandsFreeHint} value={s.tapHandsFree} onChange={(v) => update({ tapHandsFree: v })} />
+          <SwitchRow title={tr.keys.escCancels} hint={tr.keys.escCancelsHint} value={s.escCancels} onChange={(v) => update({ escCancels: v })} />
+          <Row title={tr.keys.pasteLast} hint={tr.keys.pasteLastHint} control={<AcceleratorRecorder value={s.pasteLastHotkey} onChange={(pasteLastHotkey) => update({ pasteLastHotkey })} />} />
+        </Section>
+
+        <Section title={tr.vocabulary}>
+          <TermsRow s={s} update={update} />
+          {/* OpenAI only, as on Android: the others take no context. */}
+          {s.provider === "openai" && (
+            <Row title={tr.recognition.context} hint={tr.recognition.contextHint}
+              below={<textarea value={s.prompt} onChange={(e) => update({ prompt: e.target.value }, true)} rows={3} className={`${FIELD} scroll-thin w-full resize-none px-3 py-2 text-[13px] leading-5`} />}
+            />
+          )}
+          <SwitchRow title={tr.behaviour.learn} hint={tr.behaviour.learnHint} value={s.learnCorrections} onChange={(v) => update({ learnCorrections: v })} />
+        </Section>
+
+        <SyncSection syncKeys={s.syncKeys} onSyncKeys={(syncKeys) => update({ syncKeys })} />
+
+        <Section title={tr.t3.title}>
+          <T3ModeRow value={s.t3Mode} onChange={(v) => update({ t3Mode: v })} />
+          {s.t3Mode && canBringForward && <SwitchRow title={tr.t3.forward} hint={tr.t3.forwardHint} value={s.t3Forward} onChange={(v) => update({ t3Forward: v })} />}
+          {s.t3Mode && canBringForward && <SwitchRow title={tr.t3.send} hint={tr.t3.sendHint} value={s.t3Send} onChange={(v) => update({ t3Send: v })} />}
+          {s.t3Mode && (
+            <Row title={tr.t3.prefix} hint={tr.t3.affixHint} control={<input value={s.t3Prefix} onChange={(e) => update({ t3Prefix: e.target.value }, true)} className={`${INPUT} w-56`} />} />
+          )}
+          {s.t3Mode && <Row title={tr.t3.suffix} control={<input value={s.t3Suffix} onChange={(e) => update({ t3Suffix: e.target.value }, true)} className={`${INPUT} w-56`} />} />}
+        </Section>
+
+        <Section title={tr.appearance.title}>
+          <Row title={tr.appearance.language} hint={tr.appearance.languageHint} control={<Select value={s.language} options={LANGUAGES} onChange={(language) => update({ language })} />} />
+          <Row title={tr.appearance.theme} hint={tr.appearance.themeHint}
+            control={<Select value={s.theme} options={THEMES.map((value) => ({ value, label: tr.appearance.themes[value] }))} onChange={(theme) => update({ theme })} />}
+          />
+          <SwitchRow title={tr.behaviour.pill} hint={tr.behaviour.pillHint} value={s.overlayPill} onChange={(v) => update({ overlayPill: v })} />
+        </Section>
+
+        <Section title={tr.about}>
+          {updateState && <UpdateRow state={updateState} />}
+          <SwitchRow title={tr.behaviour.openAtLogin} value={s.openAtLogin} onChange={(v) => update({ openAtLogin: v })} />
+          <SwitchRow title={tr.behaviour.telemetry} hint={tr.behaviour.telemetryHint} value={s.telemetry} onChange={(v) => update({ telemetry: v })} />
+        </Section>
+
+        <Section title={tr.developer.title}>
+          <SwitchRow title={tr.developer.formatText} hint={tr.developer.formatTextHint} value={s.paragraphs} onChange={(v) => update({ paragraphs: v })} />
+          {/* Only OpenAI has a delay level. */}
+          {s.provider === "openai" && <SwitchRow title={tr.developer.showDelay} hint={tr.developer.showDelayHint} value={s.showDelay} onChange={(v) => update({ showDelay: v })} />}
           {s.provider === "openai" && s.showDelay && (
-            <Row label={tr.developer.delay} hint={tr.developer.delayHint}>
-              <Segmented value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />
-            </Row>
+            <Row title={tr.developer.delay} hint={tr.developer.delayHint} control={<Select value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />} />
           )}
-        </Card>
+        </Section>
+      </div>
+      <div
+        aria-live="polite"
+        className={`pointer-events-none fixed right-6 bottom-5 inline-flex items-center gap-1.5 rounded-lg border border-line bg-app px-3 py-1.5 text-[12.5px] text-ok shadow-sm transition-opacity duration-200 ${saved ? "opacity-100" : "opacity-0"}`}
+      >
+        <Check className="size-3.5" />
+        {tr.saved}
       </div>
     </div>
   );
 }
 
-const INPUT = "selectable rounded-lg bg-tint/5 px-2.5 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20";
-const BUTTON = "rounded-lg bg-tint/10 px-3 py-1.5 text-[12.5px] text-fg transition-colors hover:bg-tint/15 disabled:opacity-40";
-
 /**
- * The transcription services, side by side with what they cost: the one in use with its key (and,
- * for OpenAI, its own settings), the others one click away; then the proxy they are reached through.
+ * The terms. A service that takes none (Nemotron, ChatGPT) says so, and the list, kept for the other
+ * services and synced devices, opens on demand.
  */
-function ProvidersCard({ s, update }: { s: Settings; update: (patch: Partial<Settings>, debounce?: boolean) => void }) {
-  const strings = useStrings().settings;
-  const tr = strings.providers;
-  const hasKey = useHasKeys();
+function TermsRow({ s, update }: { s: Settings; update: Update }) {
+  const tr = useStrings().settings.recognition;
+  const note = { openai: "", gemini: tr.geminiNote, nemotron: tr.nemotronNote, chatgpt: tr.chatgptNote }[s.provider];
+  const unused = s.provider === "nemotron" || s.provider === "chatgpt";
+  const [open, setOpen] = useState(false);
+  const field = (
+    <textarea
+      value={s.keywords.join("\n")}
+      onChange={(e) => update({ keywords: e.target.value.split("\n") }, true)}
+      className={`${FIELD} scroll-thin max-h-[210px] min-h-[78px] w-full resize-none px-3 py-2 text-[13px] leading-5 [field-sizing:content]`}
+    />
+  );
+  if (!unused) return <Row title={tr.terms} hint={[tr.termsHint, note].filter(Boolean).join(" ")} below={field} />;
+  return <Row title={tr.terms} hint={`${note} ${tr.otherServices}`} control={<Button onClick={() => setOpen(!open)}>{open ? tr.hide : tr.show}</Button>} below={open && field} />;
+}
+
+// ── Pieces, as in Android's Kit.kt ────────────────────────────────────────
+
+const FIELD = "selectable rounded-lg border border-field-line bg-field text-fg outline-none placeholder:text-faint focus:border-fg/40 dark:placeholder:text-muted";
+const INPUT = `${FIELD} h-8 px-3 text-[13px]`;
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Card title={tr.title}>
-      <div className="px-4 pt-0.5 pb-3 text-[12px] text-faint">{tr.intro}</div>
-      {(Object.keys(PROVIDERS) as Provider[]).map((provider) => {
-        const info = PROVIDERS[provider];
-        const inUse = s.provider === provider;
-        const m = models({ ...s, provider });
-        return (
-          <div key={provider} className={inUse ? "bg-accent/[0.04]" : ""}>
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2 text-[13.5px] text-fg">
-                  <span className="font-medium">{info.company === info.name ? info.name : `${info.company} ${info.name}`}</span>
-                  <span className="text-[12px] text-muted">{pricePerMinute(m.live) ? tr.perHour(`$${(pricePerMinute(m.live) * 60).toFixed(2)}`) : tr.free}</span>
-                </div>
-                <div className="text-[12px] text-faint">
-                  {tr.models(m.live, m.file)}{" "}
-                  {!inUse && hasKey[provider] !== undefined && (
-                    <span className={hasKey[provider] ? "" : "text-amber-700 dark:text-amber-300"}>{info.signIn ? (hasKey[provider] ? tr.signedIn : tr.signedOut) : hasKey[provider] ? tr.hasKey : tr.noKey}</span>
-                  )}
-                </div>
-              </div>
-              {inUse ? (
-                <span className="inline-flex shrink-0 items-center gap-1 text-[12.5px] text-emerald-700 dark:text-emerald-400">
-                  <Check className="size-3.5" />
-                  {tr.inUse}
-                </span>
-              ) : (
-                <button onClick={() => update({ provider })} className={`${BUTTON} shrink-0`}>
-                  {tr.use}
-                </button>
-              )}
-            </div>
-            {inUse && (info.signIn ? <ChatGPTAccountRow /> : <ApiKeyRow provider={provider} hasKey={hasKey[provider] ?? true} />)}
-            {inUse && provider === "openai" && (
-              <>
-                <Row label={strings.recognition.languages} hint={strings.recognition.languagesHint}>
-                  <input
-                    value={s.languages.join(", ")}
-                    onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)}
-                    className={`${INPUT} w-48`}
-                  />
-                </Row>
-                <Field label={strings.recognition.context} hint={strings.recognition.contextHint}>
-                  <textarea
-                    value={s.prompt}
-                    onChange={(e) => update({ prompt: e.target.value }, true)}
-                    rows={3}
-                    className="selectable w-full resize-none rounded-xl bg-tint/5 px-3 py-2 text-[13px] leading-relaxed outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-                  />
-                </Field>
-              </>
-            )}
-          </div>
-        );
-      })}
-      <ProxyRow value={s.proxy} onChange={(proxy) => update({ proxy })} />
+    <section>
+      <h2 className="px-4 pt-6 pb-3 text-[17px] font-semibold text-fg">{title}</h2>
+      <Card>{children}</Card>
+    </section>
+  );
+}
+
+function Card({ children, warn }: { children: ReactNode; warn?: boolean }) {
+  return <div className={`divide-y divide-divider overflow-hidden rounded-xl border bg-card ${warn ? "border-warn/45" : "border-line"}`}>{children}</div>;
+}
+
+/** A row: the title and a muted line on the left, the control on the right; [below] goes full width under them. */
+function Row({ id, title, hint, control, below }: { id?: string; title: string; hint?: ReactNode; control?: ReactNode; below?: ReactNode }) {
+  return (
+    <div id={id} className="flex flex-col gap-2.5 px-4 py-3">
+      <div className={`flex items-center gap-6 ${control ? "min-h-9" : ""}`}>
+        <RowText title={title} hint={hint} />
+        {control && <div className="ml-auto flex shrink-0 items-center gap-2">{control}</div>}
+      </div>
+      {below}
+    </div>
+  );
+}
+
+function RowText({ title, hint }: { title: string; hint?: ReactNode }) {
+  return (
+    <span className="block max-w-[43rem] min-w-0 flex-1">
+      <span className="block text-[14px] font-medium text-fg">{title}</span>
+      {hint && <span className="mt-0.5 block text-[12.5px] leading-[1.45] text-pretty text-faint dark:text-muted">{hint}</span>}
+    </span>
+  );
+}
+
+/** The whole row toggles the switch; [below] goes under it, outside the toggle. */
+function SwitchRow({ title, hint, value, onChange, below }: { title: string; hint?: string; value: boolean; onChange: (v: boolean) => void; below?: ReactNode }) {
+  const row = (
+    <button
+      role="switch"
+      aria-checked={value}
+      onClick={() => onChange(!value)}
+      className="flex w-full items-center gap-6 px-4 py-3 text-left transition-colors hover:bg-tint/[0.02] focus-visible:bg-tint/[0.04] focus-visible:outline-none"
+    >
+      <span className="flex min-h-9 min-w-0 flex-1 items-center">
+        <RowText title={title} hint={hint} />
+      </span>
+      <span className={`relative h-5 w-[34px] shrink-0 rounded-full transition-colors ${value ? "bg-accent-strong" : "bg-switch-off"}`}>
+        <span className={`absolute top-0.5 left-0.5 size-4 rounded-full shadow-sm transition-transform ${value ? "translate-x-[14px] bg-thumb-on" : "bg-thumb"}`} />
+      </span>
+    </button>
+  );
+  if (!below) return row;
+  return (
+    <div>
+      {row}
+      <div className="-mt-1.5 px-4 pb-3">{below}</div>
+    </div>
+  );
+}
+
+/** T3 mode: one line on what it does; the whole story opens under "How it works". */
+function T3ModeRow({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const tr = useStrings().settings.t3;
+  const [open, setOpen] = useState(false);
+  return (
+    <SwitchRow
+      title={tr.mode}
+      hint={tr.modeShort}
+      value={value}
+      onChange={onChange}
+      below={
+        <>
+          <button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1 text-[12.5px] text-accent-strong hover:underline">
+            {tr.howItWorks}
+            <ChevronDown className={`size-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          {open && <p className="mt-1.5 max-w-[43rem] text-[12.5px] leading-[1.45] text-pretty text-faint dark:text-muted">{tr.modeHint}</p>}
+        </>
+      }
+    />
+  );
+}
+
+function Button({ primary, disabled, onClick, children }: { primary?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap transition-colors disabled:opacity-40 ${
+        primary ? "bg-accent-deep text-white hover:bg-accent-deep/90" : "border border-field-line text-fg hover:bg-tint/5 disabled:hover:bg-transparent"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Select<T extends string>({ value, options, onChange, className = "" }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; className?: string }) {
+  return (
+    <span className={`relative inline-flex ${className}`}>
+      <select value={value} onChange={(e) => onChange(e.target.value as T)} className={`${INPUT} w-full min-w-36 appearance-none truncate pr-8`}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-faint" />
+    </span>
+  );
+}
+
+/** A result line under a row: green when it worked, red when not, muted while in progress. */
+function StatusText({ ok, children }: { ok?: boolean | null; children: ReactNode }) {
+  return <span className={`text-[12.5px] ${ok === true ? "text-ok" : ok === false ? "text-error" : "text-faint"}`}>{children}</span>;
+}
+
+/** Scrolls to a row and lights it up for a moment, so the eye finds it. */
+const scrollTo = (id: string) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
+  el.classList.remove("row-flash");
+  void el.offsetWidth; // restarts the animation on a second click
+  el.classList.add("row-flash");
+};
+
+// ── Status ────────────────────────────────────────────────────────────────
+
+/** All set, or what is missing before a dictation works; a click goes to the first such row. */
+function StatusCard(props: { s: Settings; hasKey: boolean | undefined; failed: Failed; mics: string[] | null; accessibility: boolean | null }) {
+  const strings = useStrings();
+  const tr = strings.settings.status;
+  const { s } = props;
+  const signIn = PROVIDERS[s.provider].signIn;
+  if (props.hasKey === undefined) return <div className="h-[66px]" />;
+  const name = PROVIDERS[s.provider].name;
+  const missing: { label: string; action: string; id: string }[] = [];
+  if (!props.hasKey) missing.push(signIn ? { label: tr.signIn, action: tr.signInAction, id: "setting-key" } : { label: tr.apiKey(name), action: tr.apiKeyAction(name), id: "setting-key" });
+  if (props.accessibility === false) missing.push({ label: tr.accessibility, action: tr.accessibilityAction, id: "setting-accessibility" });
+  if (props.mics?.length === 0) missing.push({ label: tr.mic, action: tr.micAction, id: "setting-mic" });
+  const key = s.triggers[0] ? triggerParts(s.triggers[0], strings.keyNames).join(" + ") : "";
+  // One thing to do: the title says it. Several: listed under "Needs your attention".
+  const [title, hint] = props.failed
+    ? [signIn ? tr.signInFailed : tr.keyFailed(name), props.failed.reason]
+    : missing.length === 1
+      ? [missing[0]!.action, tr.untilThen]
+      : missing.length
+        ? [tr.problem, tr.left(missing.map((m) => m.label).join(", "))]
+        : [tr.ready, tr.readyText(key, displayName(s.provider))];
+  const ok = !missing.length && !props.failed;
+  const target = props.failed ? "setting-key" : missing[0]?.id;
+  const body = (
+    <>
+      <span className={`size-2 shrink-0 rounded-full ${ok ? "bg-ok" : props.failed ? "bg-error" : "bg-warn"}`} />
+      <RowText title={title} hint={hint} />
+      {target && <ChevronRight className="ml-auto size-4 shrink-0 text-faint" />}
+    </>
+  );
+  return (
+    <Card warn={!ok}>
+      {target ? (
+        <button onClick={() => scrollTo(target)} className="flex w-full items-center gap-3.5 px-4 py-3 text-left transition-colors hover:bg-tint/[0.02]">
+          {body}
+        </button>
+      ) : (
+        <div className="flex items-center gap-3.5 px-4 py-3">{body}</div>
+      )}
     </Card>
   );
 }
+
+/** macOS only: whether the input helper has the Accessibility permission; null elsewhere. */
+function useAccessibility(): boolean | null {
+  const [granted, setGranted] = useState<boolean | null>(null);
+  useEffect(() => {
+    void ciao.settings.accessibility().then(setGranted);
+    return ciao.settings.onAccessibility(setGranted);
+  }, []);
+  return granted;
+}
+
+// ── Recognition ───────────────────────────────────────────────────────────
 
 /** Whether each provider has a key, kept up to date (one may come from another device). */
 function useHasKeys(): Partial<Record<Provider, boolean>> {
@@ -294,7 +427,29 @@ function useHasKeys(): Partial<Record<Provider, boolean>> {
   return has;
 }
 
-function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }) {
+/** The transcription service: each with what it costs and whether it has a key, the models of the one in use. */
+function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record<Provider, boolean>>; update: Update }) {
+  const strings = useStrings().settings;
+  const tr = strings.providers;
+  const m = models(s);
+  const options = (Object.keys(PROVIDERS) as Provider[]).map((provider) => {
+    const perMinute = pricePerMinute(models({ ...s, provider }).live);
+    const parts = [displayName(provider), perMinute ? tr.perHour(`$${(perMinute * 60).toFixed(2)}`) : tr.free];
+    const has = hasKey[provider];
+    if (provider !== s.provider && has !== undefined) parts.push(PROVIDERS[provider].signIn ? (has ? tr.signedIn : tr.signedOut) : has ? tr.hasKey : tr.noKey);
+    return { value: provider, label: parts.join(" · ") };
+  });
+  return (
+    <Row
+      title={tr.service}
+      hint={PROVIDERS[s.provider].signIn ? tr.introAccount : tr.intro}
+      control={<Select value={s.provider} options={options} onChange={(provider) => update({ provider })} className="w-[18rem]" />}
+      below={<span className="-mt-1.5 text-[12.5px] text-faint dark:text-muted">{tr.models(m.live, m.file)}</span>}
+    />
+  );
+}
+
+function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey: boolean; onChecked: (provider: Provider, reason: string | null) => void }) {
   const [value, setValue] = useState("");
   /** The last check's line and whether the key worked (null while checking); null before one. */
   const [check, setCheck] = useState<{ text: string; ok: boolean | null } | null>(null);
@@ -307,44 +462,54 @@ function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }
     setCheck({ text: tr.checking, ok: null });
     const r = await ciao.settings.checkKey(provider, key);
     setCheck(r.ok ? { text: tr.works(r.ms), ok: true } : { text: tr.failed(r.reason), ok: false });
+    onChecked(provider, r.ok ? null : r.reason);
   };
   return (
-    <Row label={tr.label} hint={check?.text ?? (hasKey ? tr.saved : tr.missing)}>
-      <div className="flex items-center gap-2">
-        <KeyRound className={`size-4 ${hasKey && check?.ok !== false ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
-        <input
-          type="password"
-          value={value}
-          placeholder={hasKey ? tr.replace : PROVIDERS[provider].keyPlaceholder}
-          onChange={(e) => setValue(e.target.value)}
-          className={`${INPUT} w-56`}
-        />
-        <button
-          disabled={!value.trim()}
-          onClick={async () => {
-            const key = value;
-            await ciao.settings.setApiKey(provider, key);
-            setValue("");
-            void runCheck(key);
-          }}
-          className={BUTTON}
-        >
-          {tr.save}
-        </button>
-        {hasKey && !value.trim() && (
-          <button onClick={() => void runCheck()} className={BUTTON}>
-            {tr.check}
-          </button>
-        )}
-      </div>
-    </Row>
+    <Row
+      id="setting-key"
+      title={tr.title(PROVIDERS[provider].name)}
+      hint={hasKey ? tr.saved : tr.missing}
+      below={
+        <>
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              value={value}
+              placeholder={hasKey ? tr.replace : PROVIDERS[provider].keyPlaceholder}
+              onChange={(e) => setValue(e.target.value)}
+              className={`${INPUT} min-w-0 flex-1 font-mono placeholder:font-sans ${hasKey ? "" : "border-warn/45"}`}
+            />
+            {value.trim() ? (
+              <Button
+                primary
+                onClick={async () => {
+                  const key = value;
+                  await ciao.settings.setApiKey(provider, key);
+                  setValue("");
+                  void runCheck(key);
+                }}
+              >
+                {tr.save}
+              </Button>
+            ) : (
+              hasKey && (
+                <Button disabled={check?.ok === null} onClick={() => void runCheck()}>
+                  {tr.check}
+                </Button>
+              )
+            )}
+          </div>
+          {check && <StatusText ok={check.ok}>{check.text}</StatusText>}
+        </>
+      }
+    />
   );
 }
 
 /** ChatGPT has no key to paste: the account signed in on chatgpt.com, in a window of Ciao's (src/main/chatgpt.ts). */
-function ChatGPTAccountRow() {
+function ChatGPTAccountRow({ onChecked }: { onChecked: (provider: Provider, reason: string | null) => void }) {
   const [account, setAccount] = useState<{ email: string; expiresAt: number } | null | undefined>(undefined);
-  /** A line about the last sign-in or check, over the account's own; null before one. */
+  /** A line about the last sign-in or check, under the account's own; null before one. */
   const [note, setNote] = useState<{ text: string; ok: boolean | null } | null>(null);
   const strings = useStrings().settings;
   const tr = strings.chatgpt;
@@ -357,48 +522,54 @@ function ChatGPTAccountRow() {
     setNote({ text: tr.signingIn, ok: null });
     const ok = await ciao.chatgpt.signIn();
     setNote(ok ? null : { text: tr.notSignedIn, ok: false });
+    if (ok) onChecked("chatgpt", null);
   };
   const check = async () => {
     setNote({ text: strings.apiKey.checking, ok: null });
     const r = await ciao.settings.checkKey("chatgpt");
     setNote(r.ok ? { text: strings.apiKey.works(r.ms), ok: true } : { text: strings.apiKey.failed(r.reason), ok: false });
+    onChecked("chatgpt", r.ok ? null : r.reason);
   };
   if (account === undefined) return null;
   const days = account ? Math.max(0, Math.floor((account.expiresAt - Date.now()) / 86_400_000)) : 0;
   return (
-    <Row label={tr.label} hint={note?.text ?? (account ? tr.signedIn(account.email, days) : tr.signedOut)}>
-      <div className="flex items-center gap-2">
-        <KeyRound className={`size-4 ${account && note?.ok !== false ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
-        {account ? (
+    <Row
+      id="setting-key"
+      title={tr.label}
+      hint={account ? tr.signedIn(account.email, days) : tr.signedOut}
+      control={
+        account ? (
           <>
-            <button onClick={() => void check()} className={BUTTON}>
+            <Button disabled={note?.ok === null} onClick={() => void check()}>
               {strings.apiKey.check}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 setNote(null);
+                onChecked("chatgpt", null);
                 void ciao.chatgpt.signOut();
               }}
-              className={BUTTON}
             >
               {tr.signOut}
-            </button>
+            </Button>
           </>
         ) : (
-          <button onClick={() => void signIn()} disabled={note?.ok === null} className={`${BUTTON} whitespace-nowrap`}>
+          <Button primary onClick={() => void signIn()} disabled={note?.ok === null}>
             {tr.signIn}
-          </button>
-        )}
-      </div>
-    </Row>
+          </Button>
+        )
+      }
+      below={note && <StatusText ok={note.ok}>{note.text}</StatusText>}
+    />
   );
 }
 
 /** The proxy: shown without its password; typed in anew to change it. */
-function ProxyRow({ value, onChange }: { value: string; onChange: (proxy: string) => void }) {
+function ProxyRow({ value, provider, onChange }: { value: string; provider: Provider; onChange: (proxy: string) => void }) {
   const [typed, setTyped] = useState("");
+  const [open, setOpen] = useState(false);
   /** The last check of the proxy in use (its address), or null before one. */
-  const [check, setCheck] = useState<{ href: string; text: string } | null>(null);
+  const [check, setCheck] = useState<{ href: string; text: string; ok: boolean | null } | null>(null);
   const strings = useStrings().settings;
   const tr = strings.providers;
   const current = parseProxy(value);
@@ -410,65 +581,61 @@ function ProxyRow({ value, onChange }: { value: string; onChange: (proxy: string
   }, [value]);
 
   const runCheck = async (proxy: ProxyAddress) => {
-    setCheck({ href: proxy.href, text: tr.proxyChecking(proxyLabel(proxy)) });
+    setCheck({ href: proxy.href, text: tr.proxyChecking(proxyLabel(proxy)), ok: null });
     const r = await ciao.settings.checkProxy(proxy.href);
     const text = r.ok ? tr.proxyWorks(r.ms) : r.badLogin ? tr.proxyBadLogin : tr.proxyFailed(r.reason);
-    setCheck((c) => (c?.href === proxy.href ? { href: proxy.href, text } : c));
+    setCheck((c) => (c?.href === proxy.href ? { href: proxy.href, text, ok: r.ok } : c));
   };
 
-  const status = [
-    current ? tr.proxyVia(proxyLabel(current)) : tr.proxyNone,
-    check && check.href === current?.href ? check.text : "",
-    invalid ? tr.proxyInvalid : "",
-  ].filter(Boolean);
+  const shown = check && check.href === current?.href ? check : null;
+  // No proxy: just the row, the field opens on "Set up".
+  if (!current && !open) return <Row title={tr.proxy} hint={tr.proxyHint(PROVIDERS[provider].name)} control={<Button onClick={() => setOpen(true)}>{tr.proxySetUp}</Button>} />;
   return (
-    <Field label={tr.proxy} hint={tr.proxyHint}>
-      <div className="flex flex-col gap-1 text-[12.5px] text-fg">
-        {status.map((line) => (
-          <div key={line}>{line}</div>
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          value={typed}
-          placeholder="http://user:password@host:port"
-          onChange={(e) => setTyped(e.target.value)}
-          className={`${INPUT} min-w-0 flex-1`}
-        />
-        <button
-          disabled={!parsed || parsed.href === current?.href}
-          onClick={() => {
-            onChange(parsed!.href);
-            setTyped("");
-            void runCheck(parsed!);
-          }}
-          className={BUTTON}
-        >
-          {strings.apiKey.save}
-        </button>
-        {current && (
-          <button onClick={() => void runCheck(current)} className={BUTTON}>
-            {tr.proxyCheck}
-          </button>
-        )}
-        {current && (
-          <button
-            onClick={() => {
-              onChange("");
-              setCheck(null);
-            }}
-            className={BUTTON}
-          >
-            {tr.proxyRemove}
-          </button>
-        )}
-      </div>
-    </Field>
+    <Row
+      title={tr.proxy}
+      hint={tr.proxyHint(PROVIDERS[provider].name)}
+      below={
+        <>
+          {current && <div className="text-[13px] text-fg">{tr.proxyVia(proxyLabel(current))}</div>}
+          <div className="flex items-center gap-2">
+            <input autoFocus={!current} value={typed} placeholder="http://user:password@host:port" onChange={(e) => setTyped(e.target.value)} className={`${INPUT} min-w-0 flex-1 font-mono`} />
+            {typed.trim() && (
+              <Button
+                primary
+                disabled={!parsed || parsed.href === current?.href}
+                onClick={() => {
+                  onChange(parsed!.href);
+                  setTyped("");
+                  void runCheck(parsed!);
+                }}
+              >
+                {strings.apiKey.save}
+              </Button>
+            )}
+            {current && <Button onClick={() => void runCheck(current)}>{tr.proxyCheck}</Button>}
+            {current && (
+              <Button
+                onClick={() => {
+                  onChange("");
+                  setCheck(null);
+                }}
+              >
+                {tr.proxyRemove}
+              </Button>
+            )}
+          </div>
+          {shown && <StatusText ok={shown.ok}>{shown.text}</StatusText>}
+          {invalid && <StatusText ok={false}>{tr.proxyInvalid}</StatusText>}
+        </>
+      }
+    />
   );
 }
 
+// ── Sync ──────────────────────────────────────────────────────────────────
+
 /** Google sign-in for syncing terms and context between devices (src/main/sync.ts). */
-function SyncCard({ syncKeys, onSyncKeys }: { syncKeys: boolean; onSyncKeys: (v: boolean) => void }) {
+function SyncSection({ syncKeys, onSyncKeys }: { syncKeys: boolean; onSyncKeys: (v: boolean) => void }) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const strings = useStrings();
   const tr = strings.sync;
@@ -487,39 +654,32 @@ function SyncCard({ syncKeys, onSyncKeys }: { syncKeys: boolean; onSyncKeys: (v:
         : status.syncing || !status.syncedAt
           ? tr.syncing(status.email)
           : tr.syncedAt(status.email, time(status.syncedAt)));
-  const button = "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors";
   return (
-    <Card title={tr.title}>
-      <Row label={tr.account} hint={hint}>
-        <div className="flex shrink-0 items-center gap-2">
-          {(status.syncing || status.signingIn) && <Loader2 className="size-4 animate-spin text-faint" />}
-          {status.email || status.signingIn ? (
-            <button onClick={() => void ciao.sync.signOut()} className={`${button} bg-tint/10 text-fg hover:bg-tint/15`}>
-              {status.signingIn ? tr.cancel : tr.signOut}
-            </button>
-          ) : (
-            <button onClick={() => void ciao.sync.signIn()} className={`${button} bg-accent text-white hover:bg-accent/90`}>
-              <Cloud className="size-3.5" />
-              {tr.signIn}
-            </button>
-          )}
-        </div>
-      </Row>
-      <Toggle label={tr.keys} hint={tr.keysHint} value={syncKeys} onChange={onSyncKeys} />
-    </Card>
+    <Section title={tr.title}>
+      <Row
+        title={tr.account}
+        hint={hint}
+        control={
+          <>
+            {(status.syncing || status.signingIn) && <Loader2 className="size-4 animate-spin text-faint" />}
+            {status.email || status.signingIn ? (
+              <Button onClick={() => void ciao.sync.signOut()}>{status.signingIn ? tr.cancel : tr.signOut}</Button>
+            ) : (
+              <Button onClick={() => void ciao.sync.signIn()}>{tr.signIn}</Button>
+            )}
+          </>
+        }
+      />
+      <SwitchRow title={tr.keys} hint={tr.keysHint} value={syncKeys} onChange={onSyncKeys} />
+    </Section>
   );
 }
 
-/** Which microphone dictation and the wake word record from, and a level bar to check it hears you. */
-function MicCard({ value, onChange }: { value: string; onChange: (name: string) => void }) {
-  /** null until listed: a saved one isn't called "not connected" meanwhile. */
-  const [mics, setMics] = useState<string[] | null>(null);
-  const [testing, setTesting] = useState(false);
-  /** While testing: the device actually heard (the default if the chosen one isn't connected), or why none is. */
-  const [heard, setHeard] = useState<{ name: string } | { error: string } | null>(null);
-  const bar = useRef<HTMLDivElement>(null);
-  const tr = useStrings().settings.microphone;
+// ── Microphone ────────────────────────────────────────────────────────────
 
+/** The connected microphones, kept up to date; null until listed, so a saved one isn't called "not connected" meanwhile. */
+function useMics(): string[] | null {
+  const [mics, setMics] = useState<string[] | null>(null);
   useEffect(() => {
     let current = true;
     const load = async () => {
@@ -543,6 +703,16 @@ function MicCard({ value, onChange }: { value: string; onChange: (name: string) 
       navigator.mediaDevices.removeEventListener("devicechange", reload);
     };
   }, []);
+  return mics;
+}
+
+/** Which microphone dictation and the wake word record from, and a level bar to check it hears you. */
+function MicRow({ value, mics, onChange }: { value: string; mics: string[] | null; onChange: (name: string) => void }) {
+  const [testing, setTesting] = useState(false);
+  /** While testing: the device actually heard (the default if the chosen one isn't connected), or why none is. */
+  const [heard, setHeard] = useState<{ name: string } | { error: string } | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const tr = useStrings().settings.microphone;
 
   useEffect(() => {
     if (!testing) return;
@@ -597,72 +767,36 @@ function MicCard({ value, onChange }: { value: string; onChange: (name: string) 
   const hint =
     !testing ? tr.deviceHint : !heard ? tr.testHint : "error" in heard ? tr.testFailed(heard.error) : heard.name ? `${tr.using(heard.name)}. ${tr.testHint}` : tr.testHint;
   return (
-    <Card title={tr.title}>
-      <Row label={tr.device} hint={hint}>
-        <div className="flex shrink-0 flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <select
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              className="w-56 truncate rounded-lg bg-tint/5 px-2 py-1.5 text-[13px] outline-none ring-1 ring-tint/5 focus:ring-tint/20"
-            >
-              {options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => setTesting(!testing)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors ${
-                testing ? "bg-accent/15 text-accent ring-1 ring-accent/40" : "bg-tint/10 text-fg hover:bg-tint/15"
-              }`}
-            >
-              {testing ? <Square className="size-3" /> : <Mic className="size-3.5" />}
-              {testing ? tr.stop : tr.test}
-            </button>
+    <Row
+      id="setting-mic"
+      title={tr.device}
+      hint={hint}
+      control={
+        <>
+          <Select value={value} options={options} onChange={onChange} className="w-52" />
+          <button
+            onClick={() => setTesting(!testing)}
+            className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium transition-colors ${
+              testing ? "border-accent-strong/50 bg-accent-strong/10 text-accent-strong" : "border-field-line text-fg hover:bg-tint/5"
+            }`}
+          >
+            {testing ? <Square className="size-3" /> : <Mic className="size-3.5" />}
+            {testing ? tr.stop : tr.test}
+          </button>
+        </>
+      }
+      below={
+        testing && (
+          <div className="h-1.5 overflow-hidden rounded-full bg-switch-off">
+            <div ref={bar} className="h-full w-0 rounded-full bg-accent-strong transition-[width] duration-75" />
           </div>
-          {testing && (
-            <div className="h-1.5 overflow-hidden rounded-full bg-tint/10">
-              <div ref={bar} className="h-full w-0 rounded-full bg-accent transition-[width] duration-75" />
-            </div>
-          )}
-        </div>
-      </Row>
-    </Card>
+        )
+      }
+    />
   );
 }
 
-/** macOS only: the Accessibility permission the input helper needs. Hidden elsewhere. */
-function PermissionsCard() {
-  const [granted, setGranted] = useState<boolean | null>(null);
-  const tr = useStrings().settings.permissions;
-  useEffect(() => {
-    void ciao.settings.accessibility().then(setGranted);
-    return ciao.settings.onAccessibility(setGranted);
-  }, []);
-  if (granted === null) return null;
-  return (
-    <Card title={tr.title}>
-      <Row label={tr.accessibility} hint={granted ? undefined : tr.accessibilityHint}>
-        {granted ? (
-          <span className="inline-flex items-center gap-1 text-[12.5px] text-emerald-700 dark:text-emerald-400/80">
-            <Check className="size-3.5" />
-            {tr.granted}
-          </span>
-        ) : (
-          <button
-            onClick={() => void ciao.settings.openAccessibility()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12.5px] text-white transition-colors hover:bg-accent/90"
-          >
-            <KeyRound className="size-3.5" />
-            {tr.open}
-          </button>
-        )}
-      </Row>
-    </Card>
-  );
-}
+// ── About ─────────────────────────────────────────────────────────────────
 
 function updateHint(state: UpdateState, strings: Strings): string {
   const tr = strings.settings.updates;
@@ -686,123 +820,58 @@ function updateHint(state: UpdateState, strings: Strings): string {
   }
 }
 
-function UpdateCard({ state }: { state: UpdateState }) {
+function UpdateRow({ state }: { state: UpdateState }) {
   const target = state.phase === "available" || state.phase === "downloading" || state.phase === "installing" || state.phase === "error" ? state.version : undefined;
   const busy = state.phase === "checking" || state.phase === "downloading" || state.phase === "installing";
-  const button = "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors disabled:opacity-40";
   const strings = useStrings();
   const tr = strings.settings.updates;
   return (
-    <Card title={tr.title}>
-      <Row label={tr.version(state.current)} hint={updateHint(state, strings)}>
-        <div className="flex shrink-0 items-center gap-2">
+    <Row
+      title={tr.version(state.current)}
+      hint={updateHint(state, strings)}
+      control={
+        <>
           {target && (
-            <button onClick={() => void ciao.update.openNotes(target)} className="text-[12.5px] text-muted underline-offset-2 hover:text-fg hover:underline">
+            <button onClick={() => void ciao.update.openNotes(target)} className="px-1 text-[13px] text-accent-strong underline-offset-2 hover:underline">
               {tr.whatsNew}
             </button>
           )}
           {busy && <Loader2 className="size-4 animate-spin text-faint" />}
           {state.phase === "available" || (state.phase === "error" && state.version) ? (
-            <button onClick={() => void ciao.update.install()} className={`${button} bg-accent text-white hover:bg-accent/90`}>
-              <ArrowDownToLine className="size-3.5" />
+            <Button primary onClick={() => void ciao.update.install()}>
               {state.phase === "error" ? tr.retry : tr.update}
-            </button>
+            </Button>
           ) : (
             state.phase !== "disabled" && (
-              <button disabled={busy} onClick={() => void ciao.update.check()} className={`${button} bg-tint/10 text-fg hover:bg-tint/15`}>
-                <RefreshCw className="size-3.5" />
+              <Button disabled={busy} onClick={() => void ciao.update.check()}>
                 {tr.check}
-              </button>
+              </Button>
             )
           )}
-        </div>
-      </Row>
-    </Card>
+        </>
+      }
+    />
   );
 }
 
-function Segmented<T extends string>(props: {
-  value: T;
-  options: { value: T; label: string; icon?: typeof Sun }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex shrink-0 rounded-xl bg-tint/5 p-0.5">
-      {props.options.map(({ value, label, icon: Icon }) => (
-        <button
-          key={value}
-          onClick={() => props.onChange(value)}
-          className={`inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1 text-[12.5px] transition-colors ${
-            props.value === value ? "bg-card text-fg shadow-sm ring-1 ring-tint/10 dark:bg-tint/15 dark:ring-0" : "text-muted hover:text-fg"
-          }`}
-        >
-          {Icon && <Icon className="size-3.5" />}
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
+// ── Keys ──────────────────────────────────────────────────────────────────
 
-function Card({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-2xl bg-card ring-1 ring-tint/[0.07]">
-      <h2 className="px-4 pt-3 pb-1 text-[12px] font-semibold tracking-wide text-faint uppercase">{title}</h2>
-      <div className="divide-y divide-tint/[0.06]">{children}</div>
-    </section>
-  );
-}
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <div>
-        <div className="text-[13.5px] text-fg">{label}</div>
-        {hint && <div className="text-[12px] text-faint">{hint}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2 px-4 py-3">
-      <div>
-        <div className="text-[13.5px] text-fg">{label}</div>
-        {hint && <div className="text-[12px] text-faint">{hint}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Toggle({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <Row label={label} hint={hint}>
-      <button
-        role="switch"
-        aria-checked={value}
-        onClick={() => onChange(!value)}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${value ? "bg-accent" : "bg-tint/15"}`}
-      >
-        <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4" : ""}`} />
-      </button>
-    </Row>
-  );
-}
-
+/** A key or combination as chip text: "Alt + Shift + Z". */
 function Caps({ parts }: { parts: string[] }) {
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-1 text-[13px] text-fg">
       {parts.map((k, i) => (
-        <kbd key={i} className="rounded-md bg-tint/8 px-2 py-0.5 font-sans text-[12px] text-fg2 ring-1 ring-tint/10">
+        <span key={i} className="inline-flex items-center gap-1">
+          {i > 0 && <span className="text-ghost">+</span>}
           {k}
-        </kbd>
+        </span>
       ))}
     </span>
   );
 }
+
+/** A key as a value: filled, so it doesn't look like the outlined buttons next to it. */
+const CHIP = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-tint/[0.06]";
 
 /** Dictation triggers; new ones are recorded by the native helper, so lone modifiers and mouse buttons work. */
 function TriggerList({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
@@ -834,17 +903,19 @@ function TriggerList({ value, onChange }: { value: string[]; onChange: (v: strin
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
         {value.map((spec) => (
-          <span key={spec} className="inline-flex items-center gap-1.5 rounded-xl bg-tint/5 py-1 pr-1 pl-2 ring-1 ring-tint/[0.07]">
+          <span key={spec} className={`${CHIP} pl-3 ${value.length > 1 ? "pr-1" : "pr-3"}`}>
             {isMouseTrigger(spec) && <MousePointerClick className="size-3.5 text-faint" />}
             <Caps parts={triggerParts(spec, tr.keyNames)} />
-            <button
-              title={tr.settings.keys.remove}
-              disabled={value.length === 1}
-              onClick={() => onChange(value.filter((v) => v !== spec))}
-              className="rounded-md p-0.5 text-faint transition-colors hover:bg-tint/10 hover:text-fg disabled:opacity-30"
-            >
-              <X className="size-3.5" />
-            </button>
+            {/* The last one stays: dictation needs a key. */}
+            {value.length > 1 && (
+              <button
+                title={tr.settings.keys.remove}
+                onClick={() => onChange(value.filter((v) => v !== spec))}
+                className="rounded-md p-0.5 text-faint transition-colors hover:bg-tint/10 hover:text-fg dark:text-muted"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
           </span>
         ))}
         <button
@@ -856,8 +927,8 @@ function TriggerList({ value, onChange }: { value: string[]; onChange: (v: strin
             setCapturing(false);
             if (spec && !value.includes(spec)) onChange([...value, spec]);
           }}
-          className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12.5px] transition-colors ${
-            capturing ? "bg-accent/15 text-accent ring-1 ring-accent/40" : "text-muted ring-1 ring-tint/10 hover:bg-tint/5 hover:text-fg"
+          className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors ${
+            capturing ? "border border-accent-strong/50 bg-accent-strong/10 text-accent-strong" : "border border-field-line text-fg hover:bg-tint/5"
           }`}
         >
           {capturing ? (
@@ -870,7 +941,7 @@ function TriggerList({ value, onChange }: { value: string[]; onChange: (v: strin
           )}
         </button>
       </div>
-      {notHeard && <div className="text-[12px] text-amber-700 dark:text-amber-300">{tr.settings.keys.notHeard}</div>}
+      {notHeard && <div className="text-[12.5px] text-warn">{tr.settings.keys.notHeard}</div>}
     </div>
   );
 }
@@ -896,10 +967,9 @@ function AcceleratorRecorder({ value, onChange }: { value: string; onChange: (v:
           setRecording(false);
         }
       }}
-      className={`rounded-xl px-1.5 py-1 transition-colors ${recording ? "bg-accent/15 ring-1 ring-accent/40" : "hover:bg-tint/5"}`}
+      className={`${CHIP} px-3 transition-colors ${recording ? "border-accent-strong/50 bg-accent-strong/10" : "hover:bg-tint/10"}`}
     >
-      {recording ? <span className="animate-pulse px-1 text-[12.5px] text-accent">{tr.settings.keys.recording}</span> : <Caps parts={acceleratorParts(value, tr.keyNames)} />}
+      {recording ? <span className="animate-pulse text-[13px] text-accent-strong">{tr.settings.keys.recording}</span> : <Caps parts={acceleratorParts(value, tr.keyNames)} />}
     </button>
   );
 }
-

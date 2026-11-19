@@ -160,7 +160,7 @@ function notifyChanged(entry: HistoryEntry): void {
 
 /** Window chrome colours for the current theme (the page itself follows prefers-color-scheme). */
 function chrome(): { background: string; symbols: string } {
-  return nativeTheme.shouldUseDarkColors ? { background: "#111114", symbols: "#a1a1aa" } : { background: "#f4f4f6", symbols: "#52525b" };
+  return nativeTheme.shouldUseDarkColors ? { background: "#000000", symbols: "#a1a1aa" } : { background: "#fcfcfc", symbols: "#52525b" };
 }
 
 function openHistory(tab?: "settings"): void {
