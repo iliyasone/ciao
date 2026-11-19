@@ -80,7 +80,7 @@ export class GoogleSync {
     } catch {
       // Never synced: what's in the settings now predates any edit to come.
     }
-    this.state = saved ? adoptKeys(saved, current.keys) : initialState(current, DEFAULT_SETTINGS);
+    this.state = saved ? adoptKeys(saved, current) : initialState(current, DEFAULT_SETTINGS);
     if (this.state !== saved) this.saveState();
     // Settings changed while Ciao wasn't running (config.json edited by hand) count as an edit now.
     this.pending = current;

@@ -78,7 +78,7 @@ object GoogleSync {
         val prefs = Prefs(context)
         synchronized(lock) {
             val saved = prefs.syncState.takeIf { it.isNotEmpty() }?.let { Sync.parse(it) }
-            val state = saved?.let { Sync.adoptKeys(it, prefs.local().keys) } ?: Sync.initialState(prefs.local(), Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
+            val state = saved?.let { Sync.adoptKeys(it, prefs.local()) } ?: Sync.initialState(prefs.local(), Prefs.DEFAULT_KEYWORDS, Prefs.DEFAULT_PROMPT)
             if (state != saved) prefs.syncState = Sync.serialize(state)
         }
         set(context) { copy(email = prefs.googleEmail.ifEmpty { null }, syncedAt = prefs.syncedAt) }
@@ -232,7 +232,7 @@ object GoogleSync {
                     merged.keys["openai"]?.let { prefs.apiKey = it.value }
                     merged.keys["gemini"]?.let { prefs.geminiKey = it.value }
                     merged.keys["nemotron"]?.let { prefs.dotwaveKey = it.value }
-                    merged.keys["chatgpt"]?.let { prefs.chatgptToken = it.value }
+                    prefs.chatgptToken = merged.chatgpt.value
                     prefs.proxy = merged.proxy.value
                     main.post { applied?.invoke() }
                 }

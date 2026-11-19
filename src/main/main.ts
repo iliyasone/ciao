@@ -191,10 +191,13 @@ function openHistory(tab?: "settings"): void {
   historyWin.on("focus", () => sync.syncSoon(0));
 }
 
+/** The providers whose key sync carries in its keys; ChatGPT's token has a field of its own (core/sync.ts). */
+const keyProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn);
+
 /** What Google sync compares with its history: the settings it syncs and the saved keys. */
 function local(): Local {
-  const keys = Object.fromEntries((Object.keys(PROVIDERS) as Provider[]).map((p) => [p, loadKeyFile(p)]));
-  return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys, proxy: settings.proxy };
+  const keys = Object.fromEntries(keyProviders().map((p) => [p, loadKeyFile(p)]));
+  return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys, proxy: settings.proxy, chatgpt: loadKeyFile("chatgpt") };
 }
 
 /** A key was saved here or arrived through sync: the spare session was opened with the old one. */
@@ -650,10 +653,14 @@ void app.whenReady().then(() => {
     (state) => {
       // Keys first: applySettings reads them back as this device's own.
       let keys = false;
-      for (const provider of Object.keys(PROVIDERS) as Provider[]) {
+      for (const provider of keyProviders()) {
         const key = state.keys[provider]?.value;
         if (key === undefined || key === loadKeyFile(provider)) continue;
         saveKeyFile(provider, key);
+        keys = true;
+      }
+      if (state.chatgpt.value !== loadKeyFile("chatgpt")) {
+        saveKeyFile("chatgpt", state.chatgpt.value);
         keys = true;
       }
       // The proxy first too: the spare session keysChanged reopens goes through it.

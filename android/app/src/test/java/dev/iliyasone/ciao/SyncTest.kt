@@ -127,11 +127,11 @@ class SyncTest {
     fun adopt() {
         // A history from before keys synced: the key this device had is as old as initialState's.
         val old = state("""{"version":1,"terms":[],"prompt":{"value":"p","at":5}}""")
-        val adopted = Sync.adoptKeys(old, mapOf("openai" to "sk-a", "gemini" to ""))
+        val adopted = Sync.adoptKeys(old, local(listOf(), "p", mapOf("openai" to "sk-a", "gemini" to "")))
         assertEquals(
             state("""{"version":1,"terms":[],"prompt":{"value":"p","at":5},"keys":{"openai":{"value":"sk-a","at":0}},"syncKeys":{"value":true,"at":-1}}"""),
             adopted,
         )
-        assertTrue(Sync.adoptKeys(adopted, mapOf("openai" to "sk-new")) === adopted)
+        assertTrue(Sync.adoptKeys(adopted, local(listOf(), "p", mapOf("openai" to "sk-new"))) === adopted)
     }
 }

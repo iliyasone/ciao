@@ -9,7 +9,8 @@ import org.json.JSONObject
 // come back. The prompt, each key, the proxy and the "sync keys" switch are single values: the later
 // edit wins. The switch is synced too: turned off on one device, it stops every device from sending
 // keys and the proxy (its password is a secret too), and the file keeps none (each device still has
-// its own).
+// its own). ChatGPT's access token goes with the keys but in a field of its own, which an older Ciao
+// ignores; its time is that of the sign-in or sign-out, not of a renewal (see src/core/sync.ts).
 
 /**
  * [at]: epoch ms of the last add or remove. What a device had before it started syncing: 0 for the
@@ -32,14 +33,19 @@ data class SyncState(
     val keys: Map<String, Stamped> = emptyMap(),
     val syncKeys: Flag = Flag(true, -1),
     val proxy: Stamped = Sync.NO_PROXY,
+    /** ChatGPT's access token, "" when signed out; [Stamped.at] is when it was signed in or out. */
+    val chatgpt: Stamped = Sync.NO_TOKEN,
 )
 
 /** What a device has now: its settings and its API keys ("" or missing when it has none). */
-data class Local(val keywords: List<String>, val prompt: String, val keys: Map<String, String>, val syncKeys: Boolean, val proxy: String = "")
+data class Local(val keywords: List<String>, val prompt: String, val keys: Map<String, String>, val syncKeys: Boolean, val proxy: String = "", val chatgpt: String = "")
 
 object Sync {
     /** The proxy of a file without one: an untouched default. */
     val NO_PROXY = Stamped("", -1)
+
+    /** ChatGPT's token in a file without one, as [NO_PROXY]. */
+    val NO_TOKEN = Stamped("", -1)
 
     /** Trimmed, without empty lines and repeats. */
     fun normalizeTerms(list: List<String>): List<String> = list.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -62,6 +68,7 @@ object Sync {
             local.keys.filterValues { it.isNotEmpty() }.mapValues { Stamped(it.value, 0) },
             Flag(local.syncKeys, if (local.syncKeys == defaultSyncKeys) -1 else 0),
             Stamped(local.proxy, if (local.proxy.isNotEmpty()) 0 else -1),
+            if (local.chatgpt.isNotEmpty()) Stamped(local.chatgpt, 0) else NO_TOKEN,
         )
     }
 
@@ -69,10 +76,11 @@ object Sync {
      * Keys this device had before the history knew of keys (a history from an older Ciao): as old
      * as [initialState]'s, not an edit made now that would replace another device's key.
      */
-    fun adoptKeys(state: SyncState, keys: Map<String, String>): SyncState {
-        val known = keys.filter { (provider, key) -> key.isNotEmpty() && provider !in state.keys }
-        if (known.isEmpty()) return state
-        return state.copy(keys = state.keys + known.mapValues { Stamped(it.value, 0) })
+    fun adoptKeys(state: SyncState, local: Local): SyncState {
+        val known = local.keys.filter { (provider, key) -> key.isNotEmpty() && provider !in state.keys }
+        val token = local.chatgpt.isNotEmpty() && state.chatgpt == NO_TOKEN
+        if (known.isEmpty() && !token) return state
+        return state.copy(keys = state.keys + known.mapValues { Stamped(it.value, 0) }, chatgpt = if (token) Stamped(local.chatgpt, 0) else state.chatgpt)
     }
 
     /** The terms to use: the ones not removed, in order. */
@@ -119,14 +127,32 @@ object Sync {
         val promptChanged = prompt != state.prompt.value
         val switched = local.syncKeys != state.syncKeys.value
         val proxyChanged = local.proxy != state.proxy.value
-        if (!changed && !promptChanged && !switched && !proxyChanged) return null
+        val tokenChanged = local.chatgpt != state.chatgpt.value
+        if (!changed && !promptChanged && !switched && !proxyChanged && !tokenChanged) return null
         return SyncState(
             terms,
             if (promptChanged) Stamped(prompt, now) else state.prompt,
             keys,
             if (switched) Flag(local.syncKeys, now) else state.syncKeys,
             if (proxyChanged) Stamped(local.proxy, now) else state.proxy,
+            if (tokenChanged) Stamped(local.chatgpt, if (renewal(state.chatgpt.value, local.chatgpt)) state.chatgpt.at else now) else state.chatgpt,
         )
+    }
+
+    /** A new token for the account signed in already, not a sign-in or sign-out. */
+    private fun renewal(before: String, after: String): Boolean {
+        val a = ChatGPT.account(before) ?: return false
+        val b = ChatGPT.account(after) ?: return false
+        return a.email == b.email
+    }
+
+    /** Of two tokens: the later sign-in or sign-out; within one, the later renewal; then the greater. */
+    private fun laterToken(a: Stamped, b: Stamped): Stamped {
+        if (a.at != b.at) return if (a.at > b.at) a else b
+        val x = ChatGPT.account(a.value)?.expiresAt ?: 0L
+        val y = ChatGPT.account(b.value)?.expiresAt ?: 0L
+        if (x != y) return if (x > y) a else b
+        return if (a.value >= b.value) a else b
     }
 
     /** Of two changes to one term: the later; a removal on a tie, so every device ends up the same. */
@@ -154,16 +180,17 @@ object Sync {
         val keys = local.keys.toMutableMap()
         if (syncKeys.value) for ((provider, key) in remote.keys) keys[provider] = keys[provider]?.let { later(it, key) } ?: key
         val proxy = if (syncKeys.value) later(local.proxy, remote.proxy) else local.proxy
-        return SyncState(terms, later(local.prompt, remote.prompt), keys, syncKeys, proxy)
+        val chatgpt = if (syncKeys.value) laterToken(local.chatgpt, remote.chatgpt) else local.chatgpt
+        return SyncState(terms, later(local.prompt, remote.prompt), keys, syncKeys, proxy, chatgpt)
     }
 
-    /** What goes into the synced file: no keys and no proxy while the switch is off. */
-    fun shared(state: SyncState): SyncState = if (state.syncKeys.value) state else state.copy(keys = emptyMap(), proxy = NO_PROXY)
+    /** What goes into the synced file: no keys, proxy or token while the switch is off. */
+    fun shared(state: SyncState): SyncState = if (state.syncKeys.value) state else state.copy(keys = emptyMap(), proxy = NO_PROXY, chatgpt = NO_TOKEN)
 
     /** Same content, whatever the order: nothing to upload or apply. */
     fun sameState(a: SyncState, b: SyncState): Boolean =
         a.terms.sortedBy { it.term }.map { Triple(it.term, it.at, it.removed) } == b.terms.sortedBy { it.term }.map { Triple(it.term, it.at, it.removed) } &&
-            a.prompt == b.prompt && a.keys == b.keys && a.syncKeys == b.syncKeys && a.proxy == b.proxy
+            a.prompt == b.prompt && a.keys == b.keys && a.syncKeys == b.syncKeys && a.proxy == b.proxy && a.chatgpt == b.chatgpt
 
     /**
      * The synced file's content. Still version 1: an older Ciao reads the file and ignores the proxy
@@ -179,6 +206,7 @@ object Sync {
         .put("keys", JSONObject().apply { for ((provider, k) in state.keys) put(provider, JSONObject().put("value", k.value).put("at", k.at)) })
         .put("syncKeys", JSONObject().put("value", state.syncKeys.value).put("at", state.syncKeys.at))
         .apply { if (state.proxy != NO_PROXY) put("proxy", JSONObject().put("value", state.proxy.value).put("at", state.proxy.at)) }
+        .apply { if (state.chatgpt != NO_TOKEN) put("chatgpt", JSONObject().put("value", state.chatgpt.value).put("at", state.chatgpt.at)) }
         .toString()
 
     /**
@@ -218,6 +246,11 @@ object Sync {
             val f = raw.opt("proxy") as? JSONObject ?: return null
             proxy = Stamped(f.opt("value") as? String ?: return null, (f.opt("at") as? Number ?: return null).toLong())
         }
-        SyncState(terms, Stamped(value, at.toLong()), keys, syncKeys, proxy)
+        var chatgpt = NO_TOKEN
+        if (raw.has("chatgpt")) {
+            val f = raw.opt("chatgpt") as? JSONObject ?: return null
+            chatgpt = Stamped(f.opt("value") as? String ?: return null, (f.opt("at") as? Number ?: return null).toLong())
+        }
+        SyncState(terms, Stamped(value, at.toLong()), keys, syncKeys, proxy, chatgpt)
     }.getOrNull()
 }

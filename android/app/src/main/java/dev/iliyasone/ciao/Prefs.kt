@@ -54,7 +54,7 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("syncKeys", v).apply()
 
     /** What GoogleSync compares with its history. */
-    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey, "nemotron" to dotwaveKey, "chatgpt" to chatgptToken), syncKeys, proxy)
+    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey, "nemotron" to dotwaveKey), syncKeys, proxy, chatgptToken)
 
     /**
      * Not synced, as on the desktop: each device picks its own. Gemini until one is picked, as on the

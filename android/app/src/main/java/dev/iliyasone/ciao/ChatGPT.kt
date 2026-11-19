@@ -46,7 +46,7 @@ object ChatGPT {
 
     /** The account a token is for and when it expires, read from the token itself (a JWT). Null for anything else. */
     fun account(token: String): Account? = runCatching {
-        val claims = JSONObject(String(Base64.decode(token.split(".")[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)))
+        val claims = JSONObject(String(java.util.Base64.getUrlDecoder().decode(token.split(".")[1].trimEnd('='))))
         if (!claims.has("exp")) return null
         Account(claims.optJSONObject("https://api.openai.com/profile")?.optString("email") ?: "", claims.getLong("exp") * 1000)
     }.getOrNull()
