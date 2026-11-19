@@ -450,7 +450,8 @@ and starts Ciao. If you already run a copy you built yourself, quit it first
    anyway*.
 2. Ciao lives in the system tray. On first start the Settings tab opens: paste
    your API key there. The card at the top of Settings says *All set*, or what is
-   still missing (the key, a microphone); a click on it goes to that setting.
+   still missing (the key, a microphone or access to it); a click on it goes to
+   that setting.
 3. If nothing is recorded, allow microphone access for desktop apps. It is in
    Windows Settings → Privacy & security → Microphone.
 
