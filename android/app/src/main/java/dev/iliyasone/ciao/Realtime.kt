@@ -175,21 +175,24 @@ fun openLive(context: Context, provider: Provider, key: String): LiveSession = w
 class SessionPool(private val context: Context, private val prefs: Prefs) {
     private var spare: LiveSession? = null
     private var spareProvider: Provider? = null
+    /** The key the spare was opened with: one changed since (a new key, or another ChatGPT account through sync) needs a new socket. */
+    private var spareKey = ""
     private var failedAt = Long.MIN_VALUE / 2
 
     private fun fresh(s: LiveSession?): Boolean =
-        s != null && s.usable && spareProvider == prefs.provider && SystemClock.elapsedRealtime() - s.createdAt < prefs.provider.maxSpareAgeMs
+        s != null && s.usable && spareProvider == prefs.provider && spareKey == prefs.currentKey && SystemClock.elapsedRealtime() - s.createdAt < prefs.provider.maxSpareAgeMs
 
     /** Called on every keyboard event; a failed spare (offline, bad key) is retried at most every 30 s. */
     fun refill() {
         val s = spare
         val now = SystemClock.elapsedRealtime()
         if (fresh(s)) return
-        if (s?.failure != null && spareProvider == prefs.provider) failedAt = maxOf(failedAt, s.createdAt)
-        else if (spareProvider != prefs.provider) failedAt = Long.MIN_VALUE / 2
+        if (s?.failure != null && spareProvider == prefs.provider && spareKey == prefs.currentKey) failedAt = maxOf(failedAt, s.createdAt)
+        else if (spareProvider != prefs.provider || spareKey != prefs.currentKey) failedAt = Long.MIN_VALUE / 2
         if (now - failedAt < RETRY_MS) return
         s?.close()
         spareProvider = prefs.provider
+        spareKey = prefs.currentKey
         spare = prefs.currentKey.takeIf { it.isNotEmpty() }?.let { openLive(context, prefs) }
     }
 

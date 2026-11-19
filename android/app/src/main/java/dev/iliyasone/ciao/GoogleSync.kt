@@ -243,8 +243,9 @@ object GoogleSync {
             if (remote == null || !Sync.sameState(out, remote) || ids.size > 1) {
                 val json = "application/json".toMediaType()
                 val body = Sync.serialize(out).toRequestBody(json)
-                // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys and the proxy's password in them) for a while.
-                val replace = remote != null && ((remote.keys.isNotEmpty() && out.keys.isEmpty()) || (remote.proxy.value.isNotEmpty() && out.proxy.value.isEmpty()))
+                // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys, the proxy's password and ChatGPT's token in them) for a while.
+                val replace = remote != null && ((remote.keys.isNotEmpty() && out.keys.isEmpty()) || (remote.proxy.value.isNotEmpty() && out.proxy.value.isEmpty()) ||
+                    (remote.chatgpt.value.isNotEmpty() && out.chatgpt.value.isEmpty()))
                 if (ids.isNotEmpty() && !replace) {
                     drive(Request.Builder().url("$UPLOAD/${ids[0]}?uploadType=media").patch(body))
                 } else {
