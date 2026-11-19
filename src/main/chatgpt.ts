@@ -16,6 +16,12 @@ const SESSION_URL = "https://chatgpt.com/api/auth/session";
 const RENEW_BEFORE_MS = 3 * 24 * 3600_000;
 
 let partition: Session | null = null;
+/** Told when a renewal saved a new token (main.ts: the spare session and sync take it). */
+let renewed: () => void = () => {};
+
+export function onRenewed(listener: () => void): void {
+  renewed = listener;
+}
 
 function chatgptSession(): Session {
   if (!partition) {
@@ -52,8 +58,11 @@ export async function renewToken(force = false): Promise<boolean> {
   }
   // Not signed in here, or signed out (or in anew) while the request was out.
   if (!token || token === saved || loadKeyFile("chatgpt") !== saved) return false;
+  // The cookies here may be another account's: the saved token came through sync from a sign-in elsewhere.
+  if (chatgptAccount(token)?.email !== chatgptAccount(saved)?.email) return false;
   saveKeyFile("chatgpt", token);
   console.log("chatgpt: token renewed");
+  renewed();
   return true;
 }
 

@@ -21,7 +21,7 @@ import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
 import { logRenderer } from "./rendererLog";
 import { checkProxy, setProxy } from "./proxy";
-import { renewToken, signIn as signInChatGPT, signOut as signOutChatGPT } from "./chatgpt";
+import { onRenewed, renewToken, signIn as signInChatGPT, signOut as signOutChatGPT } from "./chatgpt";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
@@ -584,7 +584,9 @@ void app.whenReady().then(() => {
   setInterval(() => pool.refill(), 30_000);
   // ChatGPT's token lasts about 10 days: asked for anew in its last days (main/chatgpt.ts). chatgpt.com
   // may hand out the same one until it runs out, so it is asked every hour then.
-  const renewChatGPT = () => void renewToken().then((changed) => changed && keysChanged());
+  // Renewed here or after a 401 (transcribe.ts): the spare session and the other devices take the new one.
+  onRenewed(keysChanged);
+  const renewChatGPT = () => void renewToken();
   renewChatGPT();
   setInterval(renewChatGPT, 3600_000);
 

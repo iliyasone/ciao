@@ -89,11 +89,18 @@ object ChatGPT {
             android.util.Log.w("Ciao", "chatgpt: the token wasn't renewed: ${e.message}")
             return false
         }
-        // Not signed in here, or signed out (or in anew) while the request was out.
-        if (token == null || token == saved || prefs.chatgptToken != saved) return false
-        GoogleSync.edit(context) { it.chatgptToken = token }
-        android.util.Log.i("Ciao", "chatgpt: token renewed")
-        return true
+        // Not signed in here, or this phone's cookies are another account's (the saved token came through sync).
+        if (token == null || token == saved || account(token)?.email != account(saved)?.email) return false
+        var changed = false
+        // Under sync's lock: signed out, or another token synced in, while the request was out wins.
+        GoogleSync.edit(context) {
+            if (it.chatgptToken == saved) {
+                it.chatgptToken = token
+                changed = true
+            }
+        }
+        if (changed) android.util.Log.i("Ciao", "chatgpt: token renewed")
+        return changed
     }
 
     /** Off the main thread. */
