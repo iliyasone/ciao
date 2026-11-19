@@ -51,6 +51,9 @@
     <string name="context_text">What you usually talk about. Helps the recognizer with names and terms.</string>
     <string name="terms_title">Terms</string>
     <string name="terms_text">Words that must be spelled exactly, one per line.</string>
+    <string name="terms_unused">%1$s takes no terms. The list is kept for the other services and your other devices.</string>
+    <string name="terms_show">Show</string>
+    <string name="terms_hide">Hide</string>
     <string name="learn_corrections">Suggest new words</string>
     <string name="learn_corrections_hint">Fix a misheard word in the field after a dictation, and Ciao offers to add it to the terms. Compared on the phone, never sent.</string>
     <string name="format_text">Paragraphs and lists</string>

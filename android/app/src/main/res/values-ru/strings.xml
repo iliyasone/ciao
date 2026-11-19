@@ -45,6 +45,9 @@
     <string name="context_text">О чём вы обычно говорите. Помогает с названиями и терминами.</string>
     <string name="terms_title">Термины</string>
     <string name="terms_text">Слова, которые нужно писать точно, по одному в строке.</string>
+    <string name="terms_unused">%1$s не берёт термины. Список хранится для других сервисов и ваших устройств.</string>
+    <string name="terms_show">Показать</string>
+    <string name="terms_hide">Скрыть</string>
     <string name="learn_corrections">Предлагать новые слова</string>
     <string name="learn_corrections_hint">Исправьте неверно услышанное слово в поле после диктовки, и Ciao предложит добавить его в термины. Сравнение — на телефоне, ничего не отправляется.</string>
     <string name="format_text">Абзацы и списки</string>

@@ -55,6 +55,9 @@
     <item name="updateTitle" type="id" />
     <item name="chatgptSignIn" type="id" />
     <item name="chatgptSignOut" type="id" />
+    <item name="showCostRow" type="id" />
+    <item name="termsText" type="id" />
+    <item name="termsToggle" type="id" />
     <item name="version" type="id" />
     <item name="whatsNewButton" type="id" />
 </resources>
