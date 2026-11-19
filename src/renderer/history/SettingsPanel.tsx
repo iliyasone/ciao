@@ -40,6 +40,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   /** What a pending save sends: the latest settings, including terms merged by a sync meanwhile. */
   const latest = useRef<Settings | null>(null);
   const hasKey = useHasKeys();
+  // New keys (saved here or brought by sync): an earlier failed check no longer says anything about them.
+  useEffect(() => ciao.settings.onKeys(() => setFailed(null)), []);
   const mics = useMics();
   const accessibility = useAccessibility();
   const tr = useStrings().settings;
@@ -92,7 +94,9 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   };
 
   if (!s) return null;
-  const onChecked = (provider: Provider, reason: string | null) => setFailed(reason === null ? null : { provider, reason });
+  // A check clears only its own service's failure: a late answer for another service changes nothing here.
+  const onChecked = (provider: Provider, reason: string | null) =>
+    setFailed((f) => (reason !== null ? { provider, reason } : f?.provider === provider ? null : f));
 
   return (
     <div className="scroll-thin h-full overflow-y-auto">
@@ -109,7 +113,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         <Section title={tr.recognition.title}>
           <ServiceRow s={s} hasKey={hasKey} update={update} />
-          {PROVIDERS[s.provider].signIn ? <ChatGPTAccountRow onChecked={onChecked} /> : <ApiKeyRow provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />}
+          {PROVIDERS[s.provider].signIn ? <ChatGPTAccountRow onChecked={onChecked} /> : <ApiKeyRow key={s.provider} provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />}
           {/* OpenAI only: the others detect the language themselves. */}
           {s.provider === "openai" && (
             <Row title={tr.recognition.languages} hint={tr.recognition.languagesHint}
@@ -164,9 +168,9 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         </Section>
 
         <Section title={tr.appearance.title}>
-          <Row title={tr.appearance.language} hint={tr.appearance.languageHint} control={<Select value={s.language} options={LANGUAGES} onChange={(language) => update({ language })} />} />
+          <Row title={tr.appearance.language} hint={tr.appearance.languageHint} control={<Select label={tr.appearance.language} value={s.language} options={LANGUAGES} onChange={(language) => update({ language })} />} />
           <Row title={tr.appearance.theme} hint={tr.appearance.themeHint}
-            control={<Select value={s.theme} options={THEMES.map((value) => ({ value, label: tr.appearance.themes[value] }))} onChange={(theme) => update({ theme })} />}
+            control={<Select label={tr.appearance.theme} value={s.theme} options={THEMES.map((value) => ({ value, label: tr.appearance.themes[value] }))} onChange={(theme) => update({ theme })} />}
           />
           <SwitchRow title={tr.behaviour.pill} hint={tr.behaviour.pillHint} value={s.overlayPill} onChange={(v) => update({ overlayPill: v })} />
         </Section>
@@ -182,7 +186,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
           {/* Only OpenAI has a delay level. */}
           {s.provider === "openai" && <SwitchRow title={tr.developer.showDelay} hint={tr.developer.showDelayHint} value={s.showDelay} onChange={(v) => update({ showDelay: v })} />}
           {s.provider === "openai" && s.showDelay && (
-            <Row title={tr.developer.delay} hint={tr.developer.delayHint} control={<Select value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />} />
+            <Row title={tr.developer.delay} hint={tr.developer.delayHint} control={<Select label={tr.developer.delay} value={s.delay} options={DELAYS.map((d) => ({ value: d, label: d }))} onChange={(delay) => update({ delay })} />} />
           )}
         </Section>
       </div>
@@ -320,10 +324,12 @@ function Button({ primary, disabled, onClick, children }: { primary?: boolean; d
   );
 }
 
-function Select<T extends string>({ value, options, onChange, className = "" }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; className?: string }) {
+/** [label]: the row's title, read out by screen readers. */
+function Select<T extends string>(props: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; className?: string }) {
+  const { label, value, options, onChange, className = "" } = props;
   return (
     <span className={`relative inline-flex ${className}`}>
-      <select value={value} onChange={(e) => onChange(e.target.value as T)} className={`${INPUT} w-full min-w-36 appearance-none truncate pr-8`}>
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)} className={`${INPUT} w-full min-w-36 appearance-none truncate pr-8`}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -443,7 +449,7 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
     <Row
       title={tr.service}
       hint={PROVIDERS[s.provider].signIn ? tr.introAccount : tr.intro}
-      control={<Select value={s.provider} options={options} onChange={(provider) => update({ provider })} className="w-[18rem]" />}
+      control={<Select label={tr.service} value={s.provider} options={options} onChange={(provider) => update({ provider })} className="w-[18rem]" />}
       below={<span className="-mt-1.5 text-[12.5px] text-faint dark:text-muted">{tr.models(m.live, m.file)}</span>}
     />
   );
@@ -773,7 +779,7 @@ function MicRow({ value, mics, onChange }: { value: string; mics: string[] | nul
       hint={hint}
       control={
         <>
-          <Select value={value} options={options} onChange={onChange} className="w-52" />
+          <Select label={tr.device} value={value} options={options} onChange={onChange} className="w-52" />
           <button
             onClick={() => setTesting(!testing)}
             className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium transition-colors ${
