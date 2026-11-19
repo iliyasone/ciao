@@ -32,7 +32,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     hands-free, click again to finish, or hold it to talk.
   - Any key, key combo or mouse button (middle, side buttons) can be a trigger;
     see [Hotkeys](#hotkeys).
-  - Or just say **"ciao"** ("чао") to start hands-free (*Settings → Voice*, off by default).
+  - Or just say **"ciao"** ("чао") to start hands-free (*Settings → Dictation*, off by default).
     The word is spotted on your computer, so nothing is sent anywhere until you
     dictate: [Vosk](https://alphacephei.com/vosk/) hears it within ~0.2 s and
     [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotting double-checks
@@ -41,7 +41,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     and the mic stays open while it is on.
   - Tapping for less than 0.35 s switches to hands-free mode: tap again to finish,
     or say **"ciao ciao"** ("чао-чао"; the words themselves are not pasted; toggle in
-    *Settings → Voice*).
+    *Settings → Dictation*).
     Turn off *Settings → Keys → A short press starts hands-free mode* to dictate only
     while holding: a short tap then starts nothing (useful when a mouse or trackpad
     button is a trigger and gets clicked by accident). The short click still doesn't
@@ -61,9 +61,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   finish), drag it anywhere. The card then opens where the pill is, on that
   screen, rather than on the screen under the pointer: upwards, or downwards
   when the pill is too close to the top for it.
-  Turn it off in *Settings → Behavior → Pill on screen*; then the card simply
+  Turn it off in *Settings → Appearance → Pill on screen*; then the card simply
   appears and disappears.
-- **Pick the microphone.** *Settings → Microphone* lists the connected ones; the
+- **Pick the microphone.** *Settings → Dictation → Record from* lists the connected ones; the
   system's default is used until you choose one, and while the chosen one isn't
   connected (Ciao goes back to it once it is). **Test** shows a level bar and the
   name of the microphone actually heard. If the microphone in use is unplugged in
@@ -75,13 +75,13 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   Device"), then choose it again. Desktop only: on Android the phone
   chooses (a headset when one is connected).
 - **Sounds when it listens.** A soft rising two-note sound when Ciao starts
-  listening, a falling one when it stops (*Settings → Behavior → Start and stop
+  listening, a falling one when it stops (*Settings → Dictation → Start and stop
   sounds*, on by default; desktop only: on Android the bubble buzzes instead). The
   start sound plays at once, except with a trigger like Right Ctrl (0.15 s later, so
   a Ctrl+C makes none) or when short presses are dropped (0.35 s); the mic audio for
   the next 0.28 s is silenced so the sound isn't in the recording, unless you are
   speaking already (after the wake word, or when you started before the sound).
-- **Music pauses while you dictate**, if you turn on *Settings → Behavior → Pause
+- **Music pauses while you dictate**, if you turn on *Settings → Dictation → Pause
   music while you dictate* (off by default). Once a recording has gone on for
   0.35 s (1 s with a trigger like Right Ctrl, which a shortcut can still turn into
   Ctrl+C until then), the players that are playing pause, so a shortcut leaves the
@@ -244,7 +244,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   in Russian speech, capitals, digits) are offered; rewrites, added sentences and
   typo fixes are not. The text is compared on your computer and never stored or
   sent. Fixing a dictation in the history (*Edit*) offers the corrected words too.
-  Turn it off in *Settings → Behavior → Suggest new words*.
+  Turn it off in *Settings → Vocabulary → Suggest new words*.
   - Reading a field makes a Chromium or Electron app (Chrome, VS Code, T3 Code,
     Slack) turn its accessibility support on, as a screen reader would; it costs
     that app some memory, and VS Code may ask once whether you use a screen
@@ -307,10 +307,10 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   prices (minutes recorded, less the silence the live model wasn't sent, × the
   model's price, `src/core/cost.ts`), not the
   providers' bill, and counts the dictations of this device's history only.
-- **Gemini or OpenAI** (*Settings → Who transcribes* on the desktop and on
+- **Gemini or OpenAI** (*Settings → Recognition → Service* on the desktop and on
   Android). Ciao doesn't recognize speech itself: it sends the audio to one of
-  these services, on your own key and your bill, and the card lists them side by
-  side with their price per hour of speech. Gemini is the default for a new install.
+  these services, on your own key and your bill, and the list gives each one's
+  price per hour of speech. Gemini is the default for a new install.
   An Android install where no service was ever picked moves to Gemini with the
   update if it has a Gemini key (one with only an OpenAI key stays on OpenAI); the
   desktop keeps the service it had. With Google's Gemini
@@ -319,8 +319,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   its smart mode, which dropped "um" and applied spoken corrections, also dropped
   whole sentences now and then, and is gone since 0.9.16.
   - Gemini detects the language on its own and takes no free-form context, only
-    the terms (*Settings → Recognition*), so the Languages and Context fields
-    (under OpenAI in *Who transcribes*) are hidden with it, and so is the delay level.
+    the terms (*Settings → Vocabulary*), so the Languages and Context fields
+    (shown with OpenAI only) are hidden with it, and so is the delay level.
   - A Gemini live connection lasts about 10 minutes, so a longer dictation moves
     to a new connection at a pause once the connection is 6 minutes old (at 8
     minutes without a pause, or right away when Google says it will close it).
@@ -335,18 +335,19 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     an AI Studio key by itself and sends the audio to Vertex AI in the key's
     project. Vertex has no AI Studio tiers (Tier 1 allows the file model only 100
     requests a day) and bills the project's Cloud billing account.
-- **NVIDIA Nemotron** (a third choice in *Who transcribes*): NVIDIA's
+- **NVIDIA Nemotron** (a third choice in *Settings → Recognition → Service*): NVIDIA's
   Nemotron 3.5 ASR Streaming, run by [.wave](https://dotwave.ai) (a `wk_…` key;
   new accounts get $10 of credit). It costs about $0.03 per hour of speech, a
   twentieth of Gemini, and the text is in 0.1–0.2 s after you stop, but it
   recognizes Russian noticeably worse than Gemini and writes English inside
   Russian speech in Cyrillic. It detects the language on its own and takes no
-  context and no terms.
+  context and no terms (the desktop's Settings keeps the terms for the other
+  services behind *Show*).
   - .wave hears audio only at the speed of speech: a backlog (the wake word's
     pre-roll, audio from before the connection opened) goes out at that speed, so
     the text comes that much later. *Live* and *More accurate* in the history take
     as long as the recording.
-- **ChatGPT** (a fourth choice in *Who transcribes*): the dictation
+- **ChatGPT** (a fourth choice in *Settings → Recognition → Service*): the dictation
   chatgpt.com has in its message box, where the text appears while you speak. It
   is free with a ChatGPT account, a free one included, and there is no key: *Sign
   in to ChatGPT* opens chatgpt.com in a window of Ciao's, and once you are in,
@@ -361,7 +362,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     account for it is wiser. ChatGPT keeps each dictation's audio on its side
     for 30 days (it says so in its answer; there is no way to turn it off).
   - It detects the language on its own, mixed Russian and English included, and
-    takes no context and no terms. Measured on synthetic speech: the first text
+    takes no context and no terms (the desktop's Settings keeps the terms for the
+    other services behind *Show*). Measured on synthetic speech: the first text
     about 0.65 s after the first word, the final about 0.55 s after the end, fewer
     errors than Gemini on Russian with English terms; a 9-minute dictation came
     through whole, its final 0.6 s after the end.
@@ -374,7 +376,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - On Android, *Sign in to ChatGPT* opens chatgpt.com inside Ciao. Google's
     sign-in may refuse to work there; then sign in with email and password, or
     on the desktop and let sync bring the account over.
-- **Proxy** (*Settings → Who transcribes → Proxy*, on every platform and on
+- **Proxy** (*Settings → Recognition → Proxy*, on every platform and on
   Android). Requests to OpenAI, Gemini, Nemotron and ChatGPT, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
   country. Paste it, press *Save*, and *Check* (run on its own after a save) says
@@ -447,7 +449,9 @@ and starts Ciao. If you already run a copy you built yourself, quit it first
 1. The installer is unsigned, so SmartScreen may warn you: choose *More info → Run
    anyway*.
 2. Ciao lives in the system tray. On first start the Settings tab opens: paste
-   your API key there.
+   your API key there. The card at the top of Settings says *All set*, or what is
+   still missing (the key, a microphone or access to it); a click on it goes to
+   that setting.
 3. If nothing is recorded, allow microphone access for desktop apps. It is in
    Windows Settings → Privacy & security → Microphone.
 
@@ -462,7 +466,7 @@ Ciao quits, installs it silently and starts again. Settings, the key and the
 history in `%APPDATA%\Ciao` stay. Nothing is downloaded until you click, and a
 failed check in the background shows nothing.
 
-To check by hand, go to *Settings → Updates → Check*.
+To check by hand, go to *Settings → About → Check*.
 
 On Linux the AppImage updates itself the same way; the `.deb` asks for your
 password to install the new package. On macOS the check works the same, but the
@@ -484,7 +488,8 @@ for Intel. Open it and drag Ciao into Applications.
    Privacy & Security, scroll down and click *Open Anyway*. Or run
    `xattr -dr com.apple.quarantine /Applications/Ciao.app` in Terminal once.
 2. Ciao lives in the menu bar; there is no Dock icon. On first start the Settings
-   tab opens: paste your API key there.
+   tab opens: paste your API key there. The card at the top of Settings says what
+   is still missing, Accessibility included.
 3. Allow the microphone when asked, and turn Ciao on in System Settings → Privacy
    & Security → Accessibility. Without that, Ciao can't hear the dictation key or
    paste the text. *Settings → Permissions* shows whether it has it.
@@ -597,8 +602,8 @@ Ciao takes the OpenAI key from the `OPENAI_API_KEY` environment variable, the
 Gemini key from `GEMINI_API_KEY` and the .wave key from `DOTWAVE_API_KEY`. If that
 is not set, it reads `openai-key.txt`, `gemini-key.txt` or `dotwave-key.txt` in the
 [data folder](#where-things-are-stored). Saving a key in
-Settings writes that file; the key field is under the service in use in
-*Settings → Who transcribes*. Saving a key checks it right away (the service lists
+Settings writes that file; the key field is under the service in
+*Settings → Recognition*. Saving a key checks it right away (the service lists
 its models; for .wave the live connection opens and closes): the line under the
 field says whether it works or what the service answered. *Check* repeats that for
 the saved key.
@@ -887,7 +892,7 @@ not derived from your machine or accounts. No text, audio, window titles, prompt
 terms or API keys are ever sent. PostHog keeps no person profiles for these events, does
 not look up a location from your IP address, and the project discards IP addresses.
 
-To turn it off, use *Settings → Behavior → Anonymous usage stats* (*Настройки → Поведение → Анонимная статистика* in Russian), or set
+To turn it off, use *Settings → About → Anonymous usage stats* (*Настройки → О приложении → Анонимная статистика* in Russian), or set
 `CIAO_TELEMETRY=0`. An unpackaged dev run (`electron .`) sends nothing unless
 `CIAO_TELEMETRY=1`. `CIAO_POSTHOG_KEY` and `CIAO_POSTHOG_HOST`
 point it at your own PostHog project.

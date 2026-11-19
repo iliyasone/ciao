@@ -3,6 +3,10 @@
 @theme {
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --color-accent: #f4677f;
+  /* Buttons, links and switches in Settings, as on Android: the brand pink is too light for white text. */
+  --color-accent-strong: #d9435e;
+  /* Behind white text: #d9435e is 4.3:1 on white, this one 5:1. */
+  --color-accent-deep: #c63450;
 }
 
 /* Semantic colours. Electron maps the theme setting (system/light/dark) onto
@@ -20,11 +24,22 @@
   --color-overlay: var(--c-overlay);
   --color-settled: var(--c-settled);
   --color-fresh: var(--c-fresh);
+  --color-line: var(--c-line);
+  --color-divider: var(--c-divider);
+  --color-field: var(--c-field);
+  --color-field-line: var(--c-field-line);
+  --color-switch-off: var(--c-switch-off);
+  --color-thumb: var(--c-thumb);
+  --color-thumb-on: var(--c-thumb-on);
+  --color-ok: var(--c-ok);
+  --color-warn: var(--c-warn);
+  --color-error: var(--c-error);
 }
 
 :root {
   color-scheme: light;
-  --c-app: #f4f4f6;
+  /* Neutrals after T3 Code's settings, the same as the Android app's (android/.../values/colors.xml). */
+  --c-app: #fcfcfc;
   --c-fg: #18181b;
   --c-fg2: #27272a;
   --c-muted: #52525b;
@@ -36,12 +51,22 @@
   --c-overlay: #fdfdfe;
   --c-settled: #6b6b78;
   --c-fresh: #09090b;
+  --c-line: #e9e9ec;
+  --c-divider: #f0f0f2;
+  --c-field: #fcfcfc;
+  --c-field-line: #dcdce0;
+  --c-switch-off: #d4d4d8;
+  --c-thumb: #fff;
+  --c-thumb-on: #fff;
+  --c-ok: #047857;
+  --c-warn: #b45309;
+  --c-error: #b91c1c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --c-app: #111114;
+    --c-app: #000;
     --c-fg: #ececef;
     --c-fg2: #d4d4d8;
     --c-muted: #a1a1aa;
@@ -53,6 +78,16 @@
     --c-overlay: #1a1a1f;
     --c-settled: #9d9daa;
     --c-fresh: #f5f5f7;
+    --c-line: #1c1c1c;
+    --c-divider: #141414;
+    --c-field: #0f0f0f;
+    --c-field-line: #262626;
+    --c-switch-off: #262626;
+    --c-thumb: #a1a1a1;
+    --c-thumb-on: #0a0a0a;
+    --c-ok: #34d399;
+    --c-warn: #fbbf24;
+    --c-error: #f87171;
   }
 }
 
@@ -219,6 +254,18 @@ body.lifted .lift-shadow {
 @keyframes tok-settle {
   to {
     color: var(--color-settled);
+  }
+}
+
+/* Settings: the row the status card points to, lit up for a moment. */
+.row-flash {
+  animation: row-flash 1.6s ease-out;
+}
+
+@keyframes row-flash {
+  from,
+  30% {
+    background: color-mix(in srgb, var(--color-accent-strong) 9%, transparent);
   }
 }
 

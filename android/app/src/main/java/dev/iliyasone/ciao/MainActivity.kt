@@ -110,12 +110,19 @@ class MainActivity : Activity() {
             kit.add(this, kit.switchRow(R.id.restoreClipboard, getString(R.string.restore_clipboard), getString(R.string.restore_clipboard_hint)))
             kit.add(this, kit.switchRow(R.id.stopPhrase, getString(R.string.stop_phrase), getString(R.string.stop_phrase_hint)))
             kit.add(this, kit.switchRow(R.id.pauseMedia, getString(R.string.pause_media), getString(R.string.pause_media_hint)))
-            kit.add(this, kit.switchRow(R.id.showCost, getString(R.string.show_cost), getString(R.string.show_cost_hint)))
+            kit.add(this, kit.switchRow(R.id.showCost, getString(R.string.show_cost), getString(R.string.show_cost_hint)).apply { id = R.id.showCostRow })
         }
 
         // Vocabulary
         kit.section(page, getString(R.string.section_vocabulary), kit.card()).apply {
-            kit.add(this, kit.row(getString(R.string.terms_title), getString(R.string.terms_text), below = listOf(kit.field(R.id.keywords, "", lines = 3))))
+            // With a service that takes no terms, the list folds behind Show (kept for the others and the other devices), as on the desktop.
+            val termsToggle = kit.button(getString(R.string.terms_show), primary = false, id = R.id.termsToggle).apply {
+                setOnClickListener {
+                    termsOpen = !termsOpen
+                    showProvider()
+                }
+            }
+            kit.add(this, kit.row(getString(R.string.terms_title), getString(R.string.terms_text), control = termsToggle, below = listOf(kit.field(R.id.keywords, "", lines = 3)), hintId = R.id.termsText))
             kit.add(this, kit.row(getString(R.string.context_title), getString(R.string.context_text), below = listOf(
                 kit.field(R.id.prompt, "", lines = 3),
             )).apply { id = R.id.contextRow })
@@ -218,9 +225,22 @@ class MainActivity : Activity() {
         showProvider()
     }
 
+    /** The terms folded by hand open, with a service that takes none. */
+    private var termsOpen = false
+
     /** The key title, the Gemini note and the OpenAI-only rows follow the service picked. */
     private fun showProvider() {
         val openai = prefs.provider == Provider.OPENAI
+        // Free: its card shows no cost, so there is none to switch.
+        findViewById<View>(R.id.showCostRow).visibility = if (prefs.provider.pricePerMinute > 0) View.VISIBLE else View.GONE
+        val noTerms = prefs.provider == Provider.NEMOTRON || prefs.provider == Provider.CHATGPT
+        findViewById<TextView>(R.id.termsText).text =
+            if (noTerms) getString(R.string.terms_unused, prefs.provider.displayName) else getString(R.string.terms_text)
+        findViewById<View>(R.id.keywords).visibility = if (!noTerms || termsOpen) View.VISIBLE else View.GONE
+        findViewById<android.widget.Button>(R.id.termsToggle).apply {
+            visibility = if (noTerms) View.VISIBLE else View.GONE
+            setText(if (termsOpen) R.string.terms_hide else R.string.terms_show)
+        }
         findViewById<TextView>(R.id.keyTitle).text = key.title()
         // OpenAI only, as on the desktop: Gemini and ChatGPT detect the language themselves, take no context and have no delay level.
         findViewById<View>(R.id.contextRow).visibility = if (openai) View.VISIBLE else View.GONE
