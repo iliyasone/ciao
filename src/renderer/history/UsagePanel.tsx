@@ -10,7 +10,7 @@ import { useStrings } from "../lang";
 
 type Metric = "cost" | "minutes";
 
-const COLORS: Record<UsageProvider, string> = { openai: "#10a37f", gemini: "#4c8df6", nemotron: "#76b900", other: "#a1a1aa" };
+const COLORS: Record<UsageProvider, string> = { openai: "#10a37f", gemini: "#4c8df6", nemotron: "#76b900", chatgpt: "#ab68ff", other: "#a1a1aa" };
 
 const providerName = (p: UsageProvider, tr: Strings) => (p === "other" ? tr.usage.other : PROVIDERS[p].name);
 const minutesOf = (ms: number) => Math.round(ms / 60_000);
@@ -233,7 +233,7 @@ function Models({ summary, metric }: { summary: UsageSummary; metric: Metric }) 
               <span className="w-10 text-right text-[12px] text-ghost tabular-nums">{Math.round(share * 100)}%</span>
               <span className="w-12 text-right text-[12px] text-faint tabular-nums">{m.count}</span>
               <span className="w-24 text-right text-[12px] text-faint tabular-nums">{tr.usage.duration(minutesOf(m.ms))}</span>
-              <span className="w-16 text-right font-medium text-fg tabular-nums">{formatCost(m.usd)}</span>
+              <span className="w-16 text-right font-medium text-fg tabular-nums">{m.provider === "chatgpt" ? tr.usage.free : formatCost(m.usd)}</span>
             </div>
           );
         })}

@@ -4,8 +4,10 @@ import { type GeminiEndpoint, GeminiLiveSession, geminiAccess, geminiLiveUrl, pa
 import { t } from "../core/i18n";
 import { models, PROVIDERS } from "../core/providers";
 import { NEMOTRON_LIVE_URL, NemotronSession } from "../core/nemotron";
+import { CHATGPT_FILE_URL, CHATGPT_LIVE_URL, ChatGPTSession, chatgptProtocols } from "../core/chatgpt";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
 import type { KeyCheck, Provider, Settings } from "../core/types";
+import { renewToken } from "./chatgpt";
 import { apiFetch, wsAgent } from "./proxy";
 
 export function openLive(provider: Provider, apiKey: string): LiveSession {
@@ -15,8 +17,20 @@ export function openLive(provider: Provider, apiKey: string): LiveSession {
     const socket = (url: string) => new WebSocket(url, { headers: { "x-goog-api-key": key }, agent: wsAgent() }) as unknown as SocketLike;
     return new GeminiLiveSession(socket, geminiEndpoint(apiKey), geminiLiveUrl(base));
   }
+  if (provider === "chatgpt")
+    return new ChatGPTSession((url) => {
+      const ws = chatgptSocket(url, apiKey);
+      // Refused: the token was renewed elsewhere or revoked. The next session takes a fresh one.
+      ws.on("error", (e) => /\b401\b/.test(e.message) && void renewToken(true));
+      return ws as unknown as SocketLike;
+    });
   const socket = (url: string) => new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent() }) as unknown as SocketLike;
   return provider === "nemotron" ? new NemotronSession(socket) : new RealtimeSession(socket);
+}
+
+/** ChatGPT's dictation socket, opened the way chatgpt.com opens it. */
+function chatgptSocket(url: string, token: string, options: WebSocket.ClientOptions = {}): WebSocket {
+  return new WebSocket(url, chatgptProtocols(token), { headers: { Origin: "https://chatgpt.com" }, agent: wsAgent(), ...options });
 }
 
 const endpoints = new Map<string, Promise<GeminiEndpoint>>();
@@ -56,16 +70,20 @@ async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
 
 /**
  * Asks the service whether it takes the key, the cheapest way it has: Gemini and OpenAI list their
- * models; .wave has no such request, so its live socket is opened and closed (no audio, no charge).
- * A Vertex key is refused by the Gemini API in a way that names its project: that counts as working.
+ * models; .wave and ChatGPT have no such request, so their live socket is opened and closed (no
+ * audio, no charge). A Vertex key is refused by the Gemini API in a way that names its project: that
+ * counts as working.
  */
 export async function checkKey(provider: Provider, apiKey: string): Promise<KeyCheck> {
   const started = Date.now();
   const name = PROVIDERS[provider].name;
   try {
-    if (provider === "nemotron") {
+    if (provider === "nemotron" || provider === "chatgpt") {
       const status = await new Promise<number>((resolve, reject) => {
-        const ws = new WebSocket(NEMOTRON_LIVE_URL, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent(), handshakeTimeout: 10_000 });
+        const ws =
+          provider === "chatgpt"
+            ? chatgptSocket(CHATGPT_LIVE_URL, apiKey, { handshakeTimeout: 10_000 })
+            : new WebSocket(NEMOTRON_LIVE_URL, { headers: { Authorization: `Bearer ${apiKey}` }, agent: wsAgent(), handshakeTimeout: 10_000 });
         ws.on("open", () => {
           ws.close();
           resolve(200);
@@ -101,7 +119,8 @@ export class SessionPool {
   private spare: { provider: Provider; session: LiveSession } | null = null;
   // Gemini drops a socket that has waited ~5 min without a setup (measured: fine after 4 min, gone
   // after 5.5), and a live session lasts at most 10 min. .wave closes one that got no audio for 30 s.
-  private static readonly MAX_AGE_MS: Record<Provider, number> = { openai: 10 * 60_000, gemini: 2 * 60_000, nemotron: 20_000 };
+  // ChatGPT kept one waiting for 13 minutes (measured).
+  private static readonly MAX_AGE_MS: Record<Provider, number> = { openai: 10 * 60_000, gemini: 2 * 60_000, nemotron: 20_000, chatgpt: 10 * 60_000 };
 
   constructor(
     private readonly provider: () => Provider,
@@ -147,6 +166,12 @@ export class SessionPool {
  */
 const GEMINI_LIVE_SPEEDUP = 4;
 
+/**
+ * ChatGPT too: a 9-minute recording sent at once ended in "Streaming ASR failed before producing a
+ * final transcript", 4× went through whole (measured).
+ */
+const CHATGPT_LIVE_SPEEDUP = 4;
+
 /** Gemini replays one at a time: two at 4× would be over the limit together. */
 let geminiReplays: Promise<unknown> = Promise.resolve();
 
@@ -183,7 +208,7 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
     };
     s.configure({ ...settings, delay: "high" });
     // NemotronSession itself sends the audio no faster than it was spoken.
-    if (settings.provider !== "gemini") {
+    if (settings.provider === "openai" || settings.provider === "nemotron") {
       const chunk = 24_000 * 2; // 1 s per message
       for (let i = 0; i < pcm.byteLength; i += chunk) s.append(pcm.subarray(i, i + chunk));
       s.commit();
@@ -198,7 +223,7 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       if (i >= pcm.byteLength) return s.commit();
       s.append(pcm.subarray(i, i + chunk));
       i += chunk;
-      setTimeout(next, 240 / GEMINI_LIVE_SPEEDUP);
+      setTimeout(next, 240 / (settings.provider === "chatgpt" ? CHATGPT_LIVE_SPEEDUP : GEMINI_LIVE_SPEEDUP));
     };
     next();
   });
@@ -246,6 +271,7 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
   if (settings.provider === "gemini") return transcribeFileGemini(apiKey, pcm, settings);
   // .wave has no file model: the live one hears the recording again, as long as it lasts.
   if (settings.provider === "nemotron") return transcribeLive(apiKey, pcm, settings);
+  if (settings.provider === "chatgpt") return transcribeFileChatGPT(apiKey, pcm);
   const texts: string[] = [];
   for (const part of splitPcm(pcm)) {
     const form = new FormData();
@@ -264,6 +290,31 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
     });
     const body = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
     if (!res.ok) throw new Error(body.error?.message ?? t().errors.status("OpenAI", res.status));
+    texts.push((body.text ?? "").trim());
+  }
+  return texts.filter(Boolean).join(" ");
+}
+
+/**
+ * ChatGPT's file endpoint, which chatgpt.com sends a dictation's audio to when the stream failed.
+ * Took a 9-minute WAV (26 MB) whole in 10 s (measured); longer ones go in parts, as for OpenAI.
+ */
+async function transcribeFileChatGPT(token: string, pcm: Buffer): Promise<string> {
+  const texts: string[] = [];
+  for (const part of splitPcm(pcm)) {
+    const form = new FormData();
+    form.append("file", new Blob([wav(part)], { type: "audio/wav" }), "audio.wav");
+    const res = await apiFetch(CHATGPT_FILE_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Origin: "https://chatgpt.com" },
+      body: form,
+    });
+    const body = (await res.json().catch(() => ({}))) as { text?: string; detail?: string | { message?: string }; error?: { message?: string } };
+    if (res.status === 401) void renewToken(true);
+    if (!res.ok) {
+      const detail = typeof body.detail === "string" ? body.detail : body.detail?.message;
+      throw new Error(res.status === 401 ? t().errors.signedOut : (detail ?? body.error?.message ?? t().errors.status("ChatGPT", res.status)));
+    }
     texts.push((body.text ?? "").trim());
   }
   return texts.filter(Boolean).join(" ");

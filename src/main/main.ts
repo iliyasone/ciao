@@ -7,6 +7,7 @@ import { DELAYS, type HistoryEntry, type Provider, type RetryMode, type Settings
 import { BYTES_PER_MS } from "../core/audio";
 import { costUsd } from "../core/cost";
 import { models, PROVIDERS } from "../core/providers";
+import { chatgptAccount } from "../core/chatgpt";
 import { setLang, t } from "../core/i18n";
 import { arrangeTerms, termsOf, type Local } from "../core/sync";
 import { findCorrections, newTerms } from "../core/corrections";
@@ -20,6 +21,7 @@ import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
 import { logRenderer } from "./rendererLog";
 import { checkProxy, setProxy } from "./proxy";
+import { renewToken, signIn as signInChatGPT, signOut as signOutChatGPT } from "./chatgpt";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
@@ -189,9 +191,12 @@ function openHistory(tab?: "settings"): void {
   historyWin.on("focus", () => sync.syncSoon(0));
 }
 
+/** The providers whose key sync carries: not ChatGPT's token, which lasts days and renews only on this device. */
+const syncedProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn);
+
 /** What Google sync compares with its history: the settings it syncs and the saved keys. */
 function local(): Local {
-  const keys = Object.fromEntries((Object.keys(PROVIDERS) as Provider[]).map((p) => [p, loadKeyFile(p)]));
+  const keys = Object.fromEntries(syncedProviders().map((p) => [p, loadKeyFile(p)]));
   return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys, proxy: settings.proxy };
 }
 
@@ -316,7 +321,7 @@ async function retry(id: string, mode: RetryMode, provider = settings.provider):
   const s = { ...settings, provider };
   const key = loadApiKey(provider);
   const entry = store.get(id);
-  if (!key) throw new Error(t().errors.noApiKeyHint(PROVIDERS[provider].name));
+  if (!key) throw new Error((PROVIDERS[provider].signIn ? t().errors.signInHint : t().errors.noApiKeyHint)(PROVIDERS[provider].name));
   if (!entry) throw new Error(t().errors.entryNotFound);
   const pcm = WavWriter.readPcm(store.audioPath(id));
   const model = mode === "file" ? models(s).file : models(s).live;
@@ -463,6 +468,20 @@ function registerIpc(): void {
     sync.noteLocal(local());
   });
 
+  ipcMain.handle("chatgpt:account", () => {
+    const token = loadApiKey("chatgpt");
+    return token ? (chatgptAccount(token) ?? { email: "", expiresAt: 0 }) : null;
+  });
+  ipcMain.handle("chatgpt:sign-in", async () => {
+    const ok = await signInChatGPT(historyWin ?? undefined);
+    if (ok) keysChanged();
+    return ok;
+  });
+  ipcMain.handle("chatgpt:sign-out", async () => {
+    await signOutChatGPT();
+    keysChanged();
+  });
+
   ipcMain.handle("sync:get", () => sync.get());
   ipcMain.handle("sync:sign-in", () => sync.signIn());
   ipcMain.handle("sync:sign-out", () => sync.signOut());
@@ -566,6 +585,11 @@ void app.whenReady().then(() => {
   pool = new SessionPool(() => settings.provider, loadApiKey);
   pool.refill();
   setInterval(() => pool.refill(), 30_000);
+  // ChatGPT's token lasts about 10 days: asked for anew in its last days (main/chatgpt.ts). chatgpt.com
+  // may hand out the same one until it runs out, so it is asked every hour then.
+  const renewChatGPT = () => void renewToken().then((changed) => changed && keysChanged());
+  renewChatGPT();
+  setInterval(renewChatGPT, 3600_000);
 
   overlay = new OverlayWindow(
     PRELOAD,
@@ -627,7 +651,7 @@ void app.whenReady().then(() => {
     (state) => {
       // Keys first: applySettings reads them back as this device's own.
       let keys = false;
-      for (const provider of Object.keys(PROVIDERS) as Provider[]) {
+      for (const provider of syncedProviders()) {
         const key = state.keys[provider]?.value;
         if (key === undefined || key === loadKeyFile(provider)) continue;
         saveKeyFile(provider, key);

@@ -106,6 +106,13 @@ const api = {
     onAccessibility: (cb: (granted: boolean) => void) => on("settings:accessibility", cb),
     openAccessibility: (): Promise<void> => ipcRenderer.invoke("settings:open-accessibility"),
   },
+  chatgpt: {
+    /** The account signed in for ChatGPT's transcription and when its token runs out; null when none is. */
+    account: (): Promise<{ email: string; expiresAt: number } | null> => ipcRenderer.invoke("chatgpt:account"),
+    /** Opens chatgpt.com's sign-in in a window; resolves once signed in, or false if the window was closed first. */
+    signIn: (): Promise<boolean> => ipcRenderer.invoke("chatgpt:sign-in"),
+    signOut: (): Promise<void> => ipcRenderer.invoke("chatgpt:sign-out"),
+  },
   sync: {
     get: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:get"),
     onStatus: (cb: (s: SyncStatus) => void) => on("sync:status", cb),

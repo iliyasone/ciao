@@ -67,7 +67,7 @@ export interface DictationReport {
   trigger: string;
   ended_by: "release" | "press" | "stop_phrase" | "escape" | "mic_error";
   hands_free: boolean;
-  /** Who transcribed it: "openai", "gemini" or "nemotron". */
+  /** Who transcribed it: "openai", "gemini", "nemotron" or "chatgpt". */
   provider: string;
   /** "live" = the streaming transcript, "file" = the saved audio re-sent after the live one failed, "none" = no transcript (Esc, mic error). */
   transcribed_by: "live" | "file" | "none";
@@ -369,7 +369,7 @@ export class DictationController {
     const seq = ++this.seq;
     if (!apiKey) {
       this.kept = null;
-      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: t().errors.noApiKeyHint(PROVIDERS[settings.provider].name) });
+      this.deps.overlay.state({ seq, phase: "saved", handsFree: false, startedAt: Date.now(), showCost: false, costPerMinuteUsd: 0, offline: true, message: (PROVIDERS[settings.provider].signIn ? t().errors.signInHint : t().errors.noApiKeyHint)(PROVIDERS[settings.provider].name) });
       return;
     }
     this.deps.started();
@@ -934,7 +934,8 @@ export class DictationController {
       handsFree: this.handsFree,
       startedAt: a.startedAt,
       endedAt: a.releasedAt,
-      showCost: a.settings.showCost,
+      // ChatGPT's is free: no running "0 ¢" on the card.
+      showCost: a.settings.showCost && pricePerMinute(models(a.settings).live) > 0,
       costPerMinuteUsd: pricePerMinute(models(a.settings).live),
       offline: a.offline !== null,
       delay: a.settings.showDelay && a.settings.provider === "openai" ? a.settings.delay : undefined,
