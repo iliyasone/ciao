@@ -40,8 +40,16 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
   /** What a pending save sends: the latest settings, including terms merged by a sync meanwhile. */
   const latest = useRef<Settings | null>(null);
   const hasKey = useHasKeys();
-  // New keys (saved here or brought by sync): an earlier failed check no longer says anything about them.
-  useEffect(() => ciao.settings.onKeys(() => setFailed({})), []);
+  // New keys (saved here or brought by sync): earlier checks, finished or still running, no longer say
+  // anything about them. The event doesn't say whose key changed, so this goes for every service.
+  useEffect(
+    () =>
+      ciao.settings.onKeys(() => {
+        invalidateChecks();
+        setFailed({});
+      }),
+    [],
+  );
   const mics = useMics();
   const accessibility = useAccessibility();
   const tr = useStrings().settings;
@@ -462,6 +470,7 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
 const checksStarted: Partial<Record<Provider, number>> = {};
 const startCheck = (provider: Provider) => (checksStarted[provider] = (checksStarted[provider] ?? 0) + 1);
 const isLatestCheck = (provider: Provider, n: number) => checksStarted[provider] === n;
+const invalidateChecks = () => (Object.keys(PROVIDERS) as Provider[]).forEach(startCheck);
 
 function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey: boolean; onChecked: (provider: Provider, reason: string | null) => void }) {
   const [value, setValue] = useState("");
@@ -472,6 +481,9 @@ function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey
     setValue("");
     setCheck(null);
   }, [provider]);
+  // A key changed: the last check's line (or the one still running) is about the old one. Saving here
+  // sends this before the save returns, so the check that follows a save isn't cleared.
+  useEffect(() => ciao.settings.onKeys(() => setCheck(null)), []);
   const runCheck = async (key?: string) => {
     const n = startCheck(provider);
     setCheck({ text: tr.checking, ok: null });
@@ -532,7 +544,10 @@ function ChatGPTAccountRow({ onChecked }: { onChecked: (provider: Provider, reas
   useEffect(() => {
     const load = () => void ciao.chatgpt.account().then(setAccount);
     load();
-    return ciao.settings.onKeys(load);
+    return ciao.settings.onKeys(() => {
+      setNote(null); // a check still running is about the old sign-in
+      load();
+    });
   }, []);
   const signIn = async () => {
     setNote({ text: tr.signingIn, ok: null });
