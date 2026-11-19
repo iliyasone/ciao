@@ -17,10 +17,11 @@ object Retry {
     enum class Mode { FILE, LIVE }
 
     /**
-     * Gemini takes a saved recording at most this many times faster than real time: sent all at once,
-     * its live model hits the audio-per-minute limit (see src/main/transcribe.ts).
+     * Gemini and ChatGPT take a saved recording at most this many times faster than real time: sent
+     * all at once, Gemini's live model hits the audio-per-minute limit, and ChatGPT's gave up on a
+     * 9-minute one (see src/main/transcribe.ts).
      */
-    private const val GEMINI_LIVE_SPEEDUP = 4
+    private const val LIVE_SPEEDUP = 4
     private const val BYTES_PER_MS = Recorder.SAMPLE_RATE * 2 / 1000
     /** Pieces handed to the main thread and not yet sent, and bytes the socket has yet to send, before the replay waits. */
     private const val MAX_PENDING = 8
@@ -32,7 +33,7 @@ object Retry {
     /** Blocking; call off the main thread. Saves the new text into the entry and returns the entry. */
     fun run(context: Context, prefs: Prefs, history: History, id: String, mode: Mode, provider: Provider): History.Entry {
         val key = prefs.keyOf(provider)
-        if (key.isEmpty()) throw IOException(context.getString(R.string.need_key, provider.displayName))
+        if (key.isEmpty()) throw IOException(context.getString(if (provider == Provider.CHATGPT) R.string.need_sign_in else R.string.need_key, provider.displayName))
         val audio = history.audioFile(id)
         val text = when (mode) {
             Mode.FILE -> FileTranscriber.transcribe(context, prefs, audio, provider, key)
@@ -53,14 +54,16 @@ object Retry {
      * file a piece at a time, and sent no faster than the socket takes it: OkHttp closes a socket
      * with over 16 MB waiting, about 4 minutes of audio.
      */
-    private fun live(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String): String {
+    fun live(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String): String {
         val done = CountDownLatch(1)
         var result: String? = null
         var error: String? = null
         val main = Handler(Looper.getMainLooper())
         // Opened before the socket: a missing recording fails without one.
         val input = audio.inputStream()
-        val session: LiveSession = if (provider == Provider.GEMINI) GeminiSession(context, key) else RealtimeSession(context, key)
+        val session = openLive(context, provider, key)
+        // Nemotron's session paces itself, at the speed of speech.
+        val paced = provider == Provider.GEMINI || provider == Provider.CHATGPT
         session.listener = object : LiveSession.Listener {
             override fun onDelta(text: String) {}
             override fun onRevise(text: String) {}
@@ -76,12 +79,12 @@ object Retry {
                 done.countDown()
             }
         }
-        val timeoutMs = 60_000 + audio.length() / BYTES_PER_MS / 2
+        val timeoutMs = 60_000 + audio.length() / BYTES_PER_MS / (if (provider == Provider.NEMOTRON) 1 else 2)
         try {
             main.post { session.configure(prefs) }
-            // Gemini: 240 ms per message, fine enough for the session to find pauses to cut a long one at.
+            // Paced: 240 ms per message, fine enough for Gemini's session to find pauses to cut a long one at.
             // Both are whole 40 ms frames, as the microphone gave them: the silence left out is the same (SilenceGate).
-            val chunk = if (provider == Provider.GEMINI) 240 * BYTES_PER_MS else Recorder.SAMPLE_RATE * 2 // 1 s per message
+            val chunk = if (paced) 240 * BYTES_PER_MS else Recorder.SAMPLE_RATE * 2 // 1 s per message
             val pending = AtomicInteger()
             input.use {
                 val buf = ByteArray(chunk)
@@ -96,7 +99,7 @@ object Retry {
                         session.append(part)
                         pending.decrementAndGet()
                     }
-                    if (provider == Provider.GEMINI) Thread.sleep(240L / GEMINI_LIVE_SPEEDUP)
+                    if (paced) Thread.sleep(240L / LIVE_SPEEDUP)
                 }
             }
             main.post { session.commit() }

@@ -105,6 +105,13 @@ class CiaoService : AccessibilityService() {
     private val refresh = Runnable { refreshBubble() }
     private val hideCardLater = Runnable { if (dictation == null) hideCard() }
     private val closePool = Runnable { pool.close() }
+    /** ChatGPT's token, from this phone's sign-in if it has one: checked at start and every hour, as on the desktop. */
+    private val renewChatGPT = object : Runnable {
+        override fun run() {
+            ChatGPT.renewSoon(this@CiaoService)
+            main.postDelayed(this, 3600_000L)
+        }
+    }
 
     override fun attachBaseContext(base: Context) = super.attachBaseContext(Ui.wrap(base))
 
@@ -128,6 +135,7 @@ class CiaoService : AccessibilityService() {
             "format_text_enabled" to prefs.formatText,
         ))
         RecordingService.channel(this)
+        renewChatGPT.run()
         // Recordings cut off by a crash or Android killing Ciao (out of memory, say): transcribe what was recorded.
         disk.execute { runCatching { history.recover() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { Thread { Recovery.run(this, prefs, history, it) }.start() } }
         // Where recordings went before the history (Ciao 0.8.2 and older).
@@ -483,7 +491,7 @@ class CiaoService : AccessibilityService() {
 
     private fun start(pushToTalk: Boolean) {
         if (!idle) return
-        if (prefs.currentKey.isEmpty()) return openApp(getString(R.string.need_key, prefs.provider.displayName))
+        if (prefs.currentKey.isEmpty()) return openApp(getString(if (prefs.provider == Provider.CHATGPT) R.string.need_sign_in else R.string.need_key, prefs.provider.displayName))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return openApp(getString(R.string.need_mic))
 
         val target = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()?.takeIf { it.isEditable && !it.isPassword }
@@ -572,7 +580,7 @@ class CiaoService : AccessibilityService() {
         showBubble()
         bubble?.state = BubbleView.State.RECORDING
         bubble?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-        showCard().begin(prefs.showCost, d.provider.pricePerMinute, prefs.formatText)
+        showCard().begin(prefs.showCost && d.provider.pricePerMinute > 0, d.provider.pricePerMinute, prefs.formatText)
         if (session.failure != null) card?.notice(getString(R.string.offline))
         // Android hands a background app pure digital silence instead of an error when it may not record.
         main.postDelayed({ if (dictation === d && d.phase == Phase.RECORDING && !d.heardAnything) card?.notice(getString(R.string.mic_silent)) }, 2500)

@@ -50,6 +50,11 @@
             android:label="@string/history_title" />
 
         <activity
+            android:name=".ChatGPT$SignInActivity"
+            android:exported="false"
+            android:label="ChatGPT" />
+
+        <activity
             android:name=".UsageActivity"
             android:exported="false"
             android:label="@string/usage_title" />

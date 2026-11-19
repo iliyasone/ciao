@@ -80,7 +80,7 @@ export class GoogleSync {
     } catch {
       // Never synced: what's in the settings now predates any edit to come.
     }
-    this.state = saved ? adoptKeys(saved, current.keys) : initialState(current, DEFAULT_SETTINGS);
+    this.state = saved ? adoptKeys(saved, current) : initialState(current, DEFAULT_SETTINGS);
     if (this.state !== saved) this.saveState();
     // Settings changed while Ciao wasn't running (config.json edited by hand) count as an edit now.
     this.pending = current;
@@ -222,8 +222,10 @@ export class GoogleSync {
       const out = shared(merged);
       if (!remote || !sameState(out, remote) || extra.length) {
         const body = serializeState(out);
-        // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys and the proxy's password in them) for a while.
-        const replace = !!remote && ((Object.keys(remote.keys).length > 0 && Object.keys(out.keys).length === 0) || (!!remote.proxy.value && !out.proxy.value));
+        // Keys just turned off: a new file, since Drive keeps a file's earlier versions (keys, the proxy's password and ChatGPT's token in them) for a while.
+        const replace =
+          !!remote &&
+          ((Object.keys(remote.keys).length > 0 && Object.keys(out.keys).length === 0) || (!!remote.proxy.value && !out.proxy.value) || (!!remote.chatgpt.value && !out.chatgpt.value));
         if (first && !replace) {
           await this.drive(`${UPLOAD}/${first.id}?uploadType=media`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body });
         } else {

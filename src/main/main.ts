@@ -21,7 +21,7 @@ import { InputHelper } from "./input";
 import { OverlayWindow } from "./overlayWindow";
 import { logRenderer } from "./rendererLog";
 import { checkProxy, setProxy } from "./proxy";
-import { renewToken, signIn as signInChatGPT, signOut as signOutChatGPT } from "./chatgpt";
+import { onRenewed, renewToken, signIn as signInChatGPT, signOut as signOutChatGPT } from "./chatgpt";
 import { loadApiKey, loadKeyFile, loadSettings, saveKeyFile, saveSettings, watchSettings } from "./settings";
 import { GoogleSync } from "./sync";
 import { cancelRestore } from "./paste";
@@ -191,13 +191,13 @@ function openHistory(tab?: "settings"): void {
   historyWin.on("focus", () => sync.syncSoon(0));
 }
 
-/** The providers whose key sync carries: not ChatGPT's token, which lasts days and renews only on this device. */
-const syncedProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn);
+/** The providers whose key sync carries in its keys; ChatGPT's token has a field of its own (core/sync.ts). */
+const keyProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn);
 
 /** What Google sync compares with its history: the settings it syncs and the saved keys. */
 function local(): Local {
-  const keys = Object.fromEntries(syncedProviders().map((p) => [p, loadKeyFile(p)]));
-  return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys, proxy: settings.proxy };
+  const keys = Object.fromEntries(keyProviders().map((p) => [p, loadKeyFile(p)]));
+  return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys, proxy: settings.proxy, chatgpt: loadKeyFile("chatgpt") };
 }
 
 /** A key was saved here or arrived through sync: the spare session was opened with the old one. */
@@ -205,6 +205,7 @@ function keysChanged(): void {
   pool.close();
   pool.refill();
   historyWin?.webContents.send("settings:keys");
+  sync?.noteLocal(local());
 }
 
 function applySettings(next: Settings): void {
@@ -465,7 +466,6 @@ function registerIpc(): void {
     if (!Object.hasOwn(PROVIDERS, provider)) return;
     saveKeyFile(provider, key);
     keysChanged();
-    sync.noteLocal(local());
   });
 
   ipcMain.handle("chatgpt:account", () => {
@@ -587,7 +587,9 @@ void app.whenReady().then(() => {
   setInterval(() => pool.refill(), 30_000);
   // ChatGPT's token lasts about 10 days: asked for anew in its last days (main/chatgpt.ts). chatgpt.com
   // may hand out the same one until it runs out, so it is asked every hour then.
-  const renewChatGPT = () => void renewToken().then((changed) => changed && keysChanged());
+  // Renewed here or after a 401 (transcribe.ts): the spare session and the other devices take the new one.
+  onRenewed(keysChanged);
+  const renewChatGPT = () => void renewToken();
   renewChatGPT();
   setInterval(renewChatGPT, 3600_000);
 
@@ -651,10 +653,14 @@ void app.whenReady().then(() => {
     (state) => {
       // Keys first: applySettings reads them back as this device's own.
       let keys = false;
-      for (const provider of syncedProviders()) {
+      for (const provider of keyProviders()) {
         const key = state.keys[provider]?.value;
         if (key === undefined || key === loadKeyFile(provider)) continue;
         saveKeyFile(provider, key);
+        keys = true;
+      }
+      if (state.chatgpt.value !== loadKeyFile("chatgpt")) {
+        saveKeyFile("chatgpt", state.chatgpt.value);
         keys = true;
       }
       // The proxy first too: the spare session keysChanged reopens goes through it.

@@ -13,8 +13,8 @@ object Usage {
     const val ALL = 0
     val WINDOWS = listOf(1, 7, 30, 90, ALL)
 
-    /** As OPENAI/GEMINI in [Provider], plus "other" for the rest (none so far costs anything). */
-    val PROVIDERS = listOf("openai", "gemini", "other")
+    /** As [Provider], plus "other" for the rest (none so far costs anything). */
+    val PROVIDERS = listOf("openai", "gemini", "nemotron", "chatgpt", "other")
 
     data class Paid(val model: String, val costUsd: Double)
     data class Entry(val createdAt: Long, val durationMs: Long, val transcripts: List<Paid>)
@@ -53,6 +53,10 @@ object Usage {
         "gpt-transcribe" to 0.0045,
         "gemini-3.5-transcribe-live" to 0.009,
         "gemini-3.5-transcribe" to 0.005,
+        "nemotron-asr-streaming" to 0.00045,
+        // Free with a ChatGPT account.
+        "chatgpt-dictation" to 0.0,
+        "chatgpt-transcribe" to 0.0,
     )
 
     fun pricePerMinute(model: String) = PER_MINUTE_USD[model] ?: 0.017
@@ -74,6 +78,8 @@ object Usage {
     fun providerOf(model: String) = when {
         model.startsWith("gpt-") -> "openai"
         model.startsWith("gemini-") -> "gemini"
+        model.startsWith("nemotron-") -> "nemotron"
+        model.startsWith("chatgpt-") -> "chatgpt"
         else -> "other"
     }
 
@@ -116,7 +122,8 @@ object Usage {
         for (e in entries) {
             if (e.createdAt < from || e.createdAt > now) continue
             val column = columns.last { it.start <= e.createdAt }
-            val paid = e.transcripts.filter { it.costUsd > 0 }
+            // ChatGPT's count as paid, at no cost.
+            val paid = e.transcripts.filter { it.costUsd > 0 || providerOf(it.model) == "chatgpt" }
             val owner = paid.firstOrNull()?.let { providerOf(it.model) } ?: "other"
             for (t in listOf(total, column.total, column.byProvider.getValue(owner))) {
                 t.count++

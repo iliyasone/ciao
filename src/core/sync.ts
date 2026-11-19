@@ -8,6 +8,13 @@
 //
 // The switch is synced too: turned off on one device, it stops every device from sending keys and
 // the proxy (its password is a secret too), and the file keeps none (each device still has its own).
+//
+// ChatGPT's access token goes with the keys but in a field of its own, which an older Ciao ignores
+// (it would take a token missing from its keys for one removed). Its time is that of the sign-in or
+// sign-out, not of a renewal: a renewal of the same account keeps it, so a device renewing before a
+// sign-out elsewhere reaches it doesn't sign everyone back in; of two renewals the later-expiring wins.
+
+import { chatgptAccount } from "./chatgpt";
 
 export interface TermChange {
   term: string;
@@ -35,6 +42,8 @@ export interface SyncState {
   syncKeys: Stamped<boolean>;
   /** The proxy to the transcription services (Settings.proxy), "" for none; synced with the keys. */
   proxy: Stamped<string>;
+  /** ChatGPT's access token, "" when signed out; `at` is when it was signed in or out. Synced with the keys. */
+  chatgpt: Stamped<string>;
 }
 
 /** What a device has now: its settings and its API keys ("" or missing when it has none). */
@@ -44,6 +53,8 @@ export interface Local {
   keys: Record<string, string>;
   syncKeys: boolean;
   proxy: string;
+  /** ChatGPT's access token, "" for none. */
+  chatgpt: string;
 }
 
 /** Trimmed, without empty lines and repeats (the settings keep what's typed, blank lines included). */
@@ -86,6 +97,7 @@ export function initialState(local: Local, defaults: { keywords: string[]; promp
     ),
     syncKeys: { value: local.syncKeys, at: local.syncKeys === defaults.syncKeys ? -1 : 0 },
     proxy: { value: local.proxy, at: local.proxy ? 0 : -1 },
+    chatgpt: local.chatgpt ? { value: local.chatgpt, at: 0 } : NO_TOKEN,
   };
 }
 
@@ -93,10 +105,15 @@ export function initialState(local: Local, defaults: { keywords: string[]; promp
  * Keys this device had before the history knew of keys (a history from an older Ciao): as old as
  * initialState's, not an edit made now that would replace another device's key.
  */
-export function adoptKeys(state: SyncState, keys: Record<string, string>): SyncState {
-  const known = Object.entries(keys).filter(([provider, key]) => key && !state.keys[provider]);
-  if (!known.length) return state;
-  return { ...state, keys: { ...state.keys, ...Object.fromEntries(known.map(([provider, key]) => [provider, { value: key, at: 0 }])) } };
+export function adoptKeys(state: SyncState, local: Pick<Local, "keys" | "chatgpt">): SyncState {
+  const known = Object.entries(local.keys).filter(([provider, key]) => key && !state.keys[provider]);
+  const token = !!local.chatgpt && state.chatgpt.at === NO_TOKEN.at && !state.chatgpt.value;
+  if (!known.length && !token) return state;
+  return {
+    ...state,
+    keys: { ...state.keys, ...Object.fromEntries(known.map(([provider, key]) => [provider, { value: key, at: 0 }])) },
+    chatgpt: token ? { value: local.chatgpt, at: 0 } : state.chatgpt,
+  };
 }
 
 /** The terms to use: the ones not removed, in order. */
@@ -147,14 +164,31 @@ export function recordEdit(state: SyncState, local: Local, now: number): SyncSta
   const promptChanged = prompt !== state.prompt.value;
   const switched = local.syncKeys !== state.syncKeys.value;
   const proxyChanged = local.proxy !== state.proxy.value;
-  if (!changed && !promptChanged && !switched && !proxyChanged) return null;
+  const tokenChanged = local.chatgpt !== state.chatgpt.value;
+  if (!changed && !promptChanged && !switched && !proxyChanged && !tokenChanged) return null;
   return {
     terms,
     prompt: promptChanged ? { value: prompt, at: now } : state.prompt,
     keys,
     syncKeys: switched ? { value: local.syncKeys, at: now } : state.syncKeys,
     proxy: proxyChanged ? { value: local.proxy, at: now } : state.proxy,
+    chatgpt: tokenChanged ? { value: local.chatgpt, at: renewal(state.chatgpt.value, local.chatgpt) ? state.chatgpt.at : now } : state.chatgpt,
   };
+}
+
+/** A new token for the account signed in already, not a sign-in or sign-out. */
+function renewal(before: string, after: string): boolean {
+  const a = before ? chatgptAccount(before) : null;
+  const b = after ? chatgptAccount(after) : null;
+  return !!a && !!b && a.email === b.email;
+}
+
+/** Of two tokens: the later sign-in or sign-out; within one, the later renewal; then the greater, so every device ends up the same. */
+function laterToken(a: Stamped<string>, b: Stamped<string>): Stamped<string> {
+  if (a.at !== b.at) return a.at > b.at ? a : b;
+  const [x, y] = [chatgptAccount(a.value)?.expiresAt ?? 0, chatgptAccount(b.value)?.expiresAt ?? 0];
+  if (x !== y) return x > y ? a : b;
+  return a.value >= b.value ? a : b;
 }
 
 /** Of two changes to one term: the later; a removal on a tie, so every device ends up the same. */
@@ -189,16 +223,19 @@ export function mergeStates(local: SyncState, remote: SyncState): SyncState {
     for (const [provider, key] of Object.entries(remote.keys)) keys[provider] = keys[provider] ? laterValue(keys[provider], key) : key;
   }
   const proxy = syncKeys.value ? laterValue(local.proxy, remote.proxy) : local.proxy;
-  return { terms, prompt: laterValue(local.prompt, remote.prompt), keys, syncKeys, proxy };
+  const chatgpt = syncKeys.value ? laterToken(local.chatgpt, remote.chatgpt) : local.chatgpt;
+  return { terms, prompt: laterValue(local.prompt, remote.prompt), keys, syncKeys, proxy, chatgpt };
 }
 
-/** What goes into the synced file: no keys and no proxy while the switch is off. */
+/** What goes into the synced file: no keys, proxy or token while the switch is off. */
 export function shared(state: SyncState): SyncState {
-  return state.syncKeys.value ? state : { ...state, keys: {}, proxy: NO_PROXY };
+  return state.syncKeys.value ? state : { ...state, keys: {}, proxy: NO_PROXY, chatgpt: NO_TOKEN };
 }
 
 /** The proxy of a file without one: an untouched default. */
 const NO_PROXY: Stamped<string> = { value: "", at: -1 };
+/** ChatGPT's token in a file without one, as NO_PROXY. */
+const NO_TOKEN: Stamped<string> = { value: "", at: -1 };
 
 /** Same content, whatever the order: nothing to upload or apply. */
 export function sameState(a: SyncState, b: SyncState): boolean {
@@ -214,6 +251,8 @@ export function sameState(a: SyncState, b: SyncState): boolean {
       s.syncKeys.at,
       s.proxy.value,
       s.proxy.at,
+      s.chatgpt.value,
+      s.chatgpt.at,
     ]);
   return key(a) === key(b);
 }
@@ -223,7 +262,8 @@ export function serializeState(state: SyncState): string {
   // Still version 1: an older Ciao reads the file and ignores the proxy (an upload of its drops it,
   // and the next one from a newer Ciao puts it back). No proxy is left out, as in such a file.
   const proxy = state.proxy.at === NO_PROXY.at && !state.proxy.value ? {} : { proxy: state.proxy };
-  return JSON.stringify({ version: 1, terms: state.terms, prompt: state.prompt, keys: state.keys, syncKeys: state.syncKeys, ...proxy });
+  const chatgpt = state.chatgpt.at === NO_TOKEN.at && !state.chatgpt.value ? {} : { chatgpt: state.chatgpt };
+  return JSON.stringify({ version: 1, terms: state.terms, prompt: state.prompt, keys: state.keys, syncKeys: state.syncKeys, ...proxy, ...chatgpt });
 }
 
 /**
@@ -240,6 +280,7 @@ export function parseState(text: string): SyncState | null {
       keys?: Record<string, { value?: unknown; at?: unknown }>;
       syncKeys?: { value?: unknown; at?: unknown };
       proxy?: { value?: unknown; at?: unknown };
+      chatgpt?: { value?: unknown; at?: unknown };
     };
     if (raw.version !== 1 || !Array.isArray(raw.terms) || typeof raw.prompt?.value !== "string" || typeof raw.prompt.at !== "number") return null;
     const terms: TermChange[] = [];
@@ -265,7 +306,12 @@ export function parseState(text: string): SyncState | null {
       if (typeof raw.proxy?.value !== "string" || typeof raw.proxy.at !== "number") return null;
       proxy = { value: raw.proxy.value, at: raw.proxy.at };
     }
-    return { terms, prompt: { value: raw.prompt.value, at: raw.prompt.at }, keys, syncKeys, proxy };
+    let chatgpt = NO_TOKEN;
+    if (raw.chatgpt !== undefined) {
+      if (typeof raw.chatgpt?.value !== "string" || typeof raw.chatgpt.at !== "number") return null;
+      chatgpt = { value: raw.chatgpt.value, at: raw.chatgpt.at };
+    }
+    return { terms, prompt: { value: raw.prompt.value, at: raw.prompt.at }, keys, syncKeys, proxy, chatgpt };
   } catch {
     return null;
   }

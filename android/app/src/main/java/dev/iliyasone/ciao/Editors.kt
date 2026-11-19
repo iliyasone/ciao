@@ -22,7 +22,8 @@ import java.util.Locale
  * The service and its key, on the setup screen and in the settings: a select for the service, the
  * key field with Paste, and a line under it that says whether the service takes the key. The key is
  * saved as it is typed and checked once it is in (pasted, Done, or a pause after typing): the
- * keyboard goes away and the line answers.
+ * keyboard goes away and the line answers. ChatGPT has no key to type: a button signs in on
+ * chatgpt.com instead (ChatGPT.SignInActivity), or signs out, and the line names the account.
  */
 class KeyEditor(private val activity: Activity, private val kit: Kit, private val onChange: () -> Unit) {
     private val prefs = Prefs(activity)
@@ -38,8 +39,14 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
     val provider = kit.select(
         R.id.provider,
         Provider.entries.sortedBy { it != Provider.GEMINI }.map { p ->
-            val name = activity.getString(if (p == Provider.GEMINI) R.string.provider_gemini else R.string.provider_openai)
-            p.id to activity.getString(R.string.provider_option, name, "$" + String.format(Locale.US, "%.2f", p.pricePerMinute * 60))
+            val name = activity.getString(when (p) {
+                Provider.OPENAI -> R.string.provider_openai
+                Provider.GEMINI -> R.string.provider_gemini
+                Provider.NEMOTRON -> R.string.provider_nemotron
+                Provider.CHATGPT -> R.string.provider_chatgpt
+            })
+            p.id to if (p.pricePerMinute == 0.0) activity.getString(R.string.provider_option_free, name)
+            else activity.getString(R.string.provider_option, name, "$" + String.format(Locale.US, "%.2f", p.pricePerMinute * 60))
         },
         prefs.provider.id,
     ) { id ->
@@ -84,17 +91,34 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         id = R.id.keyWhere
         setPadding(0, kit.dp(4), 0, kit.dp(4))
         setOnClickListener {
-            val url = if (prefs.provider == Provider.GEMINI) "https://aistudio.google.com/apikey" else "https://platform.openai.com/api-keys"
+            val url = when (prefs.provider) {
+                Provider.GEMINI -> "https://aistudio.google.com/apikey"
+                Provider.NEMOTRON -> "https://dotwave.ai"
+                else -> "https://platform.openai.com/api-keys"
+            }
             runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         }
     }
     val text: TextView = kit.hint().apply { id = R.id.keyText }
 
-    /** The field with a compact Paste at its end. */
+    /** ChatGPT's in place of the field: sign in on chatgpt.com, or sign out. */
+    private val signIn = kit.button(activity.getString(R.string.chatgpt_sign_in), primary = true, id = R.id.chatgptSignIn).apply {
+        setOnClickListener { activity.startActivity(Intent(activity, ChatGPT.SignInActivity::class.java)) }
+    }
+    private val signOut = kit.button(activity.getString(R.string.chatgpt_sign_out), primary = false, id = R.id.chatgptSignOut).apply {
+        setOnClickListener {
+            ChatGPT.signOut(activity)
+            refresh()
+        }
+    }
+
+    /** The field with a compact Paste at its end; for ChatGPT, the account's button. */
     val fieldRow = LinearLayout(activity).apply {
         gravity = android.view.Gravity.CENTER_VERTICAL
         addView(field, LinearLayout.LayoutParams(0, kit.dp(44), 1f))
         addView(paste, LinearLayout.LayoutParams(-2, kit.dp(44)).apply { marginStart = kit.dp(8) })
+        addView(signIn, LinearLayout.LayoutParams(0, kit.dp(44), 1f))
+        addView(signOut, LinearLayout.LayoutParams(-2, kit.dp(44)))
     }
 
     /** The last check this editor started; only its answer counts (main thread only). */
@@ -108,8 +132,14 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable) {
                 val key = s.toString()
-                if (key.filter { it in '!'..'~' } == prefs.currentKey) return
-                if (prefs.provider == Provider.GEMINI) GoogleSync.edit(activity) { it.geminiKey = key } else GoogleSync.edit(activity) { it.apiKey = key }
+                // ChatGPT's token comes from signing in, not from the field (hidden then).
+                if (prefs.provider == Provider.CHATGPT || key.filter { it in '!'..'~' } == prefs.currentKey) return
+                when (prefs.provider) {
+                    Provider.OPENAI -> GoogleSync.edit(activity) { it.apiKey = key }
+                    Provider.GEMINI -> GoogleSync.edit(activity) { it.geminiKey = key }
+                    Provider.NEMOTRON -> GoogleSync.edit(activity) { it.dotwaveKey = key }
+                    Provider.CHATGPT -> {}
+                }
                 main.removeCallbacks(autoCheck)
                 main.postDelayed(autoCheck, 1200)
                 showState(if (prefs.currentKey.isEmpty()) State.EMPTY else State.UNCHECKED)
@@ -118,13 +148,27 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
         showProvider()
     }
 
-    /** The key title for the service picked ("Gemini API key"). */
-    fun title() = activity.getString(R.string.key_title, prefs.provider.displayName)
+    /** The key title for the service picked ("Gemini API key", "ChatGPT account"). */
+    fun title(): String =
+        if (prefs.provider == Provider.CHATGPT) activity.getString(R.string.chatgpt_title) else activity.getString(R.string.key_title, prefs.provider.displayName)
 
     private fun showProvider() {
-        val gemini = prefs.provider == Provider.GEMINI
-        text.setText(if (gemini) R.string.key_text_gemini else R.string.key_text_openai)
-        field.setHint(if (gemini) R.string.key_hint_gemini else R.string.key_hint_openai)
+        val chatgpt = prefs.provider == Provider.CHATGPT
+        text.setText(when (prefs.provider) {
+            Provider.OPENAI -> R.string.key_text_openai
+            Provider.GEMINI -> R.string.key_text_gemini
+            Provider.NEMOTRON -> R.string.key_text_nemotron
+            Provider.CHATGPT -> R.string.key_text_chatgpt
+        })
+        field.setHint(when (prefs.provider) {
+            Provider.GEMINI -> R.string.key_hint_gemini
+            Provider.NEMOTRON -> R.string.key_hint_nemotron
+            else -> R.string.key_hint_openai
+        })
+        field.visibility = if (chatgpt) View.GONE else View.VISIBLE
+        paste.visibility = if (chatgpt) View.GONE else View.VISIBLE
+        signIn.visibility = if (chatgpt && prefs.chatgptToken.isEmpty()) View.VISIBLE else View.GONE
+        signOut.visibility = if (chatgpt && prefs.chatgptToken.isNotEmpty()) View.VISIBLE else View.GONE
         showState(when {
             prefs.currentKey.isEmpty() -> State.EMPTY
             prefs.keyVerified(prefs.provider) -> State.WORKS
@@ -185,16 +229,21 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
     private fun showState(s: State) {
         state = s
         val name = prefs.provider.displayName
+        // ChatGPT: the account the token is for, and how long it lasts, where a key would say it works.
+        val signedIn = ChatGPT.account(prefs.chatgptToken)?.takeIf { prefs.provider == Provider.CHATGPT }?.let {
+            val days = maxOf(0L, (it.expiresAt - System.currentTimeMillis()) / 86_400_000L).toInt()
+            activity.getString(R.string.chatgpt_signed_in, it.email.ifEmpty { "—" }, days)
+        }
         status.text = when (s) {
-            State.EMPTY -> activity.getString(R.string.key_status_empty)
-            State.UNCHECKED -> activity.getString(R.string.key_status_unchecked)
-            State.CHECKING -> activity.getString(R.string.key_status_checking)
-            State.WORKS -> activity.getString(R.string.key_status_works_short)
-            State.REJECTED -> activity.getString(R.string.key_status_rejected, name, reason)
+            State.EMPTY -> activity.getString(if (prefs.provider == Provider.CHATGPT) R.string.chatgpt_signed_out else R.string.key_status_empty)
+            State.UNCHECKED -> signedIn ?: activity.getString(R.string.key_status_unchecked)
+            State.CHECKING -> signedIn ?: activity.getString(R.string.key_status_checking)
+            State.WORKS -> signedIn ?: activity.getString(R.string.key_status_works_short)
+            State.REJECTED -> if (prefs.provider == Provider.CHATGPT) reason else activity.getString(R.string.key_status_rejected, name, reason)
             State.REGION -> activity.getString(R.string.key_status_region, name)
             State.OFFLINE -> activity.getString(R.string.key_status_offline, name, reason)
         }
-        where.visibility = if (s == State.WORKS) View.GONE else View.VISIBLE
+        where.visibility = if (s == State.WORKS || prefs.provider == Provider.CHATGPT) View.GONE else View.VISIBLE
         status.setTextColor(kit.color(when (s) {
             State.WORKS -> R.color.ok
             State.REJECTED -> R.color.error

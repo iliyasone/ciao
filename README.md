@@ -335,7 +335,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     an AI Studio key by itself and sends the audio to Vertex AI in the key's
     project. Vertex has no AI Studio tiers (Tier 1 allows the file model only 100
     requests a day) and bills the project's Cloud billing account.
-- **NVIDIA Nemotron** (desktop only, a third choice in *Who transcribes*): NVIDIA's
+- **NVIDIA Nemotron** (a third choice in *Who transcribes*): NVIDIA's
   Nemotron 3.5 ASR Streaming, run by [.wave](https://dotwave.ai) (a `wk_…` key;
   new accounts get $10 of credit). It costs about $0.03 per hour of speech, a
   twentieth of Gemini, and the text is in 0.1–0.2 s after you stop, but it
@@ -346,14 +346,16 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     pre-roll, audio from before the connection opened) goes out at that speed, so
     the text comes that much later. *Live* and *More accurate* in the history take
     as long as the recording.
-  - There is no Nemotron on Android yet.
-- **ChatGPT** (desktop only, a fourth choice in *Who transcribes*): the dictation
+- **ChatGPT** (a fourth choice in *Who transcribes*): the dictation
   chatgpt.com has in its message box, where the text appears while you speak. It
   is free with a ChatGPT account, a free one included, and there is no key: *Sign
   in to ChatGPT* opens chatgpt.com in a window of Ciao's, and once you are in,
   Ciao keeps the account's access token (it lasts about 10 days and renews itself
   from that sign-in, which stays in that window's own storage; *Sign out* forgets
-  both). The token isn't synced.
+  both). The token syncs with the keys: sign in on one device and the others,
+  Android too, use the same account; the device that signed in renews the token
+  for all of them (one that only got it through sync can't), and *Sign out* on
+  any of them signs all of them out.
   - This is chatgpt.com's private API, not a public one: OpenAI can change or
     close it at any time, and it is used on your account's behalf, so a separate
     account for it is wiser. ChatGPT keeps each dictation's audio on its side
@@ -367,8 +369,11 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     (the one chatgpt.com falls back to), which is also *More accurate* in the
     history; *Live* there sends a recording at 4× its speed.
   - The live text and the file go through the proxy below like the other
-    services; signing in and renewing the token go direct.
-  - There is no ChatGPT on Android yet.
+    services. Signing in and renewing the token go direct on the desktop; on
+    Android the renewal goes through the proxy too.
+  - On Android, *Sign in to ChatGPT* opens chatgpt.com inside Ciao. Google's
+    sign-in may refuse to work there; then sign in with email and password, or
+    on the desktop and let sync bring the account over.
 - **Proxy** (*Settings → Who transcribes → Proxy*, on every platform and on
   Android). Requests to OpenAI, Gemini, Nemotron and ChatGPT, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
@@ -395,7 +400,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   --api-target=service=aiplatform.googleapis.com --service-account=…`). Vertex
   refuses a key not bound to a service account, and a key that may also call the
   Gemini API is taken for an AI Studio key. Or a [.wave](https://dotwave.ai) key
-  for Nemotron (desktop), or a ChatGPT account for ChatGPT (desktop; no key).
+  for Nemotron, or a ChatGPT account for ChatGPT (no key).
   - Instead of a Gemini key, the Gemini key field takes a link to a server in
     front of the Gemini API with a key of that server in it:
     `https://<host>/?key=<key>`. Live and file transcription then go to that
@@ -974,7 +979,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
-  `nemotron.ts` for Nemotron on .wave and `chatgpt.ts` for ChatGPT (both desktop only, not ported to Android),
+  `nemotron.ts` for Nemotron on .wave and `chatgpt.ts` for ChatGPT,
   `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
   PCM/WAV helpers, `silence.ts` (which silence isn't sent), prices, `usage.ts` (the Usage tab's sums), shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is
@@ -1037,9 +1042,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     interface language and theme; `PasteLastTile.kt` — *Paste last*;
     `Retry.kt` — its *More accurate* and *Live*, as `retry` in `src/main/main.ts`
     and `transcribeLive` in `src/main/transcribe.ts`; `Player.kt` plays a recording;
-  - `Realtime.kt`, `Gemini.kt`, `FileTranscriber.kt` — the same OpenAI and
-    Gemini calls as `src/core/realtime.ts`, `src/core/gemini.ts` and
-    `src/main/transcribe.ts`; `Proxy.kt` — the port of `src/core/proxy.ts` and
+  - `Realtime.kt`, `Gemini.kt`, `Nemotron.kt`, `ChatGPT.kt`, `FileTranscriber.kt`,
+    `KeyCheck.kt` — the same calls to OpenAI, Gemini, Nemotron and ChatGPT as
+    `src/core/realtime.ts`, `src/core/gemini.ts`, `src/core/nemotron.ts`,
+    `src/core/chatgpt.ts` and `src/main/transcribe.ts` (`ChatGPT.kt` also signs in
+    and renews the token, as `src/main/chatgpt.ts`); `ProviderParityTest` checks
+    every service in `src/core/providers.ts` is there; `Proxy.kt` — the port of `src/core/proxy.ts` and
     `src/main/proxy.ts`, whose test holds the TypeScript outputs;
     `SilenceGate.kt` — the port of `src/core/silence.ts`, with the same kind of test; `Revision.kt` — the port of `src/core/revision.ts`,
     whose test holds its TypeScript outputs;
