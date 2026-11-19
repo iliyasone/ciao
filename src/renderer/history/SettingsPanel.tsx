@@ -92,7 +92,7 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
         <MicCard value={s.microphone} onChange={(microphone) => update({ microphone })} />
 
         <Card title={tr.recognition.title}>
-          <Field label={tr.recognition.terms} hint={s.provider === "gemini" ? `${tr.recognition.termsHint} ${tr.recognition.geminiNote}` : s.provider === "nemotron" ? `${tr.recognition.termsHint} ${tr.recognition.nemotronNote}` : tr.recognition.termsHint}>
+          <Field label={tr.recognition.terms} hint={[tr.recognition.termsHint, { openai: "", gemini: tr.recognition.geminiNote, nemotron: tr.recognition.nemotronNote, chatgpt: tr.recognition.chatgptNote }[s.provider]].filter(Boolean).join(" ")}>
             <textarea
               value={s.keywords.join("\n")}
               onChange={(e) => update({ keywords: e.target.value.split("\n") }, true)}
@@ -227,12 +227,12 @@ function ProvidersCard({ s, update }: { s: Settings; update: (patch: Partial<Set
               <div className="min-w-0">
                 <div className="flex items-baseline gap-2 text-[13.5px] text-fg">
                   <span className="font-medium">{info.company === info.name ? info.name : `${info.company} ${info.name}`}</span>
-                  <span className="text-[12px] text-muted">{tr.perHour(`$${(pricePerMinute(m.live) * 60).toFixed(2)}`)}</span>
+                  <span className="text-[12px] text-muted">{pricePerMinute(m.live) ? tr.perHour(`$${(pricePerMinute(m.live) * 60).toFixed(2)}`) : tr.free}</span>
                 </div>
                 <div className="text-[12px] text-faint">
                   {tr.models(m.live, m.file)}{" "}
                   {!inUse && hasKey[provider] !== undefined && (
-                    <span className={hasKey[provider] ? "" : "text-amber-700 dark:text-amber-300"}>{hasKey[provider] ? tr.hasKey : tr.noKey}</span>
+                    <span className={hasKey[provider] ? "" : "text-amber-700 dark:text-amber-300"}>{info.signIn ? (hasKey[provider] ? tr.signedIn : tr.signedOut) : hasKey[provider] ? tr.hasKey : tr.noKey}</span>
                   )}
                 </div>
               </div>
@@ -247,7 +247,7 @@ function ProvidersCard({ s, update }: { s: Settings; update: (patch: Partial<Set
                 </button>
               )}
             </div>
-            {inUse && <ApiKeyRow provider={provider} hasKey={hasKey[provider] ?? true} />}
+            {inUse && (info.signIn ? <ChatGPTAccountRow /> : <ApiKeyRow provider={provider} hasKey={hasKey[provider] ?? true} />)}
             {inUse && provider === "openai" && (
               <>
                 <Row label={strings.recognition.languages} hint={strings.recognition.languagesHint}>
@@ -334,6 +334,59 @@ function ApiKeyRow({ provider, hasKey }: { provider: Provider; hasKey: boolean }
         {hasKey && !value.trim() && (
           <button onClick={() => void runCheck()} className={BUTTON}>
             {tr.check}
+          </button>
+        )}
+      </div>
+    </Row>
+  );
+}
+
+/** ChatGPT has no key to paste: the account signed in on chatgpt.com, in a window of Ciao's (src/main/chatgpt.ts). */
+function ChatGPTAccountRow() {
+  const [account, setAccount] = useState<{ email: string; expiresAt: number } | null | undefined>(undefined);
+  /** A line about the last sign-in or check, over the account's own; null before one. */
+  const [note, setNote] = useState<{ text: string; ok: boolean | null } | null>(null);
+  const strings = useStrings().settings;
+  const tr = strings.chatgpt;
+  useEffect(() => {
+    const load = () => void ciao.chatgpt.account().then(setAccount);
+    load();
+    return ciao.settings.onKeys(load);
+  }, []);
+  const signIn = async () => {
+    setNote({ text: tr.signingIn, ok: null });
+    const ok = await ciao.chatgpt.signIn();
+    setNote(ok ? null : { text: tr.notSignedIn, ok: false });
+  };
+  const check = async () => {
+    setNote({ text: strings.apiKey.checking, ok: null });
+    const r = await ciao.settings.checkKey("chatgpt");
+    setNote(r.ok ? { text: strings.apiKey.works(r.ms), ok: true } : { text: strings.apiKey.failed(r.reason), ok: false });
+  };
+  if (account === undefined) return null;
+  const days = account ? Math.max(0, Math.floor((account.expiresAt - Date.now()) / 86_400_000)) : 0;
+  return (
+    <Row label={tr.label} hint={note?.text ?? (account ? tr.signedIn(account.email, days) : tr.signedOut)}>
+      <div className="flex items-center gap-2">
+        <KeyRound className={`size-4 ${account && note?.ok !== false ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-300"}`} />
+        {account ? (
+          <>
+            <button onClick={() => void check()} className={BUTTON}>
+              {strings.apiKey.check}
+            </button>
+            <button
+              onClick={() => {
+                setNote(null);
+                void ciao.chatgpt.signOut();
+              }}
+              className={BUTTON}
+            >
+              {tr.signOut}
+            </button>
+          </>
+        ) : (
+          <button onClick={() => void signIn()} disabled={note?.ok === null} className={`${BUTTON} whitespace-nowrap`}>
+            {tr.signIn}
           </button>
         )}
       </div>

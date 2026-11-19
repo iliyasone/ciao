@@ -258,8 +258,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - If the live connection drops, recording continues, and when you stop, the
     file model transcribes the saved audio from where the live text left off. With
     Gemini that is usually only the last minute or two, so even a long dictation
-    is ready in seconds. (With OpenAI the whole recording goes to the file model;
-    with Nemotron the live model hears all of it again, at its own speed.)
+    is ready in seconds. (With OpenAI and ChatGPT the whole recording goes to the
+    file model; with Nemotron the live model hears all of it again, at its own speed.)
   - If that fails too (for example, you are still offline), nothing is pasted. The
     dictation is marked "not transcribed" in the history, where you can transcribe
     it later.
@@ -268,8 +268,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
 - **History.** Click the tray icon to see every dictation. You can play it, copy
   it, delete it, or transcribe it again:
   - **More accurate** re-runs the whole file through the file model
-    (`gpt-transcribe` or `gemini-3.5-transcribe`; Nemotron has none, so there it
-    is the live model again, as long as the recording lasts).
+    (`gpt-transcribe`, `gemini-3.5-transcribe` or ChatGPT's; Nemotron has none,
+    so there it is the live model again, as long as the recording lasts).
   - **Live** re-runs it through the streaming model.
   - With keys for both services, *Via OpenAI / Gemini* next to these buttons
     picks the service for this recording (the one in Settings by default), and
@@ -301,7 +301,8 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen): what dictation cost and how much you said over the last 24 hours, 7,
   30 or 90 days or all time, after T3 Code's Usage page. Totals (cost since the
   period's first day, minutes, dictations, the average per day with dictation), a
-  column per day (per hour for 24 hours) split into OpenAI, Gemini and Nemotron, switchable
+  column per day (per hour for 24 hours) split into OpenAI, Gemini, Nemotron and ChatGPT
+  (free: it shows in minutes, at no cost), switchable
   between cost and minutes, and each model's share. It is Ciao's estimate at list
   prices (minutes recorded, less the silence the live model wasn't sent, × the
   model's price, `src/core/cost.ts`), not the
@@ -346,8 +347,30 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     the text comes that much later. *Live* and *More accurate* in the history take
     as long as the recording.
   - There is no Nemotron on Android yet.
+- **ChatGPT** (desktop only, a fourth choice in *Who transcribes*): the dictation
+  chatgpt.com has in its message box, where the text appears while you speak. It
+  is free with a ChatGPT account, a free one included, and there is no key: *Sign
+  in to ChatGPT* opens chatgpt.com in a window of Ciao's, and once you are in,
+  Ciao keeps the account's access token (it lasts about 10 days and renews itself
+  from that sign-in, which stays in that window's own storage; *Sign out* forgets
+  both). The token isn't synced.
+  - This is chatgpt.com's private API, not a public one: OpenAI can change or
+    close it at any time, and it is used on your account's behalf, so a separate
+    account for it is wiser. ChatGPT keeps each dictation's audio on its side
+    for 30 days (it says so in its answer; there is no way to turn it off).
+  - It detects the language on its own, mixed Russian and English included, and
+    takes no context and no terms. Measured on synthetic speech: the first text
+    about 0.65 s after the first word, the final about 0.55 s after the end, fewer
+    errors than Gemini on Russian with English terms; a 9-minute dictation came
+    through whole, its final 0.6 s after the end.
+  - When the live text fails, the recording goes to ChatGPT's file transcription
+    (the one chatgpt.com falls back to), which is also *More accurate* in the
+    history; *Live* there sends a recording at 4× its speed.
+  - The live text and the file go through the proxy below like the other
+    services; signing in and renewing the token go direct.
+  - There is no ChatGPT on Android yet.
 - **Proxy** (*Settings → Who transcribes → Proxy*, on every platform and on
-  Android). Requests to OpenAI, Gemini and Nemotron, live and file, go through an HTTP proxy
+  Android). Requests to OpenAI, Gemini, Nemotron and ChatGPT, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
   country. Paste it, press *Save*, and *Check* (run on its own after a save) says
   whether Gemini answers through it, or that the proxy refused the login or can't be
@@ -372,7 +395,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   --api-target=service=aiplatform.googleapis.com --service-account=…`). Vertex
   refuses a key not bound to a service account, and a key that may also call the
   Gemini API is taken for an AI Studio key. Or a [.wave](https://dotwave.ai) key
-  for Nemotron (desktop).
+  for Nemotron (desktop), or a ChatGPT account for ChatGPT (desktop; no key).
   - Instead of a Gemini key, the Gemini key field takes a link to a server in
     front of the Gemini API with a key of that server in it:
     `https://<host>/?key=<key>`. Live and file transcription then go to that
@@ -388,13 +411,15 @@ Pricing is per minute of audio:
 | OpenAI (`gpt-live-transcribe`, `gpt-transcribe`) | $0.017/min, about $1 per hour of talking | $0.0045/min |
 | Gemini (`gemini-3.5-transcribe-live`, `gemini-3.5-transcribe`) | about $0.009/min | about $0.005/min |
 | Nemotron on .wave (`nemotron-asr-streaming`) | $0.00045/min | the same, the live model again |
+| ChatGPT (`chatgpt-dictation`, `chatgpt-transcribe`) | free with a ChatGPT account | free |
 
 Gemini bills per token; the per-minute figures are Google's own estimate for
 speech. Idle time costs nothing.
 
 Long silence isn't sent to OpenAI or Gemini while you dictate, so a pause to
 think isn't billed (on every platform and on Android; Nemotron needs the whole
-audio and bills the session's length anyway). A second of quiet after the last
+audio and bills the session's length anyway, and ChatGPT, which is free, gets
+all of it too). A second of quiet after the last
 sound and half a second before the next still go out, so the model hears a
 pause of about 1.5 s in place of a longer one; the recording in the history
 stays whole, and paragraphs still follow the real pauses. Quiet means below a
@@ -819,7 +844,7 @@ we can see how many people use it. Two events (Android sends the same ones, with
 phone's maker and model, to each):
 
 - `app_started`: app version, OS version, CPU architecture, the transcription
-  service (`provider`: `openai` or `gemini`), and whether its API key is set and the
+  service (`provider`: `openai`, `gemini`, `nemotron` or `chatgpt`), and whether its API key (for ChatGPT: a sign-in) is set and the
   wake word and paragraph layout are on.
 - `dictation`, once per dictation kept in the history:
   - how it ended: `outcome` (pasted, clipboard, empty, failed, cancelled) and
@@ -828,7 +853,7 @@ phone's maker and model, to each):
   - how it was driven: `trigger` (the key or button that started it, such as
     `RControlKey` or `MButton`, `wake_word`, or `pill` for a click on it), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
-  - who transcribed it: `provider` (`openai` or `gemini`);
+  - who transcribed it: `provider` (`openai`, `gemini`, `nemotron` or `chatgpt`);
   - time and money: `duration_s`, `silence_skipped_s` (of it, the long silence
     the provider wasn't sent), `voice_onset_ms` (not for wake-word starts, whose
     audio begins with speech), `first_text_ms`, `final_after_release_ms`,
@@ -949,7 +974,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
-  `nemotron.ts` for Nemotron on .wave (desktop only, not ported to Android),
+  `nemotron.ts` for Nemotron on .wave and `chatgpt.ts` for ChatGPT (both desktop only, not ported to Android),
   `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
   PCM/WAV helpers, `silence.ts` (which silence isn't sent), prices, `usage.ts` (the Usage tab's sums), shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is
@@ -957,7 +982,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 - `src/main/` — the Electron main process:
   - `dictation.ts` — the hotkey state machine and the pipeline;
   - `history.ts` — storage and crash recovery;
-  - `transcribe.ts` — live and file transcription; `proxy.ts` — the proxy its
+  - `transcribe.ts` — live and file transcription; `chatgpt.ts` — signing in to ChatGPT and renewing its token; `proxy.ts` — the proxy its
     requests go through;
   - `paste.ts` — clipboard-preserving paste;
   - `input.ts` — talks to the keyboard and paste helper of the system;

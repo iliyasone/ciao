@@ -13,6 +13,11 @@ export interface ProviderInfo {
   keyEnv: string;
   keyFile: string;
   keyPlaceholder: string;
+  /**
+   * The "key" is the access token of a ChatGPT account, saved on signing in (main/chatgpt.ts): Settings
+   * shows a sign-in instead of a key field, and it isn't synced (it lasts days and renews only here).
+   */
+  signIn?: boolean;
 }
 
 /** In the order Settings lists them. */
@@ -44,6 +49,17 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     keyEnv: "DOTWAVE_API_KEY",
     keyFile: "dotwave-key.txt",
     keyPlaceholder: "wk_…",
+  },
+  // chatgpt.com's own dictation, free with a ChatGPT account: not a public API (core/chatgpt.ts).
+  chatgpt: {
+    name: "ChatGPT",
+    company: "OpenAI",
+    liveModel: "chatgpt-dictation",
+    fileModel: "chatgpt-transcribe",
+    keyEnv: "CHATGPT_ACCESS_TOKEN",
+    keyFile: "chatgpt-token.txt",
+    keyPlaceholder: "",
+    signIn: true,
   },
 };
 
