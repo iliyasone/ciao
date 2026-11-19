@@ -49,7 +49,8 @@ export async function renewToken(force = false): Promise<boolean> {
     console.warn("chatgpt: the token wasn't renewed:", (e as Error).message);
     return false;
   }
-  if (token === saved) return false;
+  // Signed out (or in anew) while the request was out: that wins.
+  if (token === saved || loadKeyFile("chatgpt") !== saved) return false;
   // Signed out on chatgpt.com: the saved token may still work until it runs out.
   if (!token && expiresAt > Date.now()) return false;
   saveKeyFile("chatgpt", token ?? "");
