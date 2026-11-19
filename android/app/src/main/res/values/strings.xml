@@ -309,4 +309,19 @@
     <string name="setup_copy_report_text">The button didn’t appear? Copy the report and send it.</string>
     <string name="diag_result_clipboard">The text went onto the clipboard, not into the field: the phone didn’t let Ciao type here. Copy the report.</string>
     <string name="diag_result_clipboard_setting">The text went onto the clipboard: “Insert the text right away” is off in the settings.</string>
+    <string name="provider_chatgpt" translatable="false">OpenAI ChatGPT</string>
+    <string name="provider_nemotron" translatable="false">NVIDIA Nemotron</string>
+    <string name="key_text_nemotron">A .wave key from dotwave.ai. Nemotron detects the language itself and takes neither context nor terms.</string>
+    <string name="key_hint_nemotron">.wave key (wk_…)</string>
+    <string name="provider_option_free">%1$s · free</string>
+    <string name="chatgpt_title">ChatGPT account</string>
+    <string name="key_text_chatgpt">Free with a ChatGPT account, a free one too. This is chatgpt.com’s private API: it may change or stop working, so a separate account for it is wiser. ChatGPT keeps each dictation’s audio for 30 days.</string>
+    <string name="chatgpt_sign_in">Sign in to ChatGPT</string>
+    <string name="chatgpt_sign_out">Sign out</string>
+    <string name="chatgpt_signed_out">Not signed in. Signed in on another device with Google sync, the account comes here by itself.</string>
+    <string name="chatgpt_signed_in">Signed in as %1$s. Good for %2$d more days; the device you signed in on renews it.</string>
+    <string name="need_sign_in">Sign in to %1$s in Ciao first</string>
+    <string name="error_signed_out">%1$s didn’t accept the sign-in: sign in again in Ciao’s settings</string>
+    <string name="usage_free">free</string>
+    <string name="status_signed_out">%1$s didn’t accept the sign-in</string>
 </resources>

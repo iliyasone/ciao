@@ -40,10 +40,17 @@ object FileTranscriber {
      * [from]: where in the recording to start, in bytes (what the live finals didn't cover).
      */
     fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, from: Long = 0): String =
+        // .wave has no file model: the live one hears the recording again, as long as it lasts.
+        if (provider == Provider.NEMOTRON) Retry.live(context, prefs, audio, provider, key)
         // Opened once, before any request: a file trimmed from the history meanwhile stays readable,
         // and a missing one fails as such rather than as a network error.
-        RandomAccessFile(audio, "r").use { file ->
-            if (provider == Provider.GEMINI) transcribeGemini(context, prefs, file, key, from) else transcribeOpenAI(context, prefs, file, key, from)
+        else RandomAccessFile(audio, "r").use { file ->
+            when (provider) {
+                Provider.OPENAI -> transcribeOpenAI(context, prefs, file, key, from)
+                Provider.GEMINI -> transcribeGemini(context, prefs, file, key, from)
+                Provider.CHATGPT -> transcribeChatGPT(context, file, key, from)
+                Provider.NEMOTRON -> error("not a file model")
+            }
         }
 
     private fun transcribeOpenAI(context: Context, prefs: Prefs, audio: RandomAccessFile, key: String, from: Long): String {
@@ -231,6 +238,42 @@ object FileTranscriber {
                     texts.add((0 until parts.length()).joinToString("") { i -> parts.optJSONObject(i)?.optString("text") ?: "" }.trim())
                 }
                 break
+            }
+        }
+        return texts.filter { it.isNotEmpty() }.joinToString(" ")
+    }
+
+    /**
+     * ChatGPT's file endpoint, which chatgpt.com sends a dictation's audio to when the stream failed.
+     * It took a 9-minute WAV (26 MB) whole; longer recordings go in parts, as for OpenAI. Mirrors
+     * transcribeFileChatGPT in src/main/transcribe.ts.
+     */
+    private fun transcribeChatGPT(context: Context, audio: RandomAccessFile, token: String, from: Long): String {
+        val texts = mutableListOf<String>()
+        for ((start, end) in split(audio, MAX_PART_MS, from)) {
+            val wav = object : RequestBody() {
+                override fun contentType() = "audio/wav".toMediaType()
+                override fun contentLength() = WAV_HEADER + end - start
+                override fun writeTo(sink: BufferedSink) = writeWav(audio, start, end, sink.outputStream())
+            }
+            val body = MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("file", "audio.wav", wav).build()
+            val request = Request.Builder().url(ChatGPT.FILE_URL)
+                .header("Authorization", "Bearer $token")
+                .header("Origin", ChatGPT.ORIGIN)
+                .post(body)
+                .build()
+            ApiProxy.client(context).newCall(request).execute().use { res ->
+                val text = res.body?.string() ?: ""
+                if (res.code == 401) {
+                    ChatGPT.renewSoon(context, force = true)
+                    throw IOException(context.getString(R.string.error_signed_out, ChatGPT.NAME))
+                }
+                val json = runCatching { JSONObject(text) }.getOrNull()
+                if (!res.isSuccessful) {
+                    val detail = json?.opt("detail")?.toString() ?: json?.optJSONObject("error")?.optString("message")
+                    throw IOException(detail?.takeIf { it.isNotEmpty() } ?: context.getString(R.string.error_status, ChatGPT.NAME, res.code))
+                }
+                texts.add(json?.optString("text")?.trim() ?: "")
             }
         }
         return texts.filter { it.isNotEmpty() }.joinToString(" ")

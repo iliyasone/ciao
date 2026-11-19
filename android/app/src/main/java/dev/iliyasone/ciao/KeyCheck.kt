@@ -24,6 +24,8 @@ object KeyCheck {
     /** Blocking: call it off the main thread. */
     fun check(context: Context, provider: Provider, key: String): Result {
         val started = System.currentTimeMillis()
+        if (provider == Provider.CHATGPT) return checkSocket(context, ChatGPT.socketRequest(key), ChatGPT.NAME, started)
+        if (provider == Provider.NEMOTRON) return checkSocket(context, Request.Builder().url(NemotronSession.URL).header("Authorization", "Bearer $key").build(), NemotronSession.NAME, started)
         return try {
             val request = if (provider == Provider.GEMINI) {
                 val (base, serverKey) = GeminiEndpoint.access(key)
@@ -50,5 +52,31 @@ object KeyCheck {
             while (cause.cause != null) cause = cause.cause!!
             Result.Offline(cause.message ?: cause.toString())
         }
+    }
+
+    /**
+     * .wave and ChatGPT have no request to ask with: their live socket opens with a key they take
+     * (no audio, no charge); 401 or 403 is one they don't. As checkKey on the desktop.
+     */
+    private fun checkSocket(context: Context, request: Request, name: String, started: Long): Result {
+        val answer = java.util.concurrent.ArrayBlockingQueue<Result>(1)
+        val socket = ApiProxy.client(context).newBuilder().callTimeout(10, TimeUnit.SECONDS).build().newWebSocket(
+            request,
+            object : okhttp3.WebSocketListener() {
+                override fun onOpen(webSocket: okhttp3.WebSocket, response: okhttp3.Response) {
+                    answer.offer(Result.Works(System.currentTimeMillis() - started))
+                    webSocket.close(1000, null)
+                }
+
+                override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: okhttp3.Response?) {
+                    answer.offer(when (response?.code) {
+                        401, 403 -> Result.Rejected(if (name == ChatGPT.NAME) context.getString(R.string.error_signed_out, name) else context.getString(R.string.error_bad_key, name))
+                        null -> Result.Offline(t.message ?: t.toString())
+                        else -> Result.Offline("HTTP ${response.code}")
+                    })
+                }
+            },
+        )
+        return answer.poll(12, TimeUnit.SECONDS) ?: Result.Offline(context.getString(R.string.error_timeout, name)).also { socket.cancel() }
     }
 }

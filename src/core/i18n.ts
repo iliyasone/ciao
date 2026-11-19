@@ -168,7 +168,7 @@ const ru = {
     },
     chatgpt: {
       label: "Аккаунт ChatGPT",
-      signedIn: (email: string, days: number) => `Вход: ${email || "выполнен"}. Продлевается сам, сейчас действует ещё ${days} дн.`,
+      signedIn: (email: string, days: number) => `Вход: ${email || "выполнен"}. Действует ещё ${days} дн.; его продлевает устройство, где был вход, а синхронизация приносит на остальные.`,
       signedOut:
         "Войди в ChatGPT, подойдёт и бесплатный аккаунт. Это закрытый API chatgpt.com: он может измениться или перестать работать, так что разумнее завести для этого отдельный аккаунт.",
       signingIn: "Войди в ChatGPT в открывшемся окне…",
@@ -547,7 +547,7 @@ const en: Strings = {
     },
     chatgpt: {
       label: "ChatGPT account",
-      signedIn: (email, days) => `Signed in${email ? ` as ${email}` : ""}. It renews itself; good for ${days} more days now.`,
+      signedIn: (email, days) => `Signed in${email ? ` as ${email}` : ""}. Good for ${days} more days; the device you signed in on renews it, and sync brings it to the others.`,
       signedOut: "Sign in to ChatGPT; a free account will do. This is chatgpt.com's private API: it may change or stop working, so a separate account for it is wiser.",
       signingIn: "Sign in to ChatGPT in the window that opened…",
       notSignedIn: "Not signed in: the window was closed first.",

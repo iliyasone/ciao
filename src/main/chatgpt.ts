@@ -4,8 +4,9 @@ import { loadKeyFile, saveKeyFile } from "./settings";
 
 // The ChatGPT account Ciao transcribes with (core/chatgpt.ts): signed in on chatgpt.com in a window
 // of Ciao's own, whose cookies stay in their own partition. The access token the account gets from
-// /api/auth/session is saved as ChatGPT's key (chatgpt-token.txt, not synced) and renewed from the
-// same cookies before it runs out. These requests go through Chromium, as a browser's would, and
+// /api/auth/session is saved as ChatGPT's key (chatgpt-token.txt, synced like the other keys) and
+// renewed from the same cookies once it runs out. A device that only got it through sync can't renew
+// it: it takes the one the signed-in device renews. These requests go through Chromium, as a browser's would, and
 // direct: the proxy in Settings is for the transcription requests only (main/proxy.ts).
 
 const PARTITION = "persist:chatgpt";
@@ -34,8 +35,8 @@ async function currentToken(): Promise<string | null> {
 }
 
 /**
- * Renews the saved token once it runs out soon (`force`: now, after ChatGPT refused it). Forgets it
- * when it has run out and the account is signed out. True if the saved token changed.
+ * Renews the saved token once it runs out soon (`force`: now, after ChatGPT refused it). Never forgets
+ * it: it may have come through sync from a device still signed in. True if the saved token changed.
  */
 export async function renewToken(force = false): Promise<boolean> {
   const saved = loadKeyFile("chatgpt");
@@ -49,12 +50,10 @@ export async function renewToken(force = false): Promise<boolean> {
     console.warn("chatgpt: the token wasn't renewed:", (e as Error).message);
     return false;
   }
-  // Signed out (or in anew) while the request was out: that wins.
-  if (token === saved || loadKeyFile("chatgpt") !== saved) return false;
-  // Signed out on chatgpt.com: the saved token may still work until it runs out.
-  if (!token && expiresAt > Date.now()) return false;
-  saveKeyFile("chatgpt", token ?? "");
-  console.log("chatgpt:", token ? "token renewed" : "signed out; the token ran out and is forgotten");
+  // Not signed in here, or signed out (or in anew) while the request was out.
+  if (!token || token === saved || loadKeyFile("chatgpt") !== saved) return false;
+  saveKeyFile("chatgpt", token);
+  console.log("chatgpt: token renewed");
   return true;
 }
 

@@ -231,6 +231,8 @@ object GoogleSync {
                     prefs.syncKeys = merged.syncKeys.value
                     merged.keys["openai"]?.let { prefs.apiKey = it.value }
                     merged.keys["gemini"]?.let { prefs.geminiKey = it.value }
+                    merged.keys["nemotron"]?.let { prefs.dotwaveKey = it.value }
+                    merged.keys["chatgpt"]?.let { prefs.chatgptToken = it.value }
                     prefs.proxy = merged.proxy.value
                     main.post { applied?.invoke() }
                 }

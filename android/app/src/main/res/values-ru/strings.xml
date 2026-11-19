@@ -305,4 +305,17 @@
     <string name="setup_copy_report_text">Кнопка не появилась? Скопируйте отчёт и пришлите его.</string>
     <string name="diag_result_clipboard">Текст попал в буфер обмена, а не в поле: телефон не дал Ciao вставить его. Скопируйте отчёт.</string>
     <string name="diag_result_clipboard_setting">Текст попал в буфер обмена: в настройках выключено «Вставлять текст сразу».</string>
+    <string name="provider_option_free">%1$s · бесплатно</string>
+    <string name="key_text_nemotron">Ключ .wave с dotwave.ai. Nemotron сам определяет язык и не берёт ни контекст, ни термины.</string>
+    <string name="key_hint_nemotron">Ключ .wave (wk_…)</string>
+    <string name="chatgpt_title">Аккаунт ChatGPT</string>
+    <string name="key_text_chatgpt">Бесплатно с аккаунтом ChatGPT, подойдёт и бесплатный. Это закрытый API chatgpt.com: он может измениться или перестать работать, так что разумнее завести для этого отдельный аккаунт. ChatGPT хранит звук каждой диктовки 30 дней.</string>
+    <string name="chatgpt_sign_in">Войти в ChatGPT</string>
+    <string name="chatgpt_sign_out">Выйти</string>
+    <string name="chatgpt_signed_out">Вход не выполнен. Если вы вошли на другом устройстве с синхронизацией Google, аккаунт придёт сюда сам.</string>
+    <string name="chatgpt_signed_in">Вход: %1$s. Действует ещё %2$d дн.; его продлевает устройство, где был вход.</string>
+    <string name="need_sign_in">Сначала войдите в %1$s в Ciao</string>
+    <string name="error_signed_out">%1$s не принял вход: войдите заново в настройках Ciao</string>
+    <string name="usage_free">бесплатно</string>
+    <string name="status_signed_out">%1$s не принял вход</string>
 </resources>

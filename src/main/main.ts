@@ -191,12 +191,9 @@ function openHistory(tab?: "settings"): void {
   historyWin.on("focus", () => sync.syncSoon(0));
 }
 
-/** The providers whose key sync carries: not ChatGPT's token, which lasts days and renews only on this device. */
-const syncedProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn);
-
 /** What Google sync compares with its history: the settings it syncs and the saved keys. */
 function local(): Local {
-  const keys = Object.fromEntries(syncedProviders().map((p) => [p, loadKeyFile(p)]));
+  const keys = Object.fromEntries((Object.keys(PROVIDERS) as Provider[]).map((p) => [p, loadKeyFile(p)]));
   return { keywords: settings.keywords, prompt: settings.prompt, keys, syncKeys: settings.syncKeys, proxy: settings.proxy };
 }
 
@@ -205,6 +202,7 @@ function keysChanged(): void {
   pool.close();
   pool.refill();
   historyWin?.webContents.send("settings:keys");
+  sync?.noteLocal(local());
 }
 
 function applySettings(next: Settings): void {
@@ -465,7 +463,6 @@ function registerIpc(): void {
     if (!Object.hasOwn(PROVIDERS, provider)) return;
     saveKeyFile(provider, key);
     keysChanged();
-    sync.noteLocal(local());
   });
 
   ipcMain.handle("chatgpt:account", () => {
@@ -651,7 +648,7 @@ void app.whenReady().then(() => {
     (state) => {
       // Keys first: applySettings reads them back as this device's own.
       let keys = false;
-      for (const provider of syncedProviders()) {
+      for (const provider of Object.keys(PROVIDERS) as Provider[]) {
         const key = state.keys[provider]?.value;
         if (key === undefined || key === loadKeyFile(provider)) continue;
         saveKeyFile(provider, key);

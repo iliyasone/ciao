@@ -15,7 +15,7 @@ export interface ProviderInfo {
   keyPlaceholder: string;
   /**
    * The "key" is the access token of a ChatGPT account, saved on signing in (main/chatgpt.ts): Settings
-   * shows a sign-in instead of a key field, and it isn't synced (it lasts days and renews only here).
+   * shows a sign-in instead of a key field. It syncs like a key; the device signed in renews it.
    */
   signIn?: boolean;
 }

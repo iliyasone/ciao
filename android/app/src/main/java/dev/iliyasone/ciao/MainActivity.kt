@@ -220,13 +220,13 @@ class MainActivity : Activity() {
 
     /** The key title, the Gemini note and the OpenAI-only rows follow the service picked. */
     private fun showProvider() {
-        val gemini = prefs.provider == Provider.GEMINI
+        val openai = prefs.provider == Provider.OPENAI
         findViewById<TextView>(R.id.keyTitle).text = key.title()
-        // OpenAI only, as on the desktop: Gemini detects the language itself, takes no context and has no delay level.
-        findViewById<View>(R.id.contextRow).visibility = if (gemini) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.languagesRow).visibility = if (gemini) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.showDelayRow).visibility = if (gemini) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.delayRow).visibility = if (!gemini && prefs.showDelay) View.VISIBLE else View.GONE
+        // OpenAI only, as on the desktop: Gemini and ChatGPT detect the language themselves, take no context and have no delay level.
+        findViewById<View>(R.id.contextRow).visibility = if (openai) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.languagesRow).visibility = if (openai) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.showDelayRow).visibility = if (openai) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.delayRow).visibility = if (openai && prefs.showDelay) View.VISIBLE else View.GONE
     }
 
     /** The status card: all set, or the first thing missing, with what is left. */
@@ -239,7 +239,7 @@ class MainActivity : Activity() {
         val region = key.state == KeyEditor.State.REGION
         val (title, text, color) = when {
             missing.isEmpty() && !bad && !region -> Triple(getString(R.string.status_ready), getString(R.string.status_ready_text), R.color.ok)
-            bad -> Triple(getString(R.string.status_problem), getString(R.string.status_bad_key, prefs.provider.displayName), R.color.error)
+            bad -> Triple(getString(R.string.status_problem), getString(if (prefs.provider == Provider.CHATGPT) R.string.status_signed_out else R.string.status_bad_key, prefs.provider.displayName), R.color.error)
             region -> Triple(getString(R.string.status_problem), getString(R.string.key_status_region, prefs.provider.displayName), R.color.warn)
             stopped && missing.size == 1 -> Triple(getString(R.string.status_stopped), getString(R.string.status_stopped_text), R.color.error)
             else -> Triple(getString(if (prefs.setupDone) R.string.status_problem else R.string.status_unfinished), getString(R.string.status_left, missing.joinToString(", ")), R.color.warn)

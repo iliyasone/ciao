@@ -53,6 +53,8 @@
     <item name="updateStatus" type="id" />
     <item name="updateText" type="id" />
     <item name="updateTitle" type="id" />
+    <item name="chatgptSignIn" type="id" />
+    <item name="chatgptSignOut" type="id" />
     <item name="version" type="id" />
     <item name="whatsNewButton" type="id" />
 </resources>

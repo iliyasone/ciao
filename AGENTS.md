@@ -22,10 +22,13 @@ must work on each platform it applies to, not only the one you develop on.
     jobs in `.github/workflows/ci.yml` and `release.yml`.
 - `src/core/` imports nothing from Electron or Node: it is meant to be reused by other shells
   (a T3 Code integration). Keep platform logic out of it beyond `isMac`.
-- Android: a change to dictation behaviour (live layout, voice commands, the OpenAI calls) also
-  goes into its Kotlin port in `android/`, or the PR says why Android doesn't need it. The ported
-  files and their TypeScript originals are listed in the README's project layout; the unit tests
-  in `android/` hold the TypeScript outputs, so change both together.
+- Android gets every feature too, in the same PR: a new service, setting, dictation behaviour
+  (live layout, voice commands, the calls to the services) or sync goes into its Kotlin port in
+  `android/`. Leaving it out needs the owner's say-so in that task, not a line in the PR or the
+  README; the only standing exception is the wake word. `ProviderParityTest` fails when a service
+  in `src/core/providers.ts` has no Android port. The ported files and their TypeScript originals
+  are listed in the README's project layout; the unit tests in `android/` hold the TypeScript
+  outputs, so change both together.
 - User-facing text names no OS ("Start when you sign in", not "Start with Windows") unless it
   really differs; then branch on `isMac` in `src/core/i18n.ts`, in both languages. Key names:
   Windows `Ctrl`/`Alt`/`Win` are Control/Option/Command on macOS (`keyNames` in

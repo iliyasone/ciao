@@ -10,6 +10,10 @@ enum class Provider(val id: String, val displayName: String, val liveModel: Stri
     OPENAI("openai", "OpenAI", "gpt-live-transcribe", "gpt-transcribe", 0.017, 10 * 60_000L),
     // Google drops a socket that has waited ~5 min without a setup, and a live session lasts at most 10 min.
     GEMINI("gemini", "Gemini", "gemini-3.5-transcribe-live", "gemini-3.5-transcribe", 0.009, 2 * 60_000L),
+    // .wave runs it (Nemotron.kt); a socket that gets no audio closes after 30 s. No file model: the live one hears the recording again.
+    NEMOTRON("nemotron", "Nemotron", "nemotron-asr-streaming", "nemotron-asr-streaming", 0.00045, 20_000L),
+    // Free with a ChatGPT account (ChatGPT.kt); a socket without session.start waited 13 minutes (measured).
+    CHATGPT("chatgpt", "ChatGPT", "chatgpt-dictation", "chatgpt-transcribe", 0.0, 10 * 60_000L),
 }
 
 /** Settings, with the same defaults as the desktop app (src/main/settings.ts). */
@@ -26,6 +30,16 @@ class Prefs(context: Context) {
         get() = sp.getString("geminiKey", "")!!.filter { it in '!'..'~' }
         set(v) = sp.edit().putString("geminiKey", v).apply()
 
+    /** Nemotron's: a .wave key (wk_…). */
+    var dotwaveKey: String
+        get() = sp.getString("dotwaveKey", "")!!.filter { it in '!'..'~' }
+        set(v) = sp.edit().putString("dotwaveKey", v).apply()
+
+    /** ChatGPT's key: the access token of the account signed in (ChatGPT.kt), here or on a synced device. */
+    var chatgptToken: String
+        get() = sp.getString("chatgptToken", "")!!.filter { it in '!'..'~' }
+        set(v) = sp.edit().putString("chatgptToken", v).apply()
+
     /**
      * HTTP proxy OpenAI and Gemini are reached through (Proxy.kt), "" = direct: Gemini refuses some
      * countries. Synced along with the keys, as on the desktop (Settings.proxy).
@@ -40,7 +54,7 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("syncKeys", v).apply()
 
     /** What GoogleSync compares with its history. */
-    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey), syncKeys, proxy)
+    fun local() = Local(keywords, prompt, mapOf("openai" to apiKey, "gemini" to geminiKey, "nemotron" to dotwaveKey, "chatgpt" to chatgptToken), syncKeys, proxy)
 
     /**
      * Not synced, as on the desktop: each device picks its own. Gemini until one is picked, as on the
@@ -52,7 +66,12 @@ class Prefs(context: Context) {
             ?: (if (apiKey.isNotEmpty() && geminiKey.isEmpty()) Provider.OPENAI else Provider.GEMINI).also { provider = it }
         set(v) = sp.edit().putString("provider", v.id).apply()
 
-    fun keyOf(p: Provider): String = if (p == Provider.GEMINI) geminiKey else apiKey
+    fun keyOf(p: Provider): String = when (p) {
+        Provider.OPENAI -> apiKey
+        Provider.GEMINI -> geminiKey
+        Provider.NEMOTRON -> dotwaveKey
+        Provider.CHATGPT -> chatgptToken
+    }
 
     /**
      * The key of [p] that last passed KeyCheck, with the proxy it went through (a hash, not the
@@ -101,7 +120,7 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("showDelay", false)
         set(v) = sp.edit().putBoolean("showDelay", v).apply()
 
-    /** OpenAI only; Gemini detects the language itself. */
+    /** OpenAI only; the others detect the language themselves. */
     var languages: List<String>
         get() = (sp.getString("languages", null)?.split(",") ?: listOf("ru", "en")).map { it.trim().lowercase() }.filter { it.isNotEmpty() }
         set(v) = sp.edit().putString("languages", v.joinToString(",")).apply()

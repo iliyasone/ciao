@@ -162,8 +162,14 @@ class RealtimeSession(private val context: Context, apiKey: String) : LiveSessio
 }
 
 /** Opens a live session with whichever service the settings pick. */
-fun openLive(context: Context, prefs: Prefs): LiveSession =
-    if (prefs.provider == Provider.GEMINI) GeminiSession(context, prefs.geminiKey) else RealtimeSession(context, prefs.apiKey)
+fun openLive(context: Context, prefs: Prefs): LiveSession = openLive(context, prefs.provider, prefs.currentKey)
+
+fun openLive(context: Context, provider: Provider, key: String): LiveSession = when (provider) {
+    Provider.OPENAI -> RealtimeSession(context, key)
+    Provider.GEMINI -> GeminiSession(context, key)
+    Provider.NEMOTRON -> NemotronSession(context, key)
+    Provider.CHATGPT -> ChatGPTSession(context, key)
+}
 
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */
 class SessionPool(private val context: Context, private val prefs: Prefs) {
