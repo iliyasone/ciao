@@ -233,7 +233,7 @@ class MainActivity : Activity() {
         val openai = prefs.provider == Provider.OPENAI
         // Free: its card shows no cost, so there is none to switch.
         findViewById<View>(R.id.showCostRow).visibility = if (prefs.provider.pricePerMinute > 0) View.VISIBLE else View.GONE
-        val noTerms = prefs.provider == Provider.NEMOTRON || prefs.provider == Provider.CHATGPT
+        val noTerms = prefs.provider == Provider.NEMOTRON
         findViewById<TextView>(R.id.termsText).text =
             if (noTerms) getString(R.string.terms_unused, prefs.provider.displayName) else getString(R.string.terms_text)
         findViewById<View>(R.id.keywords).visibility = if (!noTerms || termsOpen) View.VISIBLE else View.GONE
@@ -242,7 +242,7 @@ class MainActivity : Activity() {
             setText(if (termsOpen) R.string.terms_hide else R.string.terms_show)
         }
         findViewById<TextView>(R.id.keyTitle).text = key.title()
-        // OpenAI only, as on the desktop: Gemini and ChatGPT detect the language themselves, take no context and have no delay level.
+        // OpenAI only, as on the desktop: Gemini and ChatGPT detect the language themselves, take no context (only the terms) and have no delay level.
         findViewById<View>(R.id.contextRow).visibility = if (openai) View.VISIBLE else View.GONE
         findViewById<View>(R.id.languagesRow).visibility = if (openai) View.VISIBLE else View.GONE
         findViewById<View>(R.id.showDelayRow).visibility = if (openai) View.VISIBLE else View.GONE

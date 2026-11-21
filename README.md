@@ -362,8 +362,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     account for it is wiser. ChatGPT keeps each dictation's audio on its side
     for 30 days (it says so in its answer; there is no way to turn it off).
   - It detects the language on its own, mixed Russian and English included, and
-    takes no context and no terms (the desktop's Settings keeps the terms for the
-    other services behind *Show*). Measured on synthetic speech: the first text
+    takes no context, only the terms (on the desktop and on Android). Its
+    dictation takes words in only one place, the phrase of chatgpt.com's speaking
+    practice, so the terms go there, and recognition leans toward them. Measured on
+    76 real dictations with 27 terms: 9 terms written right that were wrong
+    without the list, 2 put where they weren't said ("по сокету" became
+    "WebSocket"), the other words no better and no worse. So a term that sounds
+    like everyday speech is better left out if you rarely say it. Up to 300 terms
+    work; with 1,000 the list did nothing. Measured on synthetic speech: the first text
     about 0.65 s after the first word, the final about 0.55 s after the end, fewer
     errors than Gemini on Russian with English terms; a 9-minute dictation came
     through whole, its final 0.6 s after the end.
@@ -678,8 +684,8 @@ yours.
   service isn't available in your country (the proxy then opens on the setup
   screen), or that it is saved but couldn't be checked. *Paste* puts the
   clipboard in and checks it, and the keyboard goes away.
-  With Gemini the context and languages fields are hidden: Gemini takes no
-  context and detects the language on its own.
+  With Gemini and ChatGPT the context and languages fields are hidden: they take
+  no context, only the terms, and detect the language on its own.
 - On some phones (Huawei among them) the system never tells an accessibility
   service where the keyboard is. There the icon shows whenever a text field has
   the focus, at the height a keyboard usually reaches.

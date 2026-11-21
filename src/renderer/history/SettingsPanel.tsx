@@ -210,13 +210,13 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 }
 
 /**
- * The terms. A service that takes none (Nemotron, ChatGPT) says so, and the list, kept for the other
+ * The terms. A service that takes none (Nemotron) says so, and the list, kept for the other
  * services and synced devices, opens on demand.
  */
 function TermsRow({ s, update }: { s: Settings; update: Update }) {
   const tr = useStrings().settings.recognition;
   const note = { openai: "", gemini: tr.geminiNote, nemotron: tr.nemotronNote, chatgpt: tr.chatgptNote }[s.provider];
-  const unused = s.provider === "nemotron" || s.provider === "chatgpt";
+  const unused = s.provider === "nemotron";
   const [open, setOpen] = useState(false);
   const field = (
     <textarea
