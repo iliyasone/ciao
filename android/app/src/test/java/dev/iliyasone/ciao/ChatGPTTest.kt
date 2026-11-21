@@ -22,6 +22,14 @@ class ChatGPTTest {
         assertNull(ChatGPT.account("x.${java.util.Base64.getUrlEncoder().encodeToString("{}".toByteArray())}.y"))
     }
 
+    /** As chatgptContext in src/core/chatgpt.ts: trimmed terms, both as the phrase and as the words; none without terms. */
+    @Test
+    fun context() {
+        val c = ChatGPT.context(listOf(" T3 Code ", "", "Coolify", "x".repeat(121)))!!
+        assertEquals("""{"kind":"speaking_exercise","expected_phrase":"T3 Code, Coolify","target_words":["T3 Code","Coolify"]}""", c.toString())
+        assertNull(ChatGPT.context(listOf(" ")))
+    }
+
     /** ChatGPT's dictations count, at no cost, as summarizeUsage in src/core/usage.ts. */
     @Test
     fun usageCountsChatGPT() {

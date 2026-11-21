@@ -16,6 +16,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -41,6 +42,16 @@ object ChatGPT {
         .header("Sec-WebSocket-Protocol", "chatgpt-dictation, openai-bearer.$token")
         .header("Origin", ORIGIN)
         .build()
+
+    /**
+     * The terms as session.start's context, as chatgptContext in src/core/chatgpt.ts: chatgpt.com's
+     * speaking practice ("say this phrase"), the only way its dictation takes words. Null without terms.
+     */
+    fun context(keywords: List<String>): JSONObject? {
+        val terms = keywords.map { it.trim() }.filter { it.isNotEmpty() && it.length <= 120 }.take(300)
+        if (terms.isEmpty()) return null
+        return JSONObject().put("kind", "speaking_exercise").put("expected_phrase", terms.joinToString(", ")).put("target_words", JSONArray(terms))
+    }
 
     class Account(val email: String, val expiresAt: Long)
 
@@ -190,7 +201,7 @@ object ChatGPT {
  * The server can give up on an utterance ("transcript.failed"): the live text stays on screen, and at
  * the end the session fails, so the whole recording goes to the file model, as chatgpt.com does.
  *
- * No terms, context or language: the language is detected as you speak.
+ * The terms go as the context ([ChatGPT.context]). No language: it is detected as you speak.
  * Everything the socket reports is handled on the main thread.
  */
 class ChatGPTSession(private val context: Context, token: String) : LiveSession {
@@ -252,6 +263,7 @@ class ChatGPTSession(private val context: Context, token: String) : LiveSession 
             .put("provider_mode", "streaming_sse")
             .put("transcript_delivery_mode", "segment")
             .put("vad", vad)
+        ChatGPT.context(prefs.keywords)?.let { config.put("context", it) }
         send(JSONObject().put("type", "session.start").put("dictation_session_id", UUID.randomUUID().toString()).put("attempt_id", UUID.randomUUID().toString()).put("config", config))
     }
 
