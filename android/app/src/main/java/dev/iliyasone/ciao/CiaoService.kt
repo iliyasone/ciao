@@ -231,7 +231,8 @@ class CiaoService : AccessibilityService() {
      */
     private fun shadeOpen(): Boolean {
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
-        val screen = resources.displayMetrics
+        // Not ours: the language and theme context keeps the screen size it started with, before any turn.
+        val screen = applicationContext.resources.displayMetrics
         val r = Rect()
         return runCatching {
             windows.any { w ->
