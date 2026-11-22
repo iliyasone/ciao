@@ -557,7 +557,7 @@ class SetupActivity : Activity() {
             "service: enabled=${Setup.serviceEnabled(this)} running=${CiaoService.instance != null} connected ${ago(Diag.connectedAt)}",
             "field: app=${if (testField.hasFocus()) "focused" else "not focused"} service seen ${ago(Diag.fieldAt)}",
             "keyboard: app=${if (keyboardVisible()) "open" else "closed"} service seen ${ago(Diag.keyboardAt)} · windows: ${Diag.windows.ifEmpty { "-" }} · ime: $ime",
-            "bubble: ${if (Diag.bubbleShown) "shown" else "not shown"}${if (Diag.shade) " (hidden: shade open)" else ""} · error: ${Diag.bubbleError ?: "-"}",
+            "bubble: ${if (Diag.bubbleShown) "shown" else "not shown"}${if (Diag.bubbleShown && Diag.shade) " (hidden: shade open)" else ""} · error: ${Diag.bubbleError ?: "-"}",
             "last dictation: ${Diag.outcome ?: "-"} ${if (Diag.outcomeAt > 0) ago(Diag.outcomeAt) else ""}".trim(),
             "battery unrestricted=${Background.unrestricted(this)} · background confirmed=${prefs.backgroundConfirmed}",
             "key: ${prefs.provider.displayName} ${key.state.name.lowercase()} · mic=${micGranted()} · notifications=${notificationsGranted()}",

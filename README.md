@@ -723,8 +723,9 @@ yours.
      sees: whether it is on and running, sees the field and the keyboard, and
      shows the icon, with a sentence on what to do when a link is missing.
      *Done* appears once a dictation went into the field; *Finish without
-     testing* below the list ends the setup without one. *Copy report* copies the phone model, Android version and these findings
-     (no key, no text) for a bug report.
+     testing* below the list ends the setup without one. *Copy report* copies the phone model, Android version and these findings,
+     with the size of each window the service sees and whether it hid the icon
+     for the shade (no key, no text), for a bug report.
 3. The settings open after that. The card at the top says *All set* or what is
    left, and opens the setup again.
 
