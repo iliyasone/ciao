@@ -193,7 +193,8 @@ class CiaoService : AccessibilityService() {
         }
         if (ime != null) Diag.keyboardAt = System.currentTimeMillis()
         if (field != null) Diag.fieldAt = System.currentTimeMillis()
-        Diag.windows = runCatching { windows.joinToString(", ") { windowType(it.type) } }.getOrElse { it.toString() }
+        val r = Rect()
+        Diag.windows = runCatching { windows.joinToString(", ") { "${windowType(it.type)} ${r.also { b -> it.getBoundsInScreen(b) }.width()}×${r.height()}" } }.getOrElse { it.toString() }
         // Some phones (Huawei among them) never list the keyboard among the windows: there the
         // bubble follows the focused field alone, at the height a keyboard usually reaches. Only
         // after a second without one, so elsewhere the keyboard opening first isn't mistaken for it.
@@ -209,6 +210,7 @@ class CiaoService : AccessibilityService() {
             shade = open
             if (open) setBubbleTouchable(false) else if (bubble?.alpha == 1f && !motion.running) setBubbleTouchable(true)
         }
+        Diag.shade = shade
         bubble?.visibility = if (shade) View.INVISIBLE else View.VISIBLE
         cardHost?.visibility = if (shade) View.GONE else View.VISIBLE
         suggestionHost?.visibility = if (shade) View.GONE else View.VISIBLE
@@ -223,13 +225,19 @@ class CiaoService : AccessibilityService() {
         else -> "TYPE_$type"
     }
 
-    /** The notification shade or quick settings are pulled down (the lock screen doesn't count: the card belongs there). */
+    /**
+     * The notification shade or quick settings are pulled down (the lock screen doesn't count: the card belongs there).
+     * Wide as well as tall: Huawei's gesture navigation lists a thin window down each side of the screen.
+     */
     private fun shadeOpen(): Boolean {
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
-        val height = resources.displayMetrics.heightPixels
+        // Not ours: the language and theme context keeps the screen size it started with, before any turn.
+        val screen = applicationContext.resources.displayMetrics
         val r = Rect()
         return runCatching {
-            windows.any { w -> w.type == AccessibilityWindowInfo.TYPE_SYSTEM && r.also { w.getBoundsInScreen(it) }.height() > height / 2 }
+            windows.any { w ->
+                w.type == AccessibilityWindowInfo.TYPE_SYSTEM && r.also { w.getBoundsInScreen(it) }.let { it.height() > screen.heightPixels / 2 && it.width() > screen.widthPixels / 2 }
+            }
         }.getOrDefault(false)
     }
 
