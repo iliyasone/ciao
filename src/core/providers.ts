@@ -63,7 +63,7 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     keyPlaceholder: "",
     signIn: true,
   },
-  // Telegram's on-device recognizer (tinyasr, GPL-3.0-or-later): native/asr, models fetched by scripts/fetch-tinyasr.mjs.
+  // Telegram's on-device recognizer (tinyasr, GPL-3.0-or-later): native/asr, models fetched by scripts/build-asr.mjs.
   local: {
     name: "tinyasr",
     company: "Telegram",

@@ -108,7 +108,7 @@ val buildAsr by tasks.registering {
         for ((abi, target) in asrTargets) {
             val clang = target.replace("armv7-", "armv7a-") + minSdk + "-clang" + if ("windows" in os) ".cmd" else ""
             runTool(
-                "cargo", "build", "--release", "--lib", "--target", target, "--manifest-path", asrCrate.resolve("Cargo.toml").path,
+                "cargo", "build", "--release", "--locked", "--lib", "--target", target, "--manifest-path", asrCrate.resolve("Cargo.toml").path,
                 env = mapOf("CARGO_TARGET_${target.uppercase().replace('-', '_')}_LINKER" to bin.resolve(clang).path),
             )
             val dir = out.get().asFile.resolve(abi).apply { mkdirs() }

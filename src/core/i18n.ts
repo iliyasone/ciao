@@ -45,6 +45,7 @@ const ru = {
     status: (who: string, status: number | string) => `${who} ответил ${status}`,
     microphone: (message: string) => `Микрофон: ${message}`,
     noFinalText: "Нет финального текста",
+    localMissing: "В этой сборке нет распознавателя tinyasr",
     fileFailed: (reason: string, message: string) => `${reason}; файл: ${message}`,
     closedMidTranscription: "Приложение закрылось до конца распознавания — аудио сохранено, можно распознать заново",
   },
@@ -173,6 +174,7 @@ const ru = {
       micAction: "Подключи микрофон и разреши к нему доступ",
       untilThen: "Без этого диктовка не заработает.",
       keyFailed: (name: string) => `Ключ ${name} не работает`,
+      localFailed: "tinyasr не запускается на этом устройстве",
       signInFailed: "ChatGPT не принимает вход",
     },
     apiKey: {
@@ -446,6 +448,7 @@ const en: Strings = {
     status: (who, status) => `${who} responded with ${status}`,
     microphone: (message) => `Microphone: ${message}`,
     noFinalText: "No final text",
+    localMissing: "This build has no tinyasr recognizer",
     fileFailed: (reason, message) => `${reason}; file: ${message}`,
     closedMidTranscription: "The app closed before transcription finished — the audio is saved, you can transcribe it again",
   },
@@ -574,6 +577,7 @@ const en: Strings = {
       micAction: "Connect a microphone and allow access to it",
       untilThen: "Dictation won't work until then.",
       keyFailed: (name) => `The ${name} key doesn't work`,
+      localFailed: "tinyasr doesn't start on this device",
       signInFailed: "ChatGPT doesn't accept the sign-in",
     },
     apiKey: {

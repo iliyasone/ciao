@@ -50,6 +50,14 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
       }),
     [],
   );
+  // tinyasr has no key to check: whether its helper starts here (an old glibc, a missing runtime) instead.
+  useEffect(() => {
+    if (s?.provider !== "local") return;
+    const n = startCheck("local");
+    void ciao.settings.checkKey("local").then((r) => {
+      if (isLatestCheck("local", n)) setFailed((f) => ({ ...f, local: r.ok ? undefined : r.reason }));
+    });
+  }, [s?.provider]);
   const mics = useMics();
   const accessibility = useAccessibility();
   const tr = useStrings().settings;
@@ -386,14 +394,14 @@ function StatusCard(props: { s: Settings; hasKey: boolean | undefined; failed: F
   const key = s.triggers[0] ? triggerParts(s.triggers[0], strings.keyNames).join(" + ") : "";
   // One thing to do: the title says it. Several: listed under "Needs your attention".
   const [title, hint] = props.failed
-    ? [signIn ? tr.signInFailed : tr.keyFailed(name), props.failed.reason]
+    ? [PROVIDERS[s.provider].local ? tr.localFailed : signIn ? tr.signInFailed : tr.keyFailed(name), props.failed.reason]
     : missing.length === 1
       ? [missing[0]!.action, tr.untilThen]
       : missing.length
         ? [tr.problem, tr.left(missing.map((m) => m.label).join(", "))]
         : [tr.ready, tr.readyText(key, displayName(s.provider))];
   const ok = !missing.length && !props.failed;
-  const target = props.failed ? "setting-key" : missing[0]?.id;
+  const target = props.failed ? (PROVIDERS[s.provider].local ? undefined : "setting-key") : missing[0]?.id;
   const body = (
     <>
       <span className={`size-2 shrink-0 rounded-full ${ok ? "bg-ok" : props.failed ? "bg-error" : "bg-warn"}`} />

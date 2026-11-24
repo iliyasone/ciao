@@ -37,7 +37,10 @@ for (const [src, hash] of Object.entries(FILES)) {
 }
 
 const manifest = path.resolve("native/asr/Cargo.toml");
-const cargo = (...args) => execFileSync("cargo", ["build", "--release", "--bin", "ciao-asr", "--manifest-path", manifest, ...args], { stdio: "inherit" });
+// Windows: the C runtime linked in, so the helper doesn't need the Visual C++ Redistributable.
+const env = process.platform === "win32" ? { ...process.env, RUSTFLAGS: `${process.env.RUSTFLAGS ?? ""} -C target-feature=+crt-static`.trim() } : process.env;
+const cargo = (...args) =>
+  execFileSync("cargo", ["build", "--release", "--locked", "--bin", "ciao-asr", "--manifest-path", manifest, ...args], { stdio: "inherit", env });
 const target = path.resolve("native/asr/target");
 if (process.platform === "darwin") {
   execFileSync("rustup", ["target", "add", "aarch64-apple-darwin", "x86_64-apple-darwin"], { stdio: "inherit" });

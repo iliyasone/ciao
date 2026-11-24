@@ -59,7 +59,7 @@ export function providerOf(model: string): UsageProvider {
 }
 
 /** Free services, counted like paid ones (at no cost). */
-const FREE: readonly UsageProvider[] = ["chatgpt", "local"];
+export const FREE: readonly UsageProvider[] = ["chatgpt", "local"];
 
 const HOUR = 3_600_000;
 

@@ -1,5 +1,5 @@
 // The on-device recognizer (tinyasr): runs native/asr's helper, one process per dictation or recording.
-// Its folder (resources/tinyasr) holds the helper and the model files: scripts/fetch-tinyasr.mjs.
+// Its folder (resources/tinyasr) holds the helper and the model files: scripts/build-asr.mjs.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";

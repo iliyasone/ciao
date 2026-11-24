@@ -80,7 +80,7 @@ async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
 export async function checkKey(provider: Provider, apiKey: string): Promise<KeyCheck> {
   const started = Date.now();
   const name = PROVIDERS[provider].name;
-  if (provider === "local") return localAvailable() ? { ok: true, ms: 0 } : { ok: false, reason: t().errors.providerError(name) };
+  if (provider === "local") return checkLocal(started);
   try {
     if (provider === "nemotron" || provider === "chatgpt") {
       const status = await new Promise<number>((resolve, reject) => {
@@ -116,6 +116,32 @@ export async function checkKey(provider: Provider, apiKey: string): Promise<KeyC
     for (let x = e as (Error & { cause?: unknown }) | undefined; x instanceof Error; x = x.cause as typeof x) chain.push(x.message);
     return { ok: false, reason: chain.at(-1) ?? String(e) };
   }
+}
+
+/** Whether tinyasr's helper starts and loads its model here. */
+function checkLocal(started: number): Promise<KeyCheck> {
+  if (!localAvailable()) return Promise.resolve({ ok: false, reason: t().errors.localMissing });
+  return new Promise((resolve) => {
+    const helper = spawnHelper();
+    const done = (r: KeyCheck) => {
+      clearTimeout(timer);
+      helper.onLine = helper.onExit = null;
+      helper.kill();
+      resolve(r);
+    };
+    const timer = setTimeout(() => done({ ok: false, reason: t().errors.timeout("tinyasr") }), 30_000);
+    helper.onLine = (line) => {
+      let msg: { type?: string; message?: string };
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (msg.type === "ready") done({ ok: true, ms: Date.now() - started });
+      else if (msg.type === "error") done({ ok: false, reason: msg.message ?? t().errors.providerError("tinyasr") });
+    };
+    helper.onExit = (error) => done({ ok: false, reason: error ?? t().errors.providerError("tinyasr") });
+  });
 }
 
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */

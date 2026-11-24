@@ -401,7 +401,9 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
     accurate* (the same model over the whole recording at once, on four threads)
     takes about 4 s for a minute.
   - On the desktop it runs as a helper process per dictation (`native/asr`), one
-    started ahead so the model is loaded when you start.
+    started ahead so the model is loaded when you start. On Linux the helper needs
+    glibc 2.34 or later (Ubuntu 22.04, Debian 12 and later); where it can't start,
+    the status card in Settings says so.
 - **Proxy** (*Settings → Recognition → Proxy*, on every platform and on
   Android). Requests to OpenAI, Gemini, Nemotron and ChatGPT, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
@@ -540,8 +542,10 @@ What is different on macOS for now:
 
 ### Build it yourself
 
-You need Node.js 22+, and the .NET 8 SDK for the Windows app. The Windows build
-runs on Windows, Linux or macOS.
+You need Node.js 22+, Rust (`cargo`, from [rustup](https://rustup.rs)) for
+tinyasr's helper, and the .NET 8 SDK for the Windows app. The Windows build runs
+on Windows, Linux or macOS, except tinyasr's helper, which `build:asr` builds for
+the OS it runs on (without it, *tinyasr* in Settings says it can't start).
 
 ```sh
 git clone https://github.com/iliyasone/ciao.git
@@ -549,6 +553,7 @@ cd ciao
 npm install
 npm run build:native        # the input helper → build/win-input/Ciao.Input.exe
 npm run build:kws           # the wake-word detector and model (~50 MB) → build/kws
+npm run build:asr           # tinyasr's helper and model (~40 MB) → build/tinyasr
 npm run dist:win            # a portable folder → release/win-unpacked/Ciao.exe
 npm run dist:win:installer  # the installer → release/Ciao-Setup-<version>.exe
 ```
@@ -561,6 +566,7 @@ The macOS app builds on a Mac only, with Xcode's command line tools
 
 ```sh
 npm run build:native:mac    # the input helper → build/mac-input/Ciao.Input
+npm run build:asr           # tinyasr's helper (Apple Silicon and Intel) and model → build/tinyasr
 npm run dist:mac            # disk images → release/Ciao-<version>-{arm64,x64}.dmg
 ```
 
@@ -568,6 +574,7 @@ The Linux app is built on Linux, without Wine or .NET:
 
 ```sh
 npm run build:kws:linux     # the wake-word detector and FFI for Linux → build/kws
+npm run build:asr           # tinyasr's helper and model → build/tinyasr
 npm run dist:linux          # → release/Ciao-<version>.AppImage and .deb
 ```
 
@@ -1103,8 +1110,10 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `Corrections.kt` — the port of `src/core/corrections.ts`, with the same kind
     of test; `SuggestionView.kt` — the card offering a corrected word for the terms.
 
-`npm run typecheck` checks the desktop app. For Android you need JDK 17 and the
-Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds
+`npm run typecheck` checks the desktop app. For Android you need JDK 17, the
+Android SDK (platform 35) with NDK 28.2.13676358, Rust (`rustup`, `cargo`; the
+build adds the Android targets) and the network on the first build (tinyasr's
+model files); `cd android && ./gradlew assembleRelease` builds
 `app/build/outputs/apk/release/Ciao-<version>-release.apk`, and
 `./gradlew testReleaseUnitTest` runs the tests. Without
 `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`,
