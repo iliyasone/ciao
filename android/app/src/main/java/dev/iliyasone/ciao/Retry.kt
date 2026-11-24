@@ -79,7 +79,8 @@ object Retry {
                 done.countDown()
             }
         }
-        val timeoutMs = 60_000 + audio.length() / BYTES_PER_MS / (if (provider == Provider.NEMOTRON) 1 else 2)
+        // Nemotron hears it at the speed of speech; the phone, as fast as it recognizes, which may be no faster.
+        val timeoutMs = 60_000 + audio.length() / BYTES_PER_MS / (if (provider == Provider.NEMOTRON || provider == Provider.LOCAL) 1 else 2)
         try {
             main.post { session.configure(prefs) }
             // Paced: 240 ms per message, fine enough for Gemini's session to find pauses to cut a long one at.

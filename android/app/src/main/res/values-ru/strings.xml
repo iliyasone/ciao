@@ -46,6 +46,7 @@
     <string name="terms_title">Термины</string>
     <string name="terms_text">Слова, которые нужно писать точно, по одному в строке.</string>
     <string name="terms_unused">%1$s не берёт термины. Список хранится для других сервисов и ваших устройств.</string>
+    <string name="terms_local">tinyasr распознаёт русский и английский и не берёт ни контекст, ни термины. Список хранится для других сервисов и ваших устройств.</string>
     <string name="terms_show">Показать</string>
     <string name="terms_hide">Скрыть</string>
     <string name="learn_corrections">Предлагать новые слова</string>
@@ -286,6 +287,7 @@
     <string name="section_about">О приложении</string>
     <string name="row_service">Сервис</string>
     <string name="row_service_text">Куда уходит звук. Оплата по вашему ключу.</string>
+    <string name="row_service_text_local">Распознаёт прямо на этом устройстве моделью Telegram: звук никуда не уходит, работает без интернета и без ключа. Ошибается чаще облачных сервисов, особенно в английских вставках и названиях.</string>
     <string name="stop_phrase_hint">Скажите в конце, и текст вставится.</string>
     <string name="pause_media_hint">Плеер продолжит сам.</string>
     <string name="show_cost_hint">На карточке после каждой диктовки.</string>

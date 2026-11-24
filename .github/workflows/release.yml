@@ -46,6 +46,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run build:native
       - run: npm run build:kws
+      - run: npm run build:asr
       - run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,6 +65,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build:native:mac
+      - run: npm run build:asr
       - run: npm run release:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,6 +84,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build:kws:linux
+      - run: npm run build:asr
       - run: npm run release:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,6 +104,9 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      # The NDK the on-device recognizer (native/asr) is built with for every ABI (app/build.gradle.kts, which adds
+      # the Rust targets itself); the runner has Rust.
+      - run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
       # Every release must be signed with the same key, or Android refuses to install it over the last one.
       - name: Keystore
         run: echo "$CIAO_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ciao.jks"

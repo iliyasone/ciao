@@ -48,6 +48,21 @@ class UiTest {
     }
 
     @Test
+    fun onDeviceNeedsNoKey() {
+        val prefs = Prefs(RuntimeEnvironment.getApplication())
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        pick(activity.findViewById(R.id.provider), "Telegram tinyasr · free")
+        assertEquals(Provider.LOCAL, prefs.provider)
+        assertEquals("local", prefs.currentKey)
+        // No key, no proxy; the terms fold away.
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.keyRow).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.proxyRow).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.keywords).visibility)
+        assertEquals(activity.getString(R.string.row_service_text_local), activity.findViewById<TextView>(R.id.serviceText).text.toString())
+        assertEquals(emptyList<String>(), Setup.missing(activity).filter { it == activity.getString(R.string.setup_key_title) })
+    }
+
+    @Test
     fun opensTheSetupUntilItIsDone() {
         val app = RuntimeEnvironment.getApplication()
         val main = Robolectric.buildActivity(MainActivity::class.java).setup().get()

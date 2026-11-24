@@ -46,10 +46,19 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     () =>
       ciao.settings.onKeys(() => {
         invalidateChecks();
-        setFailed({});
+        // tinyasr's check isn't about a key: it stands (and isn't run again).
+        setFailed((f) => ({ local: f.local }));
       }),
     [],
   );
+  // tinyasr has no key to check: whether its helper starts here (an old glibc, a missing runtime) instead.
+  useEffect(() => {
+    if (s?.provider !== "local") return;
+    const n = startCheck("local");
+    void ciao.settings.checkKey("local").then((r) => {
+      if (isLatestCheck("local", n)) setFailed((f) => ({ ...f, local: r.ok ? undefined : r.reason }));
+    });
+  }, [s?.provider]);
   const mics = useMics();
   const accessibility = useAccessibility();
   const tr = useStrings().settings;
@@ -121,14 +130,18 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         <Section title={tr.recognition.title}>
           <ServiceRow s={s} hasKey={hasKey} update={update} />
-          {PROVIDERS[s.provider].signIn ? <ChatGPTAccountRow onChecked={onChecked} /> : <ApiKeyRow key={s.provider} provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />}
+          {PROVIDERS[s.provider].signIn ? (
+            <ChatGPTAccountRow onChecked={onChecked} />
+          ) : (
+            !PROVIDERS[s.provider].local && <ApiKeyRow key={s.provider} provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />
+          )}
           {/* OpenAI only: the others detect the language themselves. */}
           {s.provider === "openai" && (
             <Row title={tr.recognition.languages} hint={tr.recognition.languagesHint}
               control={<input value={s.languages.join(", ")} onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)} className={`${INPUT} w-[18rem]`} />}
             />
           )}
-          <ProxyRow value={s.proxy} provider={s.provider} onChange={(proxy) => update({ proxy })} />
+          {!PROVIDERS[s.provider].local && <ProxyRow value={s.proxy} provider={s.provider} onChange={(proxy) => update({ proxy })} />}
         </Section>
 
         <Section title={tr.dictation}>
@@ -215,8 +228,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
  */
 function TermsRow({ s, update }: { s: Settings; update: Update }) {
   const tr = useStrings().settings.recognition;
-  const note = { openai: "", gemini: tr.geminiNote, nemotron: tr.nemotronNote, chatgpt: tr.chatgptNote }[s.provider];
-  const unused = s.provider === "nemotron";
+  const note = { openai: "", gemini: tr.geminiNote, nemotron: tr.nemotronNote, chatgpt: tr.chatgptNote, local: tr.localNote }[s.provider];
+  const unused = s.provider === "nemotron" || s.provider === "local";
   const [open, setOpen] = useState(false);
   const field = (
     <textarea
@@ -382,14 +395,14 @@ function StatusCard(props: { s: Settings; hasKey: boolean | undefined; failed: F
   const key = s.triggers[0] ? triggerParts(s.triggers[0], strings.keyNames).join(" + ") : "";
   // One thing to do: the title says it. Several: listed under "Needs your attention".
   const [title, hint] = props.failed
-    ? [signIn ? tr.signInFailed : tr.keyFailed(name), props.failed.reason]
+    ? [PROVIDERS[s.provider].local ? tr.localFailed : signIn ? tr.signInFailed : tr.keyFailed(name), props.failed.reason]
     : missing.length === 1
       ? [missing[0]!.action, tr.untilThen]
       : missing.length
         ? [tr.problem, tr.left(missing.map((m) => m.label).join(", "))]
         : [tr.ready, tr.readyText(key, displayName(s.provider))];
   const ok = !missing.length && !props.failed;
-  const target = props.failed ? "setting-key" : missing[0]?.id;
+  const target = props.failed ? (PROVIDERS[s.provider].local ? undefined : "setting-key") : missing[0]?.id;
   const body = (
     <>
       <span className={`size-2 shrink-0 rounded-full ${ok ? "bg-ok" : props.failed ? "bg-error" : "bg-warn"}`} />
@@ -450,13 +463,13 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
     const perMinute = pricePerMinute(models({ ...s, provider }).live);
     const parts = [displayName(provider), perMinute ? tr.perHour(`$${(perMinute * 60).toFixed(2)}`) : tr.free];
     const has = hasKey[provider];
-    if (provider !== s.provider && has !== undefined) parts.push(PROVIDERS[provider].signIn ? (has ? tr.signedIn : tr.signedOut) : has ? tr.hasKey : tr.noKey);
+    if (provider !== s.provider && has !== undefined && !PROVIDERS[provider].local) parts.push(PROVIDERS[provider].signIn ? (has ? tr.signedIn : tr.signedOut) : has ? tr.hasKey : tr.noKey);
     return { value: provider, label: parts.join(" · ") };
   });
   return (
     <Row
       title={tr.service}
-      hint={PROVIDERS[s.provider].signIn ? tr.introAccount : tr.intro}
+      hint={PROVIDERS[s.provider].local ? tr.introLocal : PROVIDERS[s.provider].signIn ? tr.introAccount : tr.intro}
       control={<Select label={tr.service} value={s.provider} options={options} onChange={(provider) => update({ provider })} className="w-[18rem]" />}
       below={<span className="-mt-1.5 text-[12.5px] text-faint dark:text-muted">{tr.models(m.live, m.file)}</span>}
     />
@@ -470,7 +483,7 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
 const checksStarted: Partial<Record<Provider, number>> = {};
 const startCheck = (provider: Provider) => (checksStarted[provider] = (checksStarted[provider] ?? 0) + 1);
 const isLatestCheck = (provider: Provider, n: number) => checksStarted[provider] === n;
-const invalidateChecks = () => (Object.keys(PROVIDERS) as Provider[]).forEach(startCheck);
+const invalidateChecks = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].local).forEach(startCheck);
 
 function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey: boolean; onChecked: (provider: Provider, reason: string | null) => void }) {
   const [value, setValue] = useState("");

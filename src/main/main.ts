@@ -192,7 +192,7 @@ function openHistory(tab?: "settings"): void {
 }
 
 /** The providers whose key sync carries in its keys; ChatGPT's token has a field of its own (core/sync.ts). */
-const keyProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn);
+const keyProviders = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].signIn && !PROVIDERS[p].local);
 
 /** What Google sync compares with its history: the settings it syncs and the saved keys. */
 function local(): Local {

@@ -14,6 +14,8 @@ enum class Provider(val id: String, val displayName: String, val liveModel: Stri
     NEMOTRON("nemotron", "Nemotron", "nemotron-asr-streaming", "nemotron-asr-streaming", 0.00045, 20_000L),
     // Free with a ChatGPT account (ChatGPT.kt); a socket without session.start waited 13 minutes (measured).
     CHATGPT("chatgpt", "ChatGPT", "chatgpt-dictation", "chatgpt-transcribe", 0.0, 10 * 60_000L),
+    // Telegram's, on the phone (LocalAsr.kt): no key, no proxy, no network; a spare waits as long as it is left.
+    LOCAL("local", "tinyasr", "tinyasr-en-ru-uk", "tinyasr-en-ru-uk", 0.0, Long.MAX_VALUE / 2),
 }
 
 /** Settings, with the same defaults as the desktop app (src/main/settings.ts). */
@@ -71,6 +73,8 @@ class Prefs(context: Context) {
         Provider.GEMINI -> geminiKey
         Provider.NEMOTRON -> dotwaveKey
         Provider.CHATGPT -> chatgptToken
+        // Needs none: it always "has" one, as on the desktop (loadApiKey). Never synced.
+        Provider.LOCAL -> "local"
     }
 
     /**

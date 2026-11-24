@@ -24,6 +24,7 @@ object KeyCheck {
     /** Blocking: call it off the main thread. */
     fun check(context: Context, provider: Provider, key: String): Result {
         val started = System.currentTimeMillis()
+        if (provider == Provider.LOCAL) return if (LocalAsr.available()) Result.Works(0) else Result.Rejected(context.getString(R.string.error_provider, LocalAsr.NAME))
         if (provider == Provider.CHATGPT) return checkSocket(context, ChatGPT.socketRequest(key), ChatGPT.NAME, started)
         if (provider == Provider.NEMOTRON) return checkSocket(context, Request.Builder().url(NemotronSession.URL).header("Authorization", "Bearer $key").build(), NemotronSession.NAME, started)
         return try {

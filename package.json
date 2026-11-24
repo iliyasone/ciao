@@ -22,6 +22,7 @@
     "release": "npm run build && electron-builder --win nsis --publish always",
     "release:linux": "npm run build && electron-builder --linux AppImage deb --publish always",
     "release:mac": "npm run build && electron-builder --mac --publish always",
+    "build:asr": "node scripts/build-asr.mjs",
     "build:kws": "node scripts/fetch-kws.mjs",
     "build:kws:linux": "node scripts/fetch-kws.mjs linux"
   },
@@ -43,6 +44,10 @@
           "*.png",
           "*.ico"
         ]
+      },
+      {
+        "from": "build/tinyasr",
+        "to": "tinyasr"
       }
     ],
     "win": {

@@ -301,14 +301,14 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   screen): what dictation cost and how much you said over the last 24 hours, 7,
   30 or 90 days or all time, after T3 Code's Usage page. Totals (cost since the
   period's first day, minutes, dictations, the average per day with dictation), a
-  column per day (per hour for 24 hours) split into OpenAI, Gemini, Nemotron and ChatGPT
-  (free: it shows in minutes, at no cost), switchable
+  column per day (per hour for 24 hours) split into OpenAI, Gemini, Nemotron, ChatGPT and tinyasr
+  (the last two free: they show in minutes, at no cost), switchable
   between cost and minutes, and each model's share. It is Ciao's estimate at list
   prices (minutes recorded, less the silence the live model wasn't sent, × the
   model's price, `src/core/cost.ts`), not the
   providers' bill, and counts the dictations of this device's history only.
 - **Gemini or OpenAI** (*Settings → Recognition → Service* on the desktop and on
-  Android). Ciao doesn't recognize speech itself: it sends the audio to one of
+  Android). Except with tinyasr (below), Ciao doesn't recognize speech itself: it sends the audio to one of
   these services, on your own key and your bill, and the list gives each one's
   price per hour of speech. Gemini is the default for a new install.
   An Android install where no service was ever picked moves to Gemini with the
@@ -382,6 +382,28 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   - On Android, *Sign in to ChatGPT* opens chatgpt.com inside Ciao. Google's
     sign-in may refuse to work there; then sign in with email and password, or
     on the desktop and let sync bring the account over.
+- **tinyasr, on this device** (a fifth choice in *Settings → Recognition →
+  Service*, on every platform and on Android): Telegram's own recognizer, the one
+  behind its live voice-message transcription,
+  [tinyasr](https://github.com/dkaraush/tinyasr) with its English-Russian-Ukrainian
+  model (38 MB, shipped with the app). The audio never leaves the device: no key,
+  no internet, no cost, no proxy. It streams the text as you speak and re-reads the
+  open sentence at each pause, so words already shown may change; Ciao lets it
+  choose between Russian and English sentence by sentence. It takes no context and
+  no terms.
+  - It makes more mistakes than the online services. On 43 real dictations
+    (31 min of Russian with English terms) its text differed from Gemini's file
+    model in 22% of the words, ChatGPT's in 14%. It loses most on English inside a
+    Russian sentence and on names ("Parallel Pay" came out "параллел дефицит"),
+    and now and then takes a Russian sentence for English.
+  - Measured on a Ryzen 7 4700U laptop: it keeps up with speech (about half of
+    real time), the final text comes about 0.2 s after you stop, and *More
+    accurate* (the same model over the whole recording at once, on four threads)
+    takes about 4 s for a minute.
+  - On the desktop it runs as a helper process per dictation (`native/asr`), one
+    started ahead so the model is loaded when you start. On Linux the helper needs
+    glibc 2.34 or later (Ubuntu 22.04, Debian 12 and later); where it can't start,
+    the status card in Settings says so.
 - **Proxy** (*Settings → Recognition → Proxy*, on every platform and on
   Android). Requests to OpenAI, Gemini, Nemotron and ChatGPT, live and file, go through an HTTP proxy
   (`http://user:password@host:port`), for when Gemini isn't available in your
@@ -408,7 +430,7 @@ Claude Code, Codex) in Russian and English mixed with technical terms.
   --api-target=service=aiplatform.googleapis.com --service-account=…`). Vertex
   refuses a key not bound to a service account, and a key that may also call the
   Gemini API is taken for an AI Studio key. Or a [.wave](https://dotwave.ai) key
-  for Nemotron, or a ChatGPT account for ChatGPT (no key).
+  for Nemotron, or a ChatGPT account for ChatGPT (no key). tinyasr needs nothing.
   - Instead of a Gemini key, the Gemini key field takes a link to a server in
     front of the Gemini API with a key of that server in it:
     `https://<host>/?key=<key>`. Live and file transcription then go to that
@@ -425,6 +447,7 @@ Pricing is per minute of audio:
 | Gemini (`gemini-3.5-transcribe-live`, `gemini-3.5-transcribe`) | about $0.009/min | about $0.005/min |
 | Nemotron on .wave (`nemotron-asr-streaming`) | $0.00045/min | the same, the live model again |
 | ChatGPT (`chatgpt-dictation`, `chatgpt-transcribe`) | free with a ChatGPT account | free |
+| tinyasr on the device (`tinyasr-en-ru-uk`) | free | free |
 
 Gemini bills per token; the per-minute figures are Google's own estimate for
 speech. Idle time costs nothing.
@@ -519,8 +542,10 @@ What is different on macOS for now:
 
 ### Build it yourself
 
-You need Node.js 22+, and the .NET 8 SDK for the Windows app. The Windows build
-runs on Windows, Linux or macOS.
+You need Node.js 22+, Rust (`cargo`, from [rustup](https://rustup.rs)) for
+tinyasr's helper, and the .NET 8 SDK for the Windows app. The Windows build runs
+on Windows, Linux or macOS, except tinyasr's helper, which `build:asr` builds for
+the OS it runs on (without it, *tinyasr* in Settings says it can't start).
 
 ```sh
 git clone https://github.com/iliyasone/ciao.git
@@ -528,6 +553,7 @@ cd ciao
 npm install
 npm run build:native        # the input helper → build/win-input/Ciao.Input.exe
 npm run build:kws           # the wake-word detector and model (~50 MB) → build/kws
+npm run build:asr           # tinyasr's helper and model (~40 MB) → build/tinyasr
 npm run dist:win            # a portable folder → release/win-unpacked/Ciao.exe
 npm run dist:win:installer  # the installer → release/Ciao-Setup-<version>.exe
 ```
@@ -540,6 +566,7 @@ The macOS app builds on a Mac only, with Xcode's command line tools
 
 ```sh
 npm run build:native:mac    # the input helper → build/mac-input/Ciao.Input
+npm run build:asr           # tinyasr's helper (Apple Silicon and Intel) and model → build/tinyasr
 npm run dist:mac            # disk images → release/Ciao-<version>-{arm64,x64}.dmg
 ```
 
@@ -547,6 +574,7 @@ The Linux app is built on Linux, without Wine or .NET:
 
 ```sh
 npm run build:kws:linux     # the wake-word detector and FFI for Linux → build/kws
+npm run build:asr           # tinyasr's helper and model → build/tinyasr
 npm run dist:linux          # → release/Ciao-<version>.AppImage and .deb
 ```
 
@@ -861,7 +889,7 @@ we can see how many people use it. Two events (Android sends the same ones, with
 phone's maker and model, to each):
 
 - `app_started`: app version, OS version, CPU architecture, the transcription
-  service (`provider`: `openai`, `gemini`, `nemotron` or `chatgpt`), and whether its API key (for ChatGPT: a sign-in) is set and the
+  service (`provider`: `openai`, `gemini`, `nemotron`, `chatgpt` or `local`), and whether its API key (for ChatGPT: a sign-in; tinyasr always has one) is set and the
   wake word and paragraph layout are on.
 - `dictation`, once per dictation kept in the history:
   - how it ended: `outcome` (pasted, clipboard, empty, failed, cancelled) and
@@ -870,7 +898,7 @@ phone's maker and model, to each):
   - how it was driven: `trigger` (the key or button that started it, such as
     `RControlKey` or `MButton`, `wake_word`, or `pill` for a click on it), `ended_by` (release, press,
     `stop_phrase`, escape, `mic_error`) and `hands_free`;
-  - who transcribed it: `provider` (`openai`, `gemini`, `nemotron` or `chatgpt`);
+  - who transcribed it: `provider` (`openai`, `gemini`, `nemotron`, `chatgpt` or `local`);
   - time and money: `duration_s`, `silence_skipped_s` (of it, the long silence
     the provider wasn't sent), `voice_onset_ms` (not for wake-word starts, whose
     audio begins with speech), `first_text_ms`, `final_after_release_ms`,
@@ -991,7 +1019,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
 
 - `src/core/` — platform-neutral TypeScript with no Electron or Node imports: the
   live transcription sessions (`realtime.ts` for OpenAI, `gemini.ts` for Gemini,
-  `nemotron.ts` for Nemotron on .wave and `chatgpt.ts` for ChatGPT,
+  `nemotron.ts` for Nemotron on .wave, `chatgpt.ts` for ChatGPT and `local.ts` for tinyasr's helper,
   `providers.ts` for which models each uses, `proxy.ts` for reading a proxy address),
   PCM/WAV helpers, `silence.ts` (which silence isn't sent), prices, `usage.ts` (the Usage tab's sums), shared types,
   and `corrections.ts`, which finds the words worth learning in a corrected text. It is
@@ -1000,7 +1028,7 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `dictation.ts` — the hotkey state machine and the pipeline;
   - `history.ts` — storage and crash recovery;
   - `transcribe.ts` — live and file transcription; `chatgpt.ts` — signing in to ChatGPT and renewing its token; `proxy.ts` — the proxy its
-    requests go through;
+    requests go through; `local.ts` — starts tinyasr's helper;
   - `paste.ts` — clipboard-preserving paste;
   - `input.ts` — talks to the keyboard and paste helper of the system;
   - `corrections.ts` — watches the field a dictation went into for corrections;
@@ -1025,6 +1053,12 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   the keys, the frontmost app, bringing an app forward (Launch Services), ⌘V and
   Return, the Accessibility API for the focused field, and
   AppleScript to pause Music and Spotify.
+- `native/asr/` — the on-device recognizer (Rust, GPL-3.0-or-later): tinyasr behind
+  Ciao's audio format (24 kHz PCM16 in, resampled to 16 kHz) as a library, run on
+  the desktop as the `ciao-asr` helper process (its protocol is at the top of
+  `src/main.rs`) and on Android over JNI. `scripts/build-asr.mjs` builds the
+  helper and fetches the model files into `build/tinyasr` (shipped as
+  `resources/tinyasr`), pinned to the same tinyasr commit as `Cargo.toml`.
 - `assets/icon.svg` — the icon. `scripts/build-icons.sh` renders the PNG, ICO and
   tray icons from it; don't edit those by hand.
 - `site/` — the landing page, [sayciao.vercel.app](https://sayciao.vercel.app), and
@@ -1058,7 +1092,10 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     `KeyCheck.kt` — the same calls to OpenAI, Gemini, Nemotron and ChatGPT as
     `src/core/realtime.ts`, `src/core/gemini.ts`, `src/core/nemotron.ts`,
     `src/core/chatgpt.ts` and `src/main/transcribe.ts` (`ChatGPT.kt` also signs in
-    and renews the token, as `src/main/chatgpt.ts`); `ProviderParityTest` checks
+    and renews the token, as `src/main/chatgpt.ts`); `LocalAsr.kt` — tinyasr, the
+    port of `src/core/local.ts` around `native/asr/src/android.rs` (JNI; Gradle
+    builds the library with the NDK and ships the models as uncompressed assets,
+    read straight from the APK); `ProviderParityTest` checks
     every service in `src/core/providers.ts` is there; `Proxy.kt` — the port of `src/core/proxy.ts` and
     `src/main/proxy.ts`, whose test holds the TypeScript outputs;
     `SilenceGate.kt` — the port of `src/core/silence.ts`, with the same kind of test; `Revision.kt` — the port of `src/core/revision.ts`,
@@ -1073,8 +1110,10 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
   - `Corrections.kt` — the port of `src/core/corrections.ts`, with the same kind
     of test; `SuggestionView.kt` — the card offering a corrected word for the terms.
 
-`npm run typecheck` checks the desktop app. For Android you need JDK 17 and the
-Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds
+`npm run typecheck` checks the desktop app. For Android you need JDK 17, the
+Android SDK (platform 35) with NDK 28.2.13676358, Rust (`rustup`, `cargo`; the
+build adds the Android targets) and the network on the first build (tinyasr's
+model files); `cd android && ./gradlew assembleRelease` builds
 `app/build/outputs/apk/release/Ciao-<version>-release.apk`, and
 `./gradlew testReleaseUnitTest` runs the tests. Without
 `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`,
@@ -1090,4 +1129,7 @@ Android SDK (platform 35); `cd android && ./gradlew assembleRelease` builds
 
 ## License
 
-MIT
+Ciao's own code is MIT. The builds include tinyasr (GPL-3.0-or-later, its model
+files too), and `native/asr`, which links it, is GPL-3.0-or-later, so the
+installers and the APK as a whole are distributed under the GPL-3.0-or-later; its
+text ships with them (`resources/tinyasr/LICENSE` on the desktop).

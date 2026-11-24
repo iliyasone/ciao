@@ -211,7 +211,7 @@ class UsageActivity : Activity() {
                         setSingleLine()
                     }, LinearLayout.LayoutParams(0, -2, 1f))
                     addView(TextView(this@UsageActivity).apply {
-                        text = if (m.provider == "chatgpt") getString(R.string.usage_free) else CardView.formatCost(m.totals.usd)
+                        text = if (m.provider in Usage.FREE) getString(R.string.usage_free) else CardView.formatCost(m.totals.usd)
                         textSize = 14f
                         setTextColor(getColor(R.color.fg))
                         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -327,12 +327,13 @@ class UsageActivity : Activity() {
         "gemini" -> Provider.GEMINI.displayName
         "nemotron" -> Provider.NEMOTRON.displayName
         "chatgpt" -> Provider.CHATGPT.displayName
+        "local" -> Provider.LOCAL.displayName
         else -> getString(R.string.usage_other)
     }
 
     companion object {
         /** As COLORS in src/renderer/history/UsagePanel.tsx. */
-        val COLORS = mapOf("openai" to Color.parseColor("#10A37F"), "gemini" to Color.parseColor("#4C8DF6"), "nemotron" to Color.parseColor("#76B900"), "chatgpt" to Color.parseColor("#AB68FF"), "other" to Color.parseColor("#A1A1AA"))
+        val COLORS = mapOf("openai" to Color.parseColor("#10A37F"), "gemini" to Color.parseColor("#4C8DF6"), "nemotron" to Color.parseColor("#76B900"), "chatgpt" to Color.parseColor("#AB68FF"), "local" to Color.parseColor("#2AABEE"), "other" to Color.parseColor("#A1A1AA"))
 
         /** 1, 2 or 5 times a power of ten, at least [raw]. */
         fun niceStep(raw: Double): Double {

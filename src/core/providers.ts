@@ -18,6 +18,8 @@ export interface ProviderInfo {
    * shows a sign-in instead of a key field. It syncs like a key; the device signed in renews it.
    */
   signIn?: boolean;
+  /** Runs on this device (main/local.ts): no key, no proxy, no internet. */
+  local?: boolean;
 }
 
 /** In the order Settings lists them. */
@@ -60,6 +62,17 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     keyFile: "chatgpt-token.txt",
     keyPlaceholder: "",
     signIn: true,
+  },
+  // Telegram's on-device recognizer (tinyasr, GPL-3.0-or-later): native/asr, models fetched by scripts/build-asr.mjs.
+  local: {
+    name: "tinyasr",
+    company: "Telegram",
+    liveModel: "tinyasr-en-ru-uk",
+    fileModel: "tinyasr-en-ru-uk",
+    keyEnv: "",
+    keyFile: "",
+    keyPlaceholder: "",
+    local: true,
   },
 };
 

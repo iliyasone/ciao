@@ -3,14 +3,14 @@ import { formatCost } from "../../core/cost";
 import type { Strings } from "../../core/i18n";
 import { PROVIDERS } from "../../core/providers";
 import type { HistoryEntry } from "../../core/types";
-import { summarizeUsage, USAGE_PROVIDERS, USAGE_WINDOWS, type UsageColumn, type UsageProvider, type UsageSummary, type UsageWindow } from "../../core/usage";
+import { FREE, summarizeUsage, USAGE_PROVIDERS, USAGE_WINDOWS, type UsageColumn, type UsageProvider, type UsageSummary, type UsageWindow } from "../../core/usage";
 import { useStrings } from "../lang";
 
 // What dictation cost and how much was said, per period: after T3 Code's Usage page.
 
 type Metric = "cost" | "minutes";
 
-const COLORS: Record<UsageProvider, string> = { openai: "#10a37f", gemini: "#4c8df6", nemotron: "#76b900", chatgpt: "#ab68ff", other: "#a1a1aa" };
+const COLORS: Record<UsageProvider, string> = { openai: "#10a37f", gemini: "#4c8df6", nemotron: "#76b900", chatgpt: "#ab68ff", local: "#2aabee", other: "#a1a1aa" };
 
 const providerName = (p: UsageProvider, tr: Strings) => (p === "other" ? tr.usage.other : PROVIDERS[p].name);
 const minutesOf = (ms: number) => Math.round(ms / 60_000);
@@ -233,7 +233,7 @@ function Models({ summary, metric }: { summary: UsageSummary; metric: Metric }) 
               <span className="w-10 text-right text-[12px] text-ghost tabular-nums">{Math.round(share * 100)}%</span>
               <span className="w-12 text-right text-[12px] text-faint tabular-nums">{m.count}</span>
               <span className="w-24 text-right text-[12px] text-faint tabular-nums">{tr.usage.duration(minutesOf(m.ms))}</span>
-              <span className="w-16 text-right font-medium text-fg tabular-nums">{m.provider === "chatgpt" ? tr.usage.free : formatCost(m.usd)}</span>
+              <span className="w-16 text-right font-medium text-fg tabular-nums">{FREE.includes(m.provider) ? tr.usage.free : formatCost(m.usd)}</span>
             </div>
           );
         })}

@@ -42,6 +42,8 @@ object FileTranscriber {
     fun transcribe(context: Context, prefs: Prefs, audio: File, provider: Provider, key: String, from: Long = 0): String =
         // .wave has no file model: the live one hears the recording again, as long as it lasts.
         if (provider == Provider.NEMOTRON) Retry.live(context, prefs, audio, provider, key)
+        // The phone's own: the native code reads the file.
+        else if (provider == Provider.LOCAL) LocalAsr.transcribe(context, audio, from)
         // Opened once, before any request: a file trimmed from the history meanwhile stays readable,
         // and a missing one fails as such rather than as a network error.
         else RandomAccessFile(audio, "r").use { file ->
@@ -49,7 +51,7 @@ object FileTranscriber {
                 Provider.OPENAI -> transcribeOpenAI(context, prefs, file, key, from)
                 Provider.GEMINI -> transcribeGemini(context, prefs, file, key, from)
                 Provider.CHATGPT -> transcribeChatGPT(context, file, key, from)
-                Provider.NEMOTRON -> error("not a file model")
+                Provider.NEMOTRON, Provider.LOCAL -> error("not here")
             }
         }
 
