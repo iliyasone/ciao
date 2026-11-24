@@ -14,7 +14,7 @@ object Usage {
     val WINDOWS = listOf(1, 7, 30, 90, ALL)
 
     /** As [Provider], plus "other" for the rest (none so far costs anything). */
-    val PROVIDERS = listOf("openai", "gemini", "nemotron", "chatgpt", "other")
+    val PROVIDERS = listOf("openai", "gemini", "nemotron", "chatgpt", "local", "other")
 
     data class Paid(val model: String, val costUsd: Double)
     data class Entry(val createdAt: Long, val durationMs: Long, val transcripts: List<Paid>)
@@ -57,6 +57,8 @@ object Usage {
         // Free with a ChatGPT account.
         "chatgpt-dictation" to 0.0,
         "chatgpt-transcribe" to 0.0,
+        // On the phone.
+        "tinyasr-en-ru-uk" to 0.0,
     )
 
     fun pricePerMinute(model: String) = PER_MINUTE_USD[model] ?: 0.017
@@ -80,8 +82,12 @@ object Usage {
         model.startsWith("gemini-") -> "gemini"
         model.startsWith("nemotron-") -> "nemotron"
         model.startsWith("chatgpt-") -> "chatgpt"
+        model.startsWith("tinyasr-") -> "local"
         else -> "other"
     }
+
+    /** Free services, counted like paid ones (at no cost). */
+    val FREE = listOf("chatgpt", "local")
 
     private const val HOUR = 3_600_000L
 
@@ -99,7 +105,7 @@ object Usage {
 
     /**
      * A dictation counts once, with all its minutes, for the provider of its first paid transcript (the
-     * live one, as a rule); its cost is every transcript's, each for its own model's provider.
+     * live one, as a rule; ChatGPT's and tinyasr's count as paid, at no cost); its cost is every transcript's, each for its own model's provider.
      */
     fun summarize(entries: List<Entry>, window: Int, now: Long): Summary {
         val hourly = window == 1
@@ -122,8 +128,7 @@ object Usage {
         for (e in entries) {
             if (e.createdAt < from || e.createdAt > now) continue
             val column = columns.last { it.start <= e.createdAt }
-            // ChatGPT's count as paid, at no cost.
-            val paid = e.transcripts.filter { it.costUsd > 0 || providerOf(it.model) == "chatgpt" }
+            val paid = e.transcripts.filter { it.costUsd > 0 || providerOf(it.model) in FREE }
             val owner = paid.firstOrNull()?.let { providerOf(it.model) } ?: "other"
             for (t in listOf(total, column.total, column.byProvider.getValue(owner))) {
                 t.count++

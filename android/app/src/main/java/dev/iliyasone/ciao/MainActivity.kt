@@ -94,11 +94,11 @@ class MainActivity : Activity() {
         key = KeyEditor(this, kit) { if (::proxy.isInitialized) updateStatus() }
         proxy = ProxyEditor(this, kit) { key.startCheck() }
         kit.section(page, getString(R.string.section_recognition), kit.card()).apply {
-            kit.add(this, kit.row(getString(R.string.row_service), getString(R.string.row_service_text), below = listOf(key.provider)))
-            kit.add(this, kit.row(key.title(), null, titleId = R.id.keyTitle, below = listOf(key.text, key.fieldRow, key.status, key.where)))
+            kit.add(this, kit.row(getString(R.string.row_service), getString(R.string.row_service_text), below = listOf(key.provider), hintId = R.id.serviceText))
+            kit.add(this, kit.row(key.title(), null, titleId = R.id.keyTitle, below = listOf(key.text, key.fieldRow, key.status, key.where)).apply { id = R.id.keyRow })
             // The description sits as close under the title as in the other rows.
             (key.text.layoutParams as LinearLayout.LayoutParams).topMargin = kit.dp(3)
-            kit.add(this, kit.row(getString(R.string.proxy_title), getString(R.string.proxy_text), below = listOf(proxy.status, proxy.field, proxy.buttons)))
+            kit.add(this, kit.row(getString(R.string.proxy_title), getString(R.string.proxy_text), below = listOf(proxy.status, proxy.field, proxy.buttons)).apply { id = R.id.proxyRow })
             kit.add(this, kit.row(getString(R.string.languages_title), getString(R.string.languages_text), below = listOf(
                 kit.field(R.id.languages, "ru, en"),
             )).apply { id = R.id.languagesRow })
@@ -233,15 +233,23 @@ class MainActivity : Activity() {
         val openai = prefs.provider == Provider.OPENAI
         // Free: its card shows no cost, so there is none to switch.
         findViewById<View>(R.id.showCostRow).visibility = if (prefs.provider.pricePerMinute > 0) View.VISIBLE else View.GONE
-        val noTerms = prefs.provider == Provider.NEMOTRON
-        findViewById<TextView>(R.id.termsText).text =
-            if (noTerms) getString(R.string.terms_unused, prefs.provider.displayName) else getString(R.string.terms_text)
+        val local = prefs.provider == Provider.LOCAL
+        val noTerms = prefs.provider == Provider.NEMOTRON || local
+        findViewById<TextView>(R.id.termsText).text = when {
+            local -> getString(R.string.terms_local)
+            noTerms -> getString(R.string.terms_unused, prefs.provider.displayName)
+            else -> getString(R.string.terms_text)
+        }
         findViewById<View>(R.id.keywords).visibility = if (!noTerms || termsOpen) View.VISIBLE else View.GONE
         findViewById<android.widget.Button>(R.id.termsToggle).apply {
             visibility = if (noTerms) View.VISIBLE else View.GONE
             setText(if (termsOpen) R.string.terms_hide else R.string.terms_show)
         }
         findViewById<TextView>(R.id.keyTitle).text = key.title()
+        // On the phone: no key, no proxy, as on the desktop.
+        findViewById<TextView>(R.id.serviceText).setText(if (local) R.string.row_service_text_local else R.string.row_service_text)
+        findViewById<View>(R.id.keyRow).visibility = if (local) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.proxyRow).visibility = if (local) View.GONE else View.VISIBLE
         // OpenAI only, as on the desktop: Gemini and ChatGPT detect the language themselves, take no context (only the terms) and have no delay level.
         findViewById<View>(R.id.contextRow).visibility = if (openai) View.VISIBLE else View.GONE
         findViewById<View>(R.id.languagesRow).visibility = if (openai) View.VISIBLE else View.GONE

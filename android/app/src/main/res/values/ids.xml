@@ -11,6 +11,7 @@
     <item name="contextRow" type="id" />
     <item name="historyButton" type="id" />
     <item name="keyPaste" type="id" />
+    <item name="keyRow" type="id" />
     <item name="keyStatus" type="id" />
     <item name="keyText" type="id" />
     <item name="keyTitle" type="id" />
@@ -24,6 +25,7 @@
     <item name="provider" type="id" />
     <item name="proxy" type="id" />
     <item name="proxyCheck" type="id" />
+    <item name="proxyRow" type="id" />
     <item name="proxyRemove" type="id" />
     <item name="proxySave" type="id" />
     <item name="proxyStatus" type="id" />
@@ -32,6 +34,7 @@
     <item name="setupSyncButton" type="id" />
     <item name="setupSyncStatus" type="id" />
     <item name="setupSkip" type="id" />
+    <item name="serviceText" type="id" />
     <item name="showCost" type="id" />
     <item name="showDelay" type="id" />
     <item name="showDelayRow" type="id" />

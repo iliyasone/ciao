@@ -52,6 +52,7 @@
     <string name="terms_title">Terms</string>
     <string name="terms_text">Words that must be spelled exactly, one per line.</string>
     <string name="terms_unused">%1$s takes no terms. The list is kept for the other services and your other devices.</string>
+    <string name="terms_local">tinyasr recognizes Russian and English and takes neither context nor terms. The list is kept for the other services and your other devices.</string>
     <string name="terms_show">Show</string>
     <string name="terms_hide">Hide</string>
     <string name="learn_corrections">Suggest new words</string>
@@ -292,6 +293,7 @@
     <string name="section_about">About</string>
     <string name="row_service">Service</string>
     <string name="row_service_text">Where the audio goes. Billed to your key.</string>
+    <string name="row_service_text_local">Recognizes right on this device with Telegram’s model: the audio goes nowhere, works offline, no key. Makes more mistakes than the online services, above all in English phrases and names.</string>
     <string name="stop_phrase_hint">Say it at the end and the text goes in.</string>
     <string name="pause_media_hint">The player resumes by itself.</string>
     <string name="show_cost_hint">On the card after each dictation.</string>
@@ -314,6 +316,7 @@
     <string name="diag_result_clipboard_setting">The text went onto the clipboard: “Insert the text right away” is off in the settings.</string>
     <string name="provider_chatgpt" translatable="false">OpenAI ChatGPT</string>
     <string name="provider_nemotron" translatable="false">NVIDIA Nemotron</string>
+    <string name="provider_local" translatable="false">Telegram tinyasr</string>
     <string name="key_text_nemotron">A .wave key from dotwave.ai. Nemotron detects the language itself and takes neither context nor terms.</string>
     <string name="key_hint_nemotron">.wave key (wk_…)</string>
     <string name="provider_option_free">%1$s · free</string>

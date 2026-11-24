@@ -5,6 +5,9 @@ use std::time::Instant;
 
 pub use tinyasr::{Event, Models, Word};
 
+#[cfg(target_os = "android")]
+mod android;
+
 /// The app's audio rate; tinyasr takes 16 kHz.
 const IN_RATE: f64 = 24_000.0;
 const OUT_RATE: f64 = tinyasr::SAMPLE_RATE as f64;

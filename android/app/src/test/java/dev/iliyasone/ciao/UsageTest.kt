@@ -131,6 +131,21 @@ class UsageTest {
     }
 
     @Test
+    fun tinyasrCountsAtNoCost() {
+        val e = listOf(
+            Usage.Entry(at("2026-10-24T10:00:00Z"), 60_000, listOf(paid("tinyasr-en-ru-uk", 0.0), paid("gemini-3.5-transcribe", 0.005))),
+            Usage.Entry(at("2026-10-24T11:00:00Z"), 30_000, listOf(paid("rules", 0.0), paid("tinyasr-en-ru-uk", 0.0))),
+        )
+        val s = Usage.summarize(e, 7, now)
+        assertEquals(listOf(2, 90000L, 0.005), listOf(s.total.count, s.total.ms, r(s.total.usd)))
+        val c = s.columns.single { it.total.count > 0 }
+        assertEquals(1792800000000L, c.start)
+        assertEquals(listOf(2, 90000L, 0.0), c.byProvider.getValue("local").let { listOf(it.count, it.ms, it.usd) })
+        assertEquals(listOf(0, 0.005), c.byProvider.getValue("gemini").let { listOf(it.count, r(it.usd)) })
+        assertEquals(listOf(listOf("gemini-3.5-transcribe", "gemini", 1, 60000L, 0.005), listOf("tinyasr-en-ru-uk", "local", 2, 90000L, 0.0)), models(s))
+    }
+
+    @Test
     fun noDictations() {
         val s = Usage.summarize(emptyList(), Usage.ALL, now)
         assertEquals(at("2026-10-25T00:00:00Z"), s.from)

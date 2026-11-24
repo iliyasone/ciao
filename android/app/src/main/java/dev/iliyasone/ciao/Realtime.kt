@@ -169,6 +169,7 @@ fun openLive(context: Context, provider: Provider, key: String): LiveSession = w
     Provider.GEMINI -> GeminiSession(context, key)
     Provider.NEMOTRON -> NemotronSession(context, key)
     Provider.CHATGPT -> ChatGPTSession(context, key)
+    Provider.LOCAL -> LocalSession(context)
 }
 
 /** Keeps one connected session in reserve so dictation starts streaming instantly. */

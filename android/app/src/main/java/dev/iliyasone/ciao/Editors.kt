@@ -44,6 +44,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
                 Provider.GEMINI -> R.string.provider_gemini
                 Provider.NEMOTRON -> R.string.provider_nemotron
                 Provider.CHATGPT -> R.string.provider_chatgpt
+                Provider.LOCAL -> R.string.provider_local
             })
             p.id to if (p.pricePerMinute == 0.0) activity.getString(R.string.provider_option_free, name)
             else activity.getString(R.string.provider_option, name, "$" + String.format(Locale.US, "%.2f", p.pricePerMinute * 60))
@@ -133,12 +134,12 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             override fun afterTextChanged(s: Editable) {
                 val key = s.toString()
                 // ChatGPT's token comes from signing in, not from the field (hidden then).
-                if (prefs.provider == Provider.CHATGPT || key.filter { it in '!'..'~' } == prefs.currentKey) return
+                if (prefs.provider == Provider.CHATGPT || prefs.provider == Provider.LOCAL || key.filter { it in '!'..'~' } == prefs.currentKey) return
                 when (prefs.provider) {
                     Provider.OPENAI -> GoogleSync.edit(activity) { it.apiKey = key }
                     Provider.GEMINI -> GoogleSync.edit(activity) { it.geminiKey = key }
                     Provider.NEMOTRON -> GoogleSync.edit(activity) { it.dotwaveKey = key }
-                    Provider.CHATGPT -> {}
+                    Provider.CHATGPT, Provider.LOCAL -> {}
                 }
                 main.removeCallbacks(autoCheck)
                 main.postDelayed(autoCheck, 1200)
@@ -154,19 +155,22 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
 
     private fun showProvider() {
         val chatgpt = prefs.provider == Provider.CHATGPT
+        // Nothing to type: it runs on the phone.
+        val local = prefs.provider == Provider.LOCAL
         text.setText(when (prefs.provider) {
             Provider.OPENAI -> R.string.key_text_openai
             Provider.GEMINI -> R.string.key_text_gemini
             Provider.NEMOTRON -> R.string.key_text_nemotron
             Provider.CHATGPT -> R.string.key_text_chatgpt
+            Provider.LOCAL -> R.string.row_service_text_local
         })
         field.setHint(when (prefs.provider) {
             Provider.GEMINI -> R.string.key_hint_gemini
             Provider.NEMOTRON -> R.string.key_hint_nemotron
             else -> R.string.key_hint_openai
         })
-        field.visibility = if (chatgpt) View.GONE else View.VISIBLE
-        paste.visibility = if (chatgpt) View.GONE else View.VISIBLE
+        field.visibility = if (chatgpt || local) View.GONE else View.VISIBLE
+        paste.visibility = if (chatgpt || local) View.GONE else View.VISIBLE
         signIn.visibility = if (chatgpt && prefs.chatgptToken.isEmpty()) View.VISIBLE else View.GONE
         signOut.visibility = if (chatgpt && prefs.chatgptToken.isNotEmpty()) View.VISIBLE else View.GONE
         showState(when {
@@ -243,7 +247,7 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             State.REGION -> activity.getString(R.string.key_status_region, name)
             State.OFFLINE -> activity.getString(R.string.key_status_offline, name, reason)
         }
-        where.visibility = if (s == State.WORKS || prefs.provider == Provider.CHATGPT) View.GONE else View.VISIBLE
+        where.visibility = if (s == State.WORKS || prefs.provider == Provider.CHATGPT || prefs.provider == Provider.LOCAL) View.GONE else View.VISIBLE
         status.setTextColor(kit.color(when (s) {
             State.WORKS -> R.color.ok
             State.REJECTED -> R.color.error

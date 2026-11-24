@@ -147,6 +147,7 @@ class SetupActivity : Activity() {
     private lateinit var a11yStoppedText: TextView
     private lateinit var a11yButton: android.widget.Button
     private lateinit var proxyBlock: LinearLayout
+    private lateinit var proxyFold: View
     private lateinit var proxy: ProxyEditor
     private lateinit var syncBlock: LinearLayout
     private lateinit var batteryLine: TextView
@@ -204,7 +205,8 @@ class SetupActivity : Activity() {
             addView(proxy.field, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(8) })
             addView(proxy.buttons, LinearLayout.LayoutParams(-1, -2).apply { topMargin = kit.dp(8) })
         }
-        keyStep.add(fold(getString(R.string.setup_key_proxy)) { proxyBlock.visibility = if (proxyBlock.visibility == View.VISIBLE) View.GONE else View.VISIBLE }, top = 8)
+        proxyFold = fold(getString(R.string.setup_key_proxy)) { proxyBlock.visibility = if (proxyBlock.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+        keyStep.add(proxyFold, top = 8)
         keyStep.add(proxyBlock, top = 4)
         syncBlock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -408,7 +410,10 @@ class SetupActivity : Activity() {
     }
 
     private fun refresh() {
-        // Key
+        // Key; on the phone there is none, nor a proxy.
+        val local = prefs.provider == Provider.LOCAL
+        proxyFold.visibility = if (local) View.GONE else View.VISIBLE
+        if (local) proxyBlock.visibility = View.GONE
         keyStep.apply {
             mark = when (key.state) {
                 KeyEditor.State.WORKS, KeyEditor.State.OFFLINE -> Mark.DONE

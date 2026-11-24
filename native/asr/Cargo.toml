@@ -16,8 +16,12 @@ path = "src/main.rs"
 
 [dependencies]
 # Telegram's on-device recognizer (GPL-3.0-or-later, models included); pinned with the model files in
-# scripts/fetch-tinyasr.mjs.
+# scripts/build-asr.mjs.
 tinyasr = { git = "https://github.com/dkaraush/tinyasr", rev = "58acbfdfd73e31523f4d9ec80b9aae3c0e582f49" }
+
+# The Android app's JNI layer (src/android.rs); built by android/app/build.gradle.kts.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21.1", default-features = false }
 
 [profile.release]
 opt-level = 3

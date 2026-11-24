@@ -195,8 +195,17 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      # The NDK the on-device recognizer (native/asr) is built with for every ABI (app/build.gradle.kts, which adds
+      # the Rust targets itself); the runner has Rust.
+      - run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
       # Without signing secrets (pull requests) the APK is signed with the runner's debug key.
       - run: ./gradlew testReleaseUnitTest lintRelease assembleRelease
+      # The on-device recognizer ships: its library for each ABI and its models (stored, not compressed).
+      - run: |
+          apk=$(ls app/build/outputs/apk/release/*.apk)
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do unzip -l "$apk" | grep -q " lib/$abi/libciao_asr.so$"; done
+          for f in en-ru-uk.tzf silero_vad.onnx LICENSE; do unzip -lv "$apk" | grep " assets/tinyasr/$f$"; done
+          unzip -lv "$apk" | grep " assets/tinyasr/en-ru-uk.tzf$" | grep -q Stored
       - uses: actions/upload-artifact@v4
         with:
           name: Ciao-Android
