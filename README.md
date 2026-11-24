@@ -1085,7 +1085,10 @@ mic ─► AudioWorklet (24 kHz PCM16, 40 ms chunks)            overlay renderer
     `KeyCheck.kt` — the same calls to OpenAI, Gemini, Nemotron and ChatGPT as
     `src/core/realtime.ts`, `src/core/gemini.ts`, `src/core/nemotron.ts`,
     `src/core/chatgpt.ts` and `src/main/transcribe.ts` (`ChatGPT.kt` also signs in
-    and renews the token, as `src/main/chatgpt.ts`); `ProviderParityTest` checks
+    and renews the token, as `src/main/chatgpt.ts`); `LocalAsr.kt` — tinyasr, the
+    port of `src/core/local.ts` around `native/asr/src/android.rs` (JNI; Gradle
+    builds the library with the NDK and ships the models as uncompressed assets,
+    read straight from the APK); `ProviderParityTest` checks
     every service in `src/core/providers.ts` is there; `Proxy.kt` — the port of `src/core/proxy.ts` and
     `src/main/proxy.ts`, whose test holds the TypeScript outputs;
     `SilenceGate.kt` — the port of `src/core/silence.ts`, with the same kind of test; `Revision.kt` — the port of `src/core/revision.ts`,
