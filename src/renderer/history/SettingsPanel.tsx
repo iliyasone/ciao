@@ -46,7 +46,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
     () =>
       ciao.settings.onKeys(() => {
         invalidateChecks();
-        setFailed({});
+        // tinyasr's check isn't about a key: it stands (and isn't run again).
+        setFailed((f) => ({ local: f.local }));
       }),
     [],
   );
@@ -482,7 +483,7 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
 const checksStarted: Partial<Record<Provider, number>> = {};
 const startCheck = (provider: Provider) => (checksStarted[provider] = (checksStarted[provider] ?? 0) + 1);
 const isLatestCheck = (provider: Provider, n: number) => checksStarted[provider] === n;
-const invalidateChecks = () => (Object.keys(PROVIDERS) as Provider[]).forEach(startCheck);
+const invalidateChecks = () => (Object.keys(PROVIDERS) as Provider[]).filter((p) => !PROVIDERS[p].local).forEach(startCheck);
 
 function ApiKeyRow({ provider, hasKey, onChecked }: { provider: Provider; hasKey: boolean; onChecked: (provider: Provider, reason: string | null) => void }) {
   const [value, setValue] = useState("");

@@ -248,6 +248,8 @@ class KeyEditor(private val activity: Activity, private val kit: Kit, private va
             State.OFFLINE -> activity.getString(R.string.key_status_offline, name, reason)
         }
         where.visibility = if (s == State.WORKS || prefs.provider == Provider.CHATGPT || prefs.provider == Provider.LOCAL) View.GONE else View.VISIBLE
+        // tinyasr has no key to be checked or saved.
+        status.visibility = if (prefs.provider == Provider.LOCAL) View.GONE else View.VISIBLE
         status.setTextColor(kit.color(when (s) {
             State.WORKS -> R.color.ok
             State.REJECTED -> R.color.error

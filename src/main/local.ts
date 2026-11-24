@@ -24,7 +24,7 @@ const THREADS = Math.max(1, Math.min(4, os.availableParallelism()));
 
 export function spawnHelper(): HelperLike {
   const p = spawn(bin(), [path.join(dir(), "en-ru-uk.tzf"), path.join(dir(), "silero_vad.onnx"), String(THREADS)], {
-    stdio: ["pipe", "pipe", "ignore"],
+    stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
   let exited = false;
@@ -41,6 +41,11 @@ export function spawnHelper(): HelperLike {
   // A helper that went away mid-write: its exit says so.
   p.stdin.on("error", () => {});
   readline.createInterface({ input: p.stdout }).on("line", (line) => helper.onLine?.(line));
+  // Why it didn't start, when the system says (a missing library, an old glibc).
+  let lastError = "";
+  readline.createInterface({ input: p.stderr }).on("line", (line) => {
+    if (line.trim()) lastError = line.trim();
+  });
   p.on("error", (e) => {
     exited = true;
     helper.onExit?.(e.message);
@@ -48,7 +53,7 @@ export function spawnHelper(): HelperLike {
   // "close", not "exit": after the last line is read.
   p.on("close", (code) => {
     exited = true;
-    helper.onExit?.(code ? `tinyasr: exit ${code}` : null);
+    helper.onExit?.(code ? lastError || `tinyasr: exit ${code}` : null);
   });
   return helper;
 }
