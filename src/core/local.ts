@@ -3,8 +3,9 @@ import { t } from "./i18n";
 import type { LiveSession, RealtimeHandlers } from "./realtime";
 
 /**
- * The languages tinyasr recognizes in: its en-ru-uk model has three; each one allowed costs a full pass at every
- * pause (the surest wins).
+ * The languages tinyasr recognizes in, sentence by sentence (each one allowed costs a full pass at every pause; the
+ * surest wins). Its model has Ukrainian too, but allowing it made things worse: on 43 dictations the text differed
+ * from Gemini's in 36% of the words, against 22% with Russian and English, and 24% with Russian alone.
  */
 export const LOCAL_LANGS = "ru,en";
 
