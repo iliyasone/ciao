@@ -156,11 +156,14 @@ export function keyPath(provider: Provider): string {
 
 /** The provider's key: OPENAI_API_KEY / GEMINI_API_KEY, or openai-key.txt / gemini-key.txt next to the settings. */
 export function loadApiKey(provider: Provider): string | null {
+  // The on-device recognizer needs no key: it always "has" one.
+  if (PROVIDERS[provider].local) return "local";
   return process.env[PROVIDERS[provider].keyEnv]?.trim() || loadKeyFile(provider) || null;
 }
 
 /** The key saved in Settings ("" if none), what Google sync sends: not one from the environment. */
 export function loadKeyFile(provider: Provider): string {
+  if (PROVIDERS[provider].local) return "";
   try {
     return cleanKey(fs.readFileSync(keyPath(provider), "utf8"));
   } catch {
@@ -170,6 +173,7 @@ export function loadKeyFile(provider: Provider): string {
 
 /** Saves the key ("" removes it), readable only by this user. */
 export function saveKeyFile(provider: Provider, key: string): void {
+  if (PROVIDERS[provider].local) return;
   const file = keyPath(provider);
   if (cleanKey(key)) {
     fs.writeFileSync(file, cleanKey(key), { mode: 0o600 });

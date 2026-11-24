@@ -23,7 +23,7 @@ export interface UsageTotals {
 
 /** Who a model belongs to; "other" for the rest (none so far costs anything). */
 export type UsageProvider = Provider | "other";
-export const USAGE_PROVIDERS: readonly UsageProvider[] = ["openai", "gemini", "nemotron", "chatgpt", "other"];
+export const USAGE_PROVIDERS: readonly UsageProvider[] = ["openai", "gemini", "nemotron", "chatgpt", "local", "other"];
 
 export interface UsageColumn {
   /** Local midnight of the day, or the start of the hour. */
@@ -54,8 +54,12 @@ export function providerOf(model: string): UsageProvider {
   if (model.startsWith("gemini-")) return "gemini";
   if (model.startsWith("nemotron-")) return "nemotron";
   if (model.startsWith("chatgpt-")) return "chatgpt";
+  if (model.startsWith("tinyasr-")) return "local";
   return "other";
 }
+
+/** Free services, counted like paid ones (at no cost). */
+const FREE: readonly UsageProvider[] = ["chatgpt", "local"];
 
 const HOUR = 3_600_000;
 
@@ -75,7 +79,7 @@ const nextDay = (day: number): number => startOfDay(day + 26 * HOUR);
 
 /**
  * A dictation counts once, with all its minutes, for the provider of its first paid transcript (the
- * live one, as a rule; ChatGPT's count as paid, at no cost); its cost is every transcript's, each for
+ * live one, as a rule; ChatGPT's and tinyasr's count as paid, at no cost); its cost is every transcript's, each for
  * its own model's provider.
  */
 export function summarizeUsage(entries: readonly UsageEntry[], window: UsageWindow, now: number): UsageSummary {
@@ -95,7 +99,7 @@ export function summarizeUsage(entries: readonly UsageEntry[], window: UsageWind
   const columns: UsageColumn[] = starts.map((start) => ({
     start,
     total: zero(),
-    byProvider: { openai: zero(), gemini: zero(), nemotron: zero(), chatgpt: zero(), other: zero() },
+    byProvider: { openai: zero(), gemini: zero(), nemotron: zero(), chatgpt: zero(), local: zero(), other: zero() },
   }));
 
   const total = zero();
@@ -107,7 +111,7 @@ export function summarizeUsage(entries: readonly UsageEntry[], window: UsageWind
     let i = columns.length - 1;
     while (i > 0 && columns[i]!.start > e.createdAt) i--;
     const column = columns[i]!;
-    const paid = e.transcripts.filter((t) => t.costUsd > 0 || providerOf(t.model) === "chatgpt");
+    const paid = e.transcripts.filter((t) => t.costUsd > 0 || FREE.includes(providerOf(t.model)));
     const owner = paid.length ? providerOf(paid[0]!.model) : "other";
     for (const totals of [total, column.total, column.byProvider[owner]]) {
       totals.count++;

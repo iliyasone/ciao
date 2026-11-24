@@ -4,6 +4,7 @@ build/
 release/
 bin/
 obj/
+native/asr/target/
 
 # Android
 android/.gradle/

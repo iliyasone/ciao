@@ -7,10 +7,13 @@ import { NEMOTRON_LIVE_URL, NemotronSession } from "../core/nemotron";
 import { CHATGPT_FILE_URL, CHATGPT_LIVE_URL, ChatGPTSession, chatgptProtocols } from "../core/chatgpt";
 import { RealtimeSession, type LiveSession, type SocketLike } from "../core/realtime";
 import type { KeyCheck, Provider, Settings } from "../core/types";
+import { LocalSession, transcribeLocal } from "../core/local";
 import { renewToken } from "./chatgpt";
+import { localAvailable, spawnHelper } from "./local";
 import { apiFetch, wsAgent } from "./proxy";
 
 export function openLive(provider: Provider, apiKey: string): LiveSession {
+  if (provider === "local") return new LocalSession(spawnHelper);
   if (provider === "gemini") {
     const { base, key } = geminiAccess(apiKey);
     // The key goes in a header, not ?key=: query strings end up in logs.
@@ -77,6 +80,7 @@ async function detectEndpoint(apiKey: string): Promise<GeminiEndpoint | null> {
 export async function checkKey(provider: Provider, apiKey: string): Promise<KeyCheck> {
   const started = Date.now();
   const name = PROVIDERS[provider].name;
+  if (provider === "local") return localAvailable() ? { ok: true, ms: 0 } : { ok: false, reason: t().errors.providerError(name) };
   try {
     if (provider === "nemotron" || provider === "chatgpt") {
       const status = await new Promise<number>((resolve, reject) => {
@@ -119,8 +123,8 @@ export class SessionPool {
   private spare: { provider: Provider; session: LiveSession } | null = null;
   // Gemini drops a socket that has waited ~5 min without a setup (measured: fine after 4 min, gone
   // after 5.5), and a live session lasts at most 10 min. .wave closes one that got no audio for 30 s.
-  // ChatGPT kept one waiting for 13 minutes (measured).
-  private static readonly MAX_AGE_MS: Record<Provider, number> = { openai: 10 * 60_000, gemini: 2 * 60_000, nemotron: 20_000, chatgpt: 10 * 60_000 };
+  // ChatGPT kept one waiting for 13 minutes (measured). The on-device helper waits as long as it is left.
+  private static readonly MAX_AGE_MS: Record<Provider, number> = { openai: 10 * 60_000, gemini: 2 * 60_000, nemotron: 20_000, chatgpt: 10 * 60_000, local: Infinity };
 
   constructor(
     private readonly provider: () => Provider,
@@ -191,7 +195,7 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       stopped = true;
       s.close();
       reject(new Error(t().errors.timeout(PROVIDERS[settings.provider].name)));
-    }, 60_000 + pcm.byteLength / BYTES_PER_MS / (settings.provider === "nemotron" ? 1 : 2));
+    }, 60_000 + (pcm.byteLength / BYTES_PER_MS) * (settings.provider === "nemotron" || settings.provider === "local" ? 1 : 0.5));
     s.handlers = {
       onCompleted: (text) => {
         stopped = true;
@@ -207,8 +211,8 @@ function replay(apiKey: string, pcm: Buffer, settings: Settings): Promise<string
       },
     };
     s.configure({ ...settings, delay: "high" });
-    // NemotronSession itself sends the audio no faster than it was spoken.
-    if (settings.provider === "openai" || settings.provider === "nemotron") {
+    // NemotronSession itself sends the audio no faster than it was spoken; the on-device helper reads it as it goes.
+    if (settings.provider === "openai" || settings.provider === "nemotron" || settings.provider === "local") {
       const chunk = 24_000 * 2; // 1 s per message
       for (let i = 0; i < pcm.byteLength; i += chunk) s.append(pcm.subarray(i, i + chunk));
       s.commit();
@@ -272,6 +276,7 @@ export async function transcribeFile(apiKey: string, pcm: Buffer, settings: Sett
   // .wave has no file model: the live one hears the recording again, as long as it lasts.
   if (settings.provider === "nemotron") return transcribeLive(apiKey, pcm, settings);
   if (settings.provider === "chatgpt") return transcribeFileChatGPT(apiKey, pcm);
+  if (settings.provider === "local") return transcribeLocal(spawnHelper, pcm);
   const texts: string[] = [];
   for (const part of splitPcm(pcm)) {
     const form = new FormData();

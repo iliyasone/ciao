@@ -121,14 +121,18 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
 
         <Section title={tr.recognition.title}>
           <ServiceRow s={s} hasKey={hasKey} update={update} />
-          {PROVIDERS[s.provider].signIn ? <ChatGPTAccountRow onChecked={onChecked} /> : <ApiKeyRow key={s.provider} provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />}
+          {PROVIDERS[s.provider].signIn ? (
+            <ChatGPTAccountRow onChecked={onChecked} />
+          ) : (
+            !PROVIDERS[s.provider].local && <ApiKeyRow key={s.provider} provider={s.provider} hasKey={hasKey[s.provider] ?? true} onChecked={onChecked} />
+          )}
           {/* OpenAI only: the others detect the language themselves. */}
           {s.provider === "openai" && (
             <Row title={tr.recognition.languages} hint={tr.recognition.languagesHint}
               control={<input value={s.languages.join(", ")} onChange={(e) => update({ languages: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) }, true)} className={`${INPUT} w-[18rem]`} />}
             />
           )}
-          <ProxyRow value={s.proxy} provider={s.provider} onChange={(proxy) => update({ proxy })} />
+          {!PROVIDERS[s.provider].local && <ProxyRow value={s.proxy} provider={s.provider} onChange={(proxy) => update({ proxy })} />}
         </Section>
 
         <Section title={tr.dictation}>
@@ -215,8 +219,8 @@ export function SettingsPanel({ updateState }: { updateState: UpdateState | null
  */
 function TermsRow({ s, update }: { s: Settings; update: Update }) {
   const tr = useStrings().settings.recognition;
-  const note = { openai: "", gemini: tr.geminiNote, nemotron: tr.nemotronNote, chatgpt: tr.chatgptNote }[s.provider];
-  const unused = s.provider === "nemotron";
+  const note = { openai: "", gemini: tr.geminiNote, nemotron: tr.nemotronNote, chatgpt: tr.chatgptNote, local: tr.localNote }[s.provider];
+  const unused = s.provider === "nemotron" || s.provider === "local";
   const [open, setOpen] = useState(false);
   const field = (
     <textarea
@@ -450,13 +454,13 @@ function ServiceRow({ s, hasKey, update }: { s: Settings; hasKey: Partial<Record
     const perMinute = pricePerMinute(models({ ...s, provider }).live);
     const parts = [displayName(provider), perMinute ? tr.perHour(`$${(perMinute * 60).toFixed(2)}`) : tr.free];
     const has = hasKey[provider];
-    if (provider !== s.provider && has !== undefined) parts.push(PROVIDERS[provider].signIn ? (has ? tr.signedIn : tr.signedOut) : has ? tr.hasKey : tr.noKey);
+    if (provider !== s.provider && has !== undefined && !PROVIDERS[provider].local) parts.push(PROVIDERS[provider].signIn ? (has ? tr.signedIn : tr.signedOut) : has ? tr.hasKey : tr.noKey);
     return { value: provider, label: parts.join(" · ") };
   });
   return (
     <Row
       title={tr.service}
-      hint={PROVIDERS[s.provider].signIn ? tr.introAccount : tr.intro}
+      hint={PROVIDERS[s.provider].local ? tr.introLocal : PROVIDERS[s.provider].signIn ? tr.introAccount : tr.intro}
       control={<Select label={tr.service} value={s.provider} options={options} onChange={(provider) => update({ provider })} className="w-[18rem]" />}
       below={<span className="-mt-1.5 text-[12.5px] text-faint dark:text-muted">{tr.models(m.live, m.file)}</span>}
     />
