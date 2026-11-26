@@ -1,6 +1,6 @@
 ---
 name: babysit-pr
-description: Drive a PR to a clean review. Each round a fresh T3 Code reviewer (GPT-6.1 Sol, Opus as fallback) hunts bugs in the whole diff against the PR's pinned scope; you defend your code, fix the real findings minimally, push, and repeat until a round needs no fix. Use when asked to babysit a PR, "review and fix until clean", or run a review-fix loop on the current branch.
+description: Drive a PR to a clean review. Each round a fresh T3 Code reviewer (GPT-6.2 Sol, Opus as fallback) hunts bugs in the whole diff against the PR's pinned scope; you defend your code, fix the real findings minimally, push, and repeat until a round needs no fix. Use when asked to babysit a PR, "review and fix until clean", or run a review-fix loop on the current branch.
 ---
 
 # Babysit PR
@@ -49,7 +49,7 @@ Reviewers run as T3 Code delegated tasks (`delegate_task` from the `t3-code`
 MCP server), never as the agent's own native sub-agents: only T3 applies the
 model and reasoning options.
 
-**Reviewer: GPT-6.1 Sol on high reasoning.** Each round is a new call:
+**Reviewer: GPT-6.2 Sol on high reasoning.** Each round is a new call:
 
 ```json
 {
@@ -60,7 +60,7 @@ model and reasoning options.
   "clientRequestId": "babysit-pr-<repo>-<PR>-round-<N>",
   "target": {
     "providerInstanceId": "codex",
-    "model": "gpt-6.1-sol",
+    "model": "gpt-6.2-sol",
     "options": { "reasoningEffort": "high" }
   },
   "task": "<the reviewer prompt below>"
@@ -87,7 +87,7 @@ provider or the model is missing from `orchestrator_capabilities`: the same
 call with a Claude provider instance that lists `claude-opus-5-5` (prefer the
 one this thread runs on), `"model": "claude-opus-5-5"`,
 `"options": { "effort": "high" }`. Say in the report which rounds used the
-fallback and why. Every round tries GPT-6.1 Sol first.
+fallback and why. Every round tries GPT-6.2 Sol first.
 
 This reviewer is the only one: don't also request `@codex`, CodeRabbit or other
 review bots on the PR unless the user asks.
@@ -133,8 +133,15 @@ The reviewer prompt must be self-contained:
 - **From round 2 on:** every finding you pushed back on in any earlier round,
   each with your argument. The reviewer accepts the argument or answers it with a new one;
   repeating the finding without a new argument doesn't count.
-- **Read-only:** the reviewer does not edit files, commit, comment on the PR,
-  invoke skills or spawn agents of its own.
+- **A full reviewer, with every tool the author has.** It doesn't stop at the
+  diff: it reads the surrounding code, runs the tests, reads logs, queries the
+  production database read-only, and calls live APIs with read-only requests,
+  using the repo's skills and the access described in AGENTS.md. It uses them
+  to check whether an edge case actually happens and whether a claim in the PR
+  is true. Anything it can't settle goes into a **Questions** list: a question
+  for the author, or one the author should take to the user.
+- **It changes nothing:** no file edits, commits, comments on the PR, writes to
+  databases, deploys, or messages to anyone.
 
 ## 2. Judge and defend
 
@@ -156,6 +163,9 @@ finding wrong. Put each finding into exactly one bucket:
   available (as plain text in the final report if the loop has ended). Show
   both sides in two or three lines each. Don't hold the other fixes for the
   answer.
+
+Answer every question in the reviewer's **Questions** list: in the next round's
+prompt next to the pushback, or with the user when only they know the answer.
 
 A reviewer that answers your pushback with a new argument you can't refute has
 shown the finding is real: move it to Fix (or Ask the user, if fixing changes
@@ -191,14 +201,30 @@ Your buckets drive the loop, not the reviewer's verdict alone:
   reviewer.
 - Nothing to fix → done. That covers `APPROVE`, and also `REQUEST_CHANGES`
   where every open item is pushed back, out of scope, or waiting on the user.
-- After 5 rounds, stop anyway. Running out of rounds is not approval: report
-  which findings stay open and which fixes from the last round no reviewer has
-  seen.
+- **Round 5 is a checkpoint.** The round budget exists so that you dare to say
+  no to a reviewer, never so that code goes unreviewed. At round 5, ask whether
+  the loop is converging: reviewers still finding real `blocker`/`should`
+  bugs → continue; nitpicks, repeats or scope creep → push back and stop.
+- **No agreement after 10 rounds → go back to the user.** This is the most
+  important rule of the loop. Stop and tell the user plainly that you can't
+  reach agreement with the reviewers: what they keep raising, why you think
+  the code is right (or that the findings are nitpicks), and what you need
+  from the user to finish. Don't merge, and don't call the PR clean.
 - During a live incident, if the user asks to deploy the fix first, deploy, then
   review; never hold an outage fix behind review rounds.
-- Nit fixes from the last round need no extra round; list them in the report.
-  Any other commit pushed after the loop ended is unreviewed: run a round
-  before calling the PR clean.
+
+### The PR changed after the last round
+
+Every round reviews the whole PR, all its commits against the base. If
+anything was pushed after the last round, other than that round's nit fixes,
+the PR as it stands has not been reviewed: run another round on the whole PR
+before calling it clean or merging it. That holds however many rounds the PR
+already had. Writing a commit into a "not seen by a reviewer" list does not
+review it.
+
+Before merging, also read the PR's unanswered review comments (bots and
+people: `gh api repos/<owner>/<repo>/pulls/<n>/comments`). Judge each like a
+finding from step 2 and answer it on the PR.
 
 ## 5. Stamp the PR and report
 
@@ -212,10 +238,10 @@ Reviewed with babysit-pr: <N> rounds with <model> on <effort>. Verdict: approved
 
 - Verdict: `approved` when the last reviewer said `APPROVE`; `pushed back`
   when it said `REQUEST_CHANGES` and you closed the loop over its findings
-  or every open item is out of scope or waiting on the user; `not approved
-  after <N> rounds` when the last allowed round still had a fix. For the last
-  two, add `, open: <short list of the unfixed blocker/should items>`.
-- `<model>` is the reviewer of the last round (e.g. `GPT-6.1 Sol`,
+  or every open item is out of scope or waiting on the user; `no agreement
+  after 10 rounds` when you went back to the user. For the last two, add
+  `, open: <short list of the unfixed blocker/should items>`.
+- `<model>` is the reviewer of the last round (e.g. `GPT-6.2 Sol`,
   `Claude Opus 5.5`); name both when rounds used different models.
 - Write `on <effort>` only when the task result's `options` confirmed it;
   otherwise drop it.
