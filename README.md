@@ -689,6 +689,8 @@ yours.
   keys, not on them. While the keyboard is still moving, taps go through the icon,
   so a tap aimed at a key never starts a dictation.
 - **✕** on the card cancels; **✓** finishes.
+- **Drag** the card to move it, also while you speak; it opens there from then
+  on. Up and down over the text scroll it while there is more that way.
 - In a long dictation the card keeps the last few dozen lines while you speak
   (when it is scrolled to the bottom), so it stays smooth after many minutes; the
   whole text shows once you finish.

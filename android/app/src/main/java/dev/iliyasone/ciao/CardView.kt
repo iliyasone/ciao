@@ -14,7 +14,9 @@ import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -23,16 +25,20 @@ import android.widget.ScrollView
 import android.widget.TextView
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
  * The live card at the top of the screen: what you say appears word by word, new words bright and
  * settling to grey (as in src/renderer/overlay/Overlay.tsx), laid out in paragraphs and lists.
+ * Dragged, it moves: [onMove] gets how far the finger went since the drag began, [done] on letting go.
  */
 class CardView(
     context: Context,
     private val onCancel: () -> Unit,
     private val onDone: () -> Unit,
     private val onRetry: () -> Unit,
+    private val onMove: (dx: Int, dy: Int, done: Boolean) -> Unit = { _, _, _ -> },
 ) : LinearLayout(context) {
     enum class Phase { RECORDING, FINISHING, DONE, CLIPBOARD, FAILED }
 
@@ -104,6 +110,14 @@ class CardView(
     private var cutOff = ""
     private var finalShown = false
 
+    private val slop = ViewConfiguration.get(context).scaledTouchSlop
+    private var downX = 0f
+    private var downY = 0f
+    private var inText = false
+    /** Past the slop this touch was judged: a move of the card, or a tap / scroll left to the views. */
+    private var judged = false
+    private var moving = false
+
     private val tick = object : Runnable {
         override fun run() {
             render()
@@ -140,6 +154,48 @@ class CardView(
         scroller.setOnScrollChangeListener { v, _, y, _, _ ->
             val child = (v as ScrollView).getChildAt(0)
             stick = y + v.height >= child.height - dp(8)
+        }
+    }
+
+    // The card sees each touch before its buttons and text do, so it can take a drag from them.
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        follow(e)
+        return moving
+    }
+
+    // A touch on the card itself (beside the buttons and text), or one taken from them.
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        follow(e)
+        return true
+    }
+
+    private fun follow(e: MotionEvent) {
+        val dx = e.rawX - downX
+        val dy = e.rawY - downY
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = e.rawX
+                downY = e.rawY
+                inText = e.y >= scroller.top && e.y < scroller.bottom
+                judged = false
+                moving = false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!judged && hypot(dx, dy) > slop) {
+                    judged = true
+                    // Up and down in the text scroll it, while it has more that way.
+                    moving = !(inText && abs(dy) > abs(dx) && scroller.canScrollVertically(if (dy < 0) 1 else -1))
+                    // Measure from here, so the card doesn't jump by the slop it just waited out.
+                    downX = e.rawX
+                    downY = e.rawY
+                } else if (moving) {
+                    onMove(dx.toInt(), dy.toInt(), false)
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (moving) {
+                moving = false
+                onMove(dx.toInt(), dy.toInt(), true)
+            }
         }
     }
 
