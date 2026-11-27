@@ -53,9 +53,23 @@ class CardDragTest {
         touch(MotionEvent.ACTION_DOWN, x, y)
         touch(MotionEvent.ACTION_MOVE, x - slop - 5, y)
         touch(MotionEvent.ACTION_MOVE, x - slop - 305, y + 50)
-        touch(MotionEvent.ACTION_UP, x - slop - 305, y + 50)
-        assertEquals(Triple(-300, 50, true), moves.last())
+        // Let go over ✓ again: it must not count as a press.
+        touch(MotionEvent.ACTION_UP, x, y)
+        ShadowLooper.idleMainLooper()
+        assertEquals(Triple(slop + 5, 0, true), moves.last())
         assertEquals(0, done)
+    }
+
+    @Test
+    fun dragOverTheTextWhileItIsStillScrolling() {
+        val scroller = card.getChildAt(1) as android.widget.ScrollView
+        // As the card does every frame while recording: the text is mid-scroll when the finger lands.
+        scroller.smoothScrollTo(0, 0)
+        val y = (scroller.top + scroller.bottom) / 2f
+        touch(MotionEvent.ACTION_DOWN, 500f, y)
+        touch(MotionEvent.ACTION_MOVE, 500f + slop + 5, y)
+        touch(MotionEvent.ACTION_UP, 700f + slop + 5, y)
+        assertEquals(Triple(200, 0, true), moves.last())
     }
 
     @Test

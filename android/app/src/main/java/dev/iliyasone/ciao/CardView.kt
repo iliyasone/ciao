@@ -169,6 +169,11 @@ class CardView(
         return true
     }
 
+    // The text claims a touch that lands while it is still scrolling: until the touch is judged, the card keeps watching.
+    override fun requestDisallowInterceptTouchEvent(disallow: Boolean) {
+        if (!disallow || (judged && !moving)) super.requestDisallowInterceptTouchEvent(disallow)
+    }
+
     private fun follow(e: MotionEvent) {
         val dx = e.rawX - downX
         val dy = e.rawY - downY
@@ -176,7 +181,7 @@ class CardView(
             MotionEvent.ACTION_DOWN -> {
                 downX = e.rawX
                 downY = e.rawY
-                inText = e.y >= scroller.top && e.y < scroller.bottom
+                inText = e.x >= scroller.left && e.x < scroller.right && e.y >= scroller.top && e.y < scroller.bottom
                 judged = false
                 moving = false
             }
@@ -191,6 +196,11 @@ class CardView(
                 } else if (moving) {
                     onMove(dx.toInt(), dy.toInt(), false)
                 }
+            }
+            // The raw coordinates are the first finger's: when it lifts, a second one left down doesn't carry on from its spot.
+            MotionEvent.ACTION_POINTER_UP -> if (moving && e.actionIndex == 0) {
+                moving = false
+                onMove(dx.toInt(), dy.toInt(), true)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (moving) {
                 moving = false
