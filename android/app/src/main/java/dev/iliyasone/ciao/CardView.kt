@@ -114,6 +114,9 @@ class CardView(
     private var downX = 0f
     private var downY = 0f
     private var inText = false
+    /** Which ways the text could scroll when the finger landed (it may scroll a little before the touch is judged). */
+    private var textUp = false
+    private var textDown = false
     /** Past the slop this touch was judged: a move of the card, or a tap / scroll left to the views. */
     private var judged = false
     private var moving = false
@@ -182,6 +185,8 @@ class CardView(
                 downX = e.rawX
                 downY = e.rawY
                 inText = e.x >= scroller.left && e.x < scroller.right && e.y >= scroller.top && e.y < scroller.bottom
+                textUp = scroller.canScrollVertically(-1)
+                textDown = scroller.canScrollVertically(1)
                 judged = false
                 moving = false
             }
@@ -189,7 +194,7 @@ class CardView(
                 if (!judged && hypot(dx, dy) > slop) {
                     judged = true
                     // Up and down in the text scroll it, while it has more that way.
-                    moving = !(inText && abs(dy) > abs(dx) && scroller.canScrollVertically(if (dy < 0) 1 else -1))
+                    moving = !(inText && abs(dy) > abs(dx) && (if (dy < 0) textDown else textUp))
                     // Measure from here, so the card doesn't jump by the slop it just waited out.
                     downX = e.rawX
                     downY = e.rawY
@@ -197,10 +202,11 @@ class CardView(
                     onMove(dx.toInt(), dy.toInt(), false)
                 }
             }
-            // The raw coordinates are the first finger's: when it lifts, a second one left down doesn't carry on from its spot.
-            MotionEvent.ACTION_POINTER_UP -> if (moving && e.actionIndex == 0) {
+            // The raw coordinates are the first finger's: once it lifts, a second one left down doesn't move the card.
+            MotionEvent.ACTION_POINTER_UP -> if (e.actionIndex == 0) {
+                if (moving) onMove(dx.toInt(), dy.toInt(), true)
                 moving = false
-                onMove(dx.toInt(), dy.toInt(), true)
+                judged = true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (moving) {
                 moving = false
