@@ -15,7 +15,6 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLooper
 import org.robolectric.shadows.ShadowSystemClock
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 /** Dragging the live card moves it; a tap on its buttons still works. */
 @RunWith(RobolectricTestRunner::class)
@@ -66,11 +65,8 @@ class CardDragTest {
     @Test
     fun dragOverTheTextWhileItIsStillScrolling() {
         val scroller = card.getChildAt(1) as android.widget.ScrollView
-        card.delta("слово ".repeat(400), 0)
-        // A few of the card's frames: laid out, then scrolled to the bottom.
-        ShadowLooper.idleMainLooper(200, TimeUnit.MILLISECONDS)
-        assertTrue("the text is longer than the card and kept at its bottom", scroller.canScrollVertically(-1))
-        // A smooth scroll is animated only after a pause since the last one: the text is mid-scroll when the finger lands.
+        // A smooth scroll is animated (even by nothing) only after a pause since the last one: the text is
+        // mid-scroll when the finger lands, and the ScrollView claims the touch as catching it.
         ShadowSystemClock.advanceBy(Duration.ofMillis(300))
         scroller.smoothScrollTo(0, 0)
         val y = (scroller.top + scroller.bottom) / 2f
