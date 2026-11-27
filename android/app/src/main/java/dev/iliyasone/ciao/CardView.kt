@@ -186,7 +186,8 @@ class CardView(
                 downY = e.rawY
                 inText = e.x >= scroller.left && e.x < scroller.right && e.y >= scroller.top && e.y < scroller.bottom
                 textUp = scroller.canScrollVertically(-1)
-                textDown = scroller.canScrollVertically(1)
+                // Following the live text, it is at its bottom even while the next line is still being laid out.
+                textDown = scroller.canScrollVertically(1) && !stick
                 judged = false
                 moving = false
             }
