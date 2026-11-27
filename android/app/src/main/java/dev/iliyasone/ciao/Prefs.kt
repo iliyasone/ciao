@@ -235,6 +235,15 @@ class Prefs(context: Context) {
         get() = sp.getInt("bubbleLift", -1)
         set(v) = sp.edit().putInt("bubbleLift", v).apply()
 
+    /** Where the card was dragged to: from the screen's centre line, and from its top (-1: under the status bar). */
+    var cardX: Int
+        get() = sp.getInt("cardX", 0)
+        set(v) = sp.edit().putInt("cardX", v).apply()
+
+    var cardY: Int
+        get() = sp.getInt("cardY", -1)
+        set(v) = sp.edit().putInt("cardY", v).apply()
+
     companion object {
         const val MAX_DISMISSED = 200
         val DELAYS = listOf("minimal", "low", "medium", "high", "xhigh")

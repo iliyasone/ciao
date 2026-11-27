@@ -11,6 +11,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.graphics.PixelFormat
+import android.graphics.Point
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
@@ -55,6 +56,7 @@ class CiaoService : AccessibilityService() {
     private var bubble: BubbleView? = null
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private var cardHost: FrameLayout? = null
+    private lateinit var cardParams: WindowManager.LayoutParams
     private var card: CardView? = null
     private var imeTop = 0
     /** A keyboard window was listed since the service started: until one is, the phone may not list them. */
@@ -465,7 +467,7 @@ class CiaoService : AccessibilityService() {
     private fun showCard(): CardView {
         main.removeCallbacks(hideCardLater)
         card?.let { return it }
-        val c = CardView(this, onCancel = { cancel() }, onDone = { stop("press") }, onRetry = { retry() })
+        val c = CardView(this, onCancel = { cancel() }, onDone = { stop("press") }, onRetry = { retry() }, onMove = ::moveCard)
         val host = FrameLayout(this).apply {
             setPadding(dp(10), dp(6), dp(10), dp(12))
             addView(c, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(20), dp(640)), FrameLayout.LayoutParams.WRAP_CONTENT))
@@ -473,16 +475,57 @@ class CiaoService : AccessibilityService() {
         }
         // As wide as the card, so taps beside it (tablets, landscape) reach the app underneath.
         val params = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
-        params.y = statusBarHeight()
+        // Where it was last dragged to; once laid out, and whenever it grows, kept on the screen.
+        params.x = prefs.cardX
+        params.y = prefs.cardY.takeIf { it >= 0 } ?: statusBarHeight()
+        host.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeCard(params.x, params.y) }
         wm.addView(host, params)
         cardHost = host
+        cardParams = params
         card = c
         return c
+    }
+
+    /** Where the card was when the drag under way began. */
+    private var cardFrom: Point? = null
+
+    /** The card follows the finger [dx], [dy] from where the drag began; let go, it opens there from now on. */
+    private fun moveCard(dx: Int, dy: Int, done: Boolean) {
+        if (cardHost == null) return
+        val from = cardFrom ?: Point(cardParams.x, cardParams.y).also { cardFrom = it }
+        placeCard(from.x + dx, from.y + dy)
+        if (!done) return
+        cardFrom = null
+        prefs.cardX = cardParams.x
+        prefs.cardY = cardParams.y
+    }
+
+    /** Puts the card at [x] (from the centre line), [y], or as near as the screen it has now allows. */
+    private fun placeCard(x: Int, y: Int) {
+        val host = cardHost ?: return
+        val p = cardParams
+        // Not ours: the language and theme context keeps the screen size it started with, before any turn.
+        val screen = applicationContext.resources.displayMetrics
+        val room = maxOf(0, (screen.widthPixels - host.width) / 2)
+        val top = statusBarHeight()
+        val nx = x.coerceIn(-room, room)
+        val ny = y.coerceIn(top, maxOf(top, screen.heightPixels - host.height))
+        if (nx == p.x && ny == p.y) return
+        p.x = nx
+        p.y = ny
+        runCatching { wm.updateViewLayout(host, p) }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Turned: a card left low may now be below the screen.
+        if (cardHost != null) placeCard(cardParams.x, cardParams.y)
     }
 
     private fun hideCard() {
         cardHost?.let { runCatching { wm.removeView(it) } }
         cardHost = null
+        cardFrom = null
         card = null
     }
 
